@@ -13,11 +13,18 @@ typedef struct {
 } wfb_utils_fd_t;
 
 typedef struct {
+  wfb_utils_fd_t fd;
+  uint8_t len;
+  uint8_t buf[sizeof(uint8_t)];
+} wfb_utils_log_t;
+
+typedef struct {
   struct pollfd readsets[MAXDEV+1];
   wfb_utils_fd_t fd[MAXDEV+1];
   uint8_t readtab[MAXDEV+1];
   uint8_t socktab[MAXDEV+1];
   uint8_t readnb;
+  wfb_utils_log_t log;
 } wfb_utils_init_t;
 
 void wfb_utils_init(wfb_utils_init_t *u);

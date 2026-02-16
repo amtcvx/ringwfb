@@ -8,7 +8,10 @@
 #include <string.h>
 
 #define PORT 5000
+
 #define PERIOD_DELAY_S  1
+
+#define IP_LOCAL "127.0.0.1"
 
 typedef struct {
   uint8_t droneid;
@@ -25,6 +28,13 @@ const char IP_TAB[MAXDRONE+1][MAXDEV][15] = {
 
 /*****************************************************************************/
 void wfb_utils_init(wfb_utils_init_t *u) {
+
+  u->log.len =0; memset(u->log.buf, 0, sizeof(u->log.buf));
+  if (-1 == (u->log.fd.id = socket(AF_INET, SOCK_DGRAM, 0))) exit(-1);
+  if (-1 == setsockopt(u->log.fd.id, SOL_SOCKET, SO_REUSEADDR , &(int){1}, sizeof(int))) exit(-1);
+  u->log.fd.outaddr.sin_family = AF_INET;
+  u->log.fd.outaddr.sin_port = htons(PORT);
+  u->log.fd.outaddr.sin_addr.s_addr = inet_addr(IP_LOCAL);
 
   if (-1 == (u->fd[0].id = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
@@ -51,7 +61,16 @@ void wfb_utils_init(wfb_utils_init_t *u) {
 }
 
 /*****************************************************************************/
-void send_msg(wfb_utils_fd_t fd) {
+void print_log(wfb_utils_log_t *plog) {
+
+  if (plog->len == 0) plog->len += sprintf((char *)plog->buf + plog->len, "TIC\n");
+
+  sendto(plog->fd.id, plog->buf, plog->len, 0,  (const struct sockaddr *)&plog->fd.outaddr, sizeof(struct sockaddr));
+  plog->len = 0;
+}
+
+/*****************************************************************************/
+void send_msg(wfb_utils_fd_t fd, wfb_utils_log_t *plog) {
 
   ssize_t len;
   uint32_t sequence = 0;
@@ -69,11 +88,11 @@ void send_msg(wfb_utils_fd_t fd) {
 
   len = sendmsg(fd.id, (const struct msghdr *)&msg, MSG_DONTWAIT);
 
-  printf("sendmsg (%ld)(%d)(%s)\n",len,fd.id,fd.ipstr);
+  plog->len += sprintf((char *)plog->buf + plog->len, "sendmsg (%ld)(%d)(%s)\n",len,fd.id,fd.ipstr);
 }
 
 /*****************************************************************************/
-void recv_msg(wfb_utils_fd_t fd) {
+void recv_msg(wfb_utils_fd_t fd, wfb_utils_log_t *plog) {
 
   ssize_t len;
   uint8_t payloadbuf[1500];
@@ -91,7 +110,7 @@ void recv_msg(wfb_utils_fd_t fd) {
   len = recvmsg(fd.id, &msg, MSG_DONTWAIT) - sizeof(wfb_utils_heads_pay_t);
 
   if (len > 0) {
-    if (headspay.len > 0) printf("(%ld) from DRONEID (%d) (%s)\n",len,headspay.droneid,fd.ipstr);
+    if (headspay.len > 0) plog->len += sprintf((char *)plog->buf + plog->len, "(%ld) from DRONEID (%d) (%s)\n",len,headspay.droneid,fd.ipstr);
   }
 }
 
@@ -108,10 +127,13 @@ void wfb_utils_loop(wfb_utils_init_t *u) {
           uint8_t cptid =  u->readtab[cpt];
 	  if ( cptid == 0 ) {
 	    len = read(u->readsets[cpt].fd, &exptime, sizeof(uint64_t)); 
-	    send_msg(u->fd[1]);
-	    send_msg(u->fd[2]);
+#if DRONEID == 0
+	    send_msg(u->fd[1], &u->log);
+	    send_msg(u->fd[2], &u->log);
+#endif
+	    print_log(&u->log);
 	  } else {
-            recv_msg(u->fd[cpt]);
+            recv_msg(u->fd[cpt], &u->log);
 	  }
 	}
       }
