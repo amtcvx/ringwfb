@@ -1,4 +1,5 @@
 #include "wfb_utils.h"
+#include <stdio.h>
 
 int main(void) {
 

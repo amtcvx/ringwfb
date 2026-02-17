@@ -7,8 +7,8 @@
 #include <unistd.h>
 #include <string.h>
 
-#define LOG_PORT 5000
-#define EXT_PORT 5100
+#define PORT_LOG 5000
+#define PORT_EXT 5100
 
 #define PERIOD_DELAY_S  1
 
@@ -27,39 +27,58 @@ const char IP_TAB[MAXDRONE+1][EXT_NB][15] = {
   { "192.168.2.1", "192.168.3.2" }, 
   { "192.168.3.1", "192.168.4.2" } };
 
+const uint16_t PORT_TAB[WFB_NB] = { 0, 5100 };
+
+/*****************************************************************************/
+void init_sock(uint8_t role, wfb_utils_fd_t *pfd, uint16_t port, const char *pin, const char *pout) {
+
+  if (-1 == (pfd->id = socket(AF_INET, SOCK_DGRAM, 0))) exit(-1);
+  if (-1 == setsockopt(pfd->id, SOL_SOCKET, SO_REUSEADDR , &(int){1}, sizeof(int))) exit(-1);
+
+  if (role != 1) { 
+    struct sockaddr_in  inaddr;
+    inaddr.sin_family = AF_INET;
+    inaddr.sin_port = htons(port);
+    inaddr.sin_addr.s_addr = inet_addr(pin);
+    if (-1 == bind( pfd->id, (const struct sockaddr *)&inaddr, sizeof(inaddr))) exit(-1);
+  }
+
+  if (role != 0) {
+    pfd->outaddr.sin_family = AF_INET;
+    pfd->outaddr.sin_port = htons(port);
+    pfd->outaddr.sin_addr.s_addr = inet_addr(pout);
+    memcpy(&pfd->ipstr, pout, sizeof(pfd->ipstr));
+  }
+}
+
 /*****************************************************************************/
 void wfb_utils_init(wfb_utils_init_t *u) {
 
   u->log.len =0; memset(u->log.buf, 0, sizeof(u->log.buf));
-  if (-1 == (u->log.fd.id = socket(AF_INET, SOCK_DGRAM, 0))) exit(-1);
-  if (-1 == setsockopt(u->log.fd.id, SOL_SOCKET, SO_REUSEADDR , &(int){1}, sizeof(int))) exit(-1);
-  u->log.fd.outaddr.sin_family = AF_INET;
-  u->log.fd.outaddr.sin_port = htons(LOG_PORT);
-  u->log.fd.outaddr.sin_addr.s_addr = inet_addr(IP_LOCAL);
+  init_sock(1, &u->log.fd, PORT_LOG, (char *)0, IP_LOCAL);
+  u->readnb = 0;
 
   uint8_t devcpt = WFB_PRO;
   if (-1 == (u->devtab[devcpt].fd.id = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
   timerfd_settime(u->devtab[devcpt].fd.id, 0, &period, NULL);
-  u->readnb = 0;
   u->devtab[0].nbelt = 0;
   u->readsets[0].fd = u->devtab[0].fd.id; u->readsets[0].events = POLLIN; u->readnb++;
 
+#if DRONEID == 0
+  init_sock(1,&u->devtab[WFB_VID].fd, PORT_TAB[WFB_VID], (char *)0, IP_LOCAL);
+#else
+  init_sock(0,&u->devtab[WFB_VID].fd, PORT_TAB[WFB_VID], IP_LOCAL, (char *)0);
+#endif
+
   for (uint8_t cpt = WFB_NB; cpt < DEV_NB; cpt++) {
-    if (-1 == (u->devtab[cpt].fd.id = socket(AF_INET, SOCK_DGRAM, 0))) exit(-1);
-    if (-1 == setsockopt(u->devtab[cpt].fd.id, SOL_SOCKET, SO_REUSEADDR , &(int){1}, sizeof(int))) exit(-1);
-    struct sockaddr_in  inaddr;
-    inaddr.sin_family = AF_INET;
-    inaddr.sin_port = htons(EXT_PORT);
-    inaddr.sin_addr.s_addr = inet_addr(IP_TAB[DRONEID][(cpt - WFB_NB) % EXT_NB]);
-    if (-1 == bind( u->devtab[cpt].fd.id, (const struct sockaddr *)&inaddr, sizeof(inaddr))) exit(-1);
-    u->devtab[cpt].fd.outaddr.sin_family = AF_INET;
-    u->devtab[cpt].fd.outaddr.sin_port = htons(EXT_PORT);
-    u->devtab[cpt].fd.outaddr.sin_addr.s_addr = inet_addr(IP_TAB[DRONEID][(cpt - WFB_NB + 1) % EXT_NB]);
-    memcpy(u->devtab[cpt].fd.ipstr, IP_TAB[DRONEID][(cpt - WFB_NB + 1) % EXT_NB], 15);
+    init_sock(2, &u->devtab[cpt].fd, PORT_EXT, 
+      (IP_TAB[DRONEID][(cpt - WFB_NB) % EXT_NB]), IP_TAB[DRONEID][(cpt - WFB_NB + 1) % EXT_NB]);
+
     u->devtab[cpt].nbelt = cpt;
     u->readsets[cpt].fd = u->devtab[cpt].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
   }
+
 }
 
 /*****************************************************************************/
@@ -130,8 +149,8 @@ void wfb_utils_loop(wfb_utils_init_t *u) {
 	  if ( cptid == 0 ) {
 	    len = read(u->readsets[cpt].fd, &exptime, sizeof(uint64_t)); 
 #if DRONEID == 0
-	    send_msg(u->devtab[1].fd, &u->log);
 	    send_msg(u->devtab[2].fd, &u->log);
+	    send_msg(u->devtab[3].fd, &u->log);
 #endif
 	    print_log(&u->log);
 	  } else {
