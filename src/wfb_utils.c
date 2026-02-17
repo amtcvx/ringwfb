@@ -7,7 +7,8 @@
 #include <unistd.h>
 #include <string.h>
 
-#define PORT 5000
+#define LOG_PORT 5000
+#define EXT_PORT 5100
 
 #define PERIOD_DELAY_S  1
 
@@ -20,7 +21,7 @@ typedef struct {
   uint8_t dummy;
 } __attribute__((packed)) wfb_utils_heads_pay_t;
 
-const char IP_TAB[MAXDRONE+1][MAXDEV][15] = { 
+const char IP_TAB[MAXDRONE+1][EXT_NB][15] = { 
   { "192.168.1.100", "192.168.2.100" }, 
   { "192.168.1.1", "192.168.4.1" }, 
   { "192.168.2.1", "192.168.3.2" }, 
@@ -33,30 +34,31 @@ void wfb_utils_init(wfb_utils_init_t *u) {
   if (-1 == (u->log.fd.id = socket(AF_INET, SOCK_DGRAM, 0))) exit(-1);
   if (-1 == setsockopt(u->log.fd.id, SOL_SOCKET, SO_REUSEADDR , &(int){1}, sizeof(int))) exit(-1);
   u->log.fd.outaddr.sin_family = AF_INET;
-  u->log.fd.outaddr.sin_port = htons(PORT);
+  u->log.fd.outaddr.sin_port = htons(LOG_PORT);
   u->log.fd.outaddr.sin_addr.s_addr = inet_addr(IP_LOCAL);
 
-  if (-1 == (u->fd[0].id = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
+  uint8_t devcpt = WFB_PRO;
+  if (-1 == (u->devtab[devcpt].fd.id = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(u->fd[0].id, 0, &period, NULL);
+  timerfd_settime(u->devtab[devcpt].fd.id, 0, &period, NULL);
   u->readnb = 0;
-  u->readtab[u->readnb] = 0;
-  u->readsets[u->readnb].fd = u->fd[0].id; u->readsets[u->readnb].events = POLLIN; u->readnb++;
+  u->devtab[0].nbelt = 0;
+  u->readsets[0].fd = u->devtab[0].fd.id; u->readsets[0].events = POLLIN; u->readnb++;
 
-  for (uint8_t cpt=1; cpt<(MAXDEV+1); cpt++) {
-    if (-1 == (u->fd[cpt].id = socket(AF_INET, SOCK_DGRAM, 0))) exit(-1);
-    if (-1 == setsockopt(u->fd[cpt].id, SOL_SOCKET, SO_REUSEADDR , &(int){1}, sizeof(int))) exit(-1);
+  for (uint8_t cpt = WFB_NB; cpt < DEV_NB; cpt++) {
+    if (-1 == (u->devtab[cpt].fd.id = socket(AF_INET, SOCK_DGRAM, 0))) exit(-1);
+    if (-1 == setsockopt(u->devtab[cpt].fd.id, SOL_SOCKET, SO_REUSEADDR , &(int){1}, sizeof(int))) exit(-1);
     struct sockaddr_in  inaddr;
     inaddr.sin_family = AF_INET;
-    inaddr.sin_port = htons(PORT);
-    inaddr.sin_addr.s_addr = inet_addr(IP_TAB[DRONEID][(cpt % MAXDEV)]);
-    if (-1 == bind( u->fd[cpt].id, (const struct sockaddr *)&inaddr, sizeof(inaddr))) exit(-1);
-    u->fd[cpt].outaddr.sin_family = AF_INET;
-    u->fd[cpt].outaddr.sin_port = htons(PORT);
-    u->fd[cpt].outaddr.sin_addr.s_addr = inet_addr(IP_TAB[DRONEID][(cpt + 1) % MAXDEV]);
-    memcpy(u->fd[cpt].ipstr, IP_TAB[DRONEID][(cpt + 1) % MAXDEV], 15);
-    u->readtab[u->readnb] = cpt ;
-    u->readsets[u->readnb].fd = u->fd[cpt].id; u->readsets[u->readnb].events = POLLIN; u->readnb++;
+    inaddr.sin_port = htons(EXT_PORT);
+    inaddr.sin_addr.s_addr = inet_addr(IP_TAB[DRONEID][(cpt - WFB_NB) % EXT_NB]);
+    if (-1 == bind( u->devtab[cpt].fd.id, (const struct sockaddr *)&inaddr, sizeof(inaddr))) exit(-1);
+    u->devtab[cpt].fd.outaddr.sin_family = AF_INET;
+    u->devtab[cpt].fd.outaddr.sin_port = htons(EXT_PORT);
+    u->devtab[cpt].fd.outaddr.sin_addr.s_addr = inet_addr(IP_TAB[DRONEID][(cpt - WFB_NB + 1) % EXT_NB]);
+    memcpy(u->devtab[cpt].fd.ipstr, IP_TAB[DRONEID][(cpt - WFB_NB + 1) % EXT_NB], 15);
+    u->devtab[cpt].nbelt = cpt;
+    u->readsets[cpt].fd = u->devtab[cpt].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
   }
 }
 
@@ -124,16 +126,16 @@ void wfb_utils_loop(wfb_utils_init_t *u) {
     if (0 != poll(u->readsets, u->readnb, -1)) {
       for (uint8_t cpt=0; cpt<u->readnb; cpt++) {
         if (u->readsets[cpt].revents == POLLIN) {
-          uint8_t cptid =  u->readtab[cpt];
+          uint8_t cptid =  u->devtab[cpt].nbelt;
 	  if ( cptid == 0 ) {
 	    len = read(u->readsets[cpt].fd, &exptime, sizeof(uint64_t)); 
 #if DRONEID == 0
-	    send_msg(u->fd[1], &u->log);
-	    send_msg(u->fd[2], &u->log);
+	    send_msg(u->devtab[1].fd, &u->log);
+	    send_msg(u->devtab[2].fd, &u->log);
 #endif
 	    print_log(&u->log);
 	  } else {
-            recv_msg(u->fd[cpt], &u->log);
+            recv_msg(u->devtab[cpt].fd, &u->log);
 	  }
 	}
       }
