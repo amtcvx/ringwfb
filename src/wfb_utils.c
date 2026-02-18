@@ -91,25 +91,24 @@ void print_log(wfb_utils_log_t *plog) {
 }
 
 /*****************************************************************************/
-void send_msg(wfb_utils_fd_t fd, wfb_utils_log_t *plog) {
+void build_msg(struct iovec *iovheadpay, struct iovec *iovpay, struct iovec *iovtab[2], struct msghdr *msg) {
 
-  ssize_t len;
   uint32_t sequence = 0;
   uint8_t payloadbuf[1500];
 
   wfb_utils_heads_pay_t headspay = { .droneid = DRONEID, .len = sizeof(payloadbuf), .seq = sequence};
 
-  struct iovec iovheadpay = { .iov_base = &headspay, .iov_len = sizeof(wfb_utils_heads_pay_t) };
+  iovheadpay->iov_base = &headspay;
+  iovheadpay->iov_len = sizeof(wfb_utils_heads_pay_t) };
 
-  struct iovec iovpay = { .iov_base = &payloadbuf, iovpay.iov_len = sizeof(payloadbuf) };
+  iovpay->iov_base = &payloadbuf;
+  iovpay->iov_len = sizeof(payloadbuf); 
 
   struct iovec iovtab[2] = { iovheadpay, iovpay }; uint8_t iovtablen = 2;
 
-  struct msghdr msg = { .msg_iov = iovtab, .msg_iovlen = iovtablen, .msg_name = &fd.outaddr, .msg_namelen = sizeof(fd.outaddr) };
-
-  len = sendmsg(fd.id, (const struct msghdr *)&msg, MSG_DONTWAIT);
-
-  plog->len += sprintf((char *)plog->buf + plog->len, "sendmsg (%ld)(%d)(%s)\n",len,fd.id,fd.ipstr);
+  msg->msg_iov = iovtab;
+  msg->msg_iovlen = iovtablen;
+  msg->msg_namelen = sizeof(struct sockaddr_in);
 }
 
 /*****************************************************************************/
@@ -136,8 +135,28 @@ void recv_msg(wfb_utils_fd_t fd, wfb_utils_log_t *plog) {
 }
 
 /*****************************************************************************/
+void recv_buf(uint8_t cpt, wfb_utils_fd_t fd, wfb_utils_log_t *plog) {
+
+#if DRONEID > 0
+  if (cpt == WFB_NB) {
+/*
+           memset(&vidbuf[vidcur][0],0,ONLINE_MTU);
+            struct iovec iov;
+            iov.iov_base = &vidbuf[vidcur][sizeof(wfb_utils_fechd_t)];
+            iov.iov_len = PAY_MTU;
+            lentab[WFB_VID][n.rc.mainraw] = readv( u.readsets[cpt].fd, &iov, 1) + sizeof(wfb_utils_fechd_t);
+            ((wfb_utils_fechd_t *)&vidbuf[vidcur][0])->feclen = lentab[WFB_VID][n.rc.mainraw];
+            vidcur++;
+*/
+  }
+#endif
+}
+
+/*****************************************************************************/
 void wfb_utils_loop(wfb_utils_init_t *u) {
 
+  struct msghdr msg;
+  struct iovec iovheadpay, iovpay, iovtab[2];
   uint64_t exptime;
   ssize_t len;
 
@@ -147,16 +166,23 @@ void wfb_utils_loop(wfb_utils_init_t *u) {
         if (u->readsets[cpt].revents == POLLIN) {
 	  if ( cpt == 0 ) {
 	    len = read(u->readsets[cpt].fd, &exptime, sizeof(uint64_t)); 
-#if DRONEID == 0
-	    send_msg(u->devtab[1].fd, &u->log);
-	    send_msg(u->devtab[2].fd, &u->log);
-#endif
 	    print_log(&u->log);
 	  } else {
-            recv_msg(u->devtab[cpt].fd, &u->log);
+            if (cpt < EXT_NB) recv_msg(u->devtab[cpt].fd, &u->log);
+	    else if (cpt < WFB_NB - 1) recv_buf(cpt, u->devtab[cpt].fd, &u->log);
 	  }
 	}
       }
+#if DRONEID > 0
+      if (lentab[WFB_VID] > 0) {
+        build_msg(&iovheadpay,&iovpay,&iovtab,&msg);
+	msg.msg_name = &u->devtab[1].fd.outaddr; len = sendmsg(u->devtab[1].fd.id, (const struct msghdr *)&msg, MSG_DONTWAIT);
+        u->log.len += sprintf((char *)u->log.buf + u->log.len, "sendmsg (%ld)(%d)(%s)\n",len,u->devtab[1].fd.id,u->devtab[1].fd.ipstr);
+	msg.msg_name = &u->devtab[2].fd.outaddr; len = sendmsg(u->devtab[2].fd.id, (const struct msghdr *)&msg, MSG_DONTWAIT);
+        u->log.len += sprintf((char *)u->log.buf + u->log.len, "sendmsg (%ld)(%d)(%s)\n",len,u->devtab[2].fd.id,u->devtab[2].fd.ipstr);
+        lentab[WFB_VID] = 0;
+      }
+#endif
     }
   }
 }
