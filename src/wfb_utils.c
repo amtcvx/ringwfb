@@ -10,7 +10,7 @@
 #define PORT_LOG 5000
 #define PORT_EXT 5010
 
-#define PORT_VID 5100
+#define PORT_VID 5600
 
 #define PERIOD_DELAY_S  1
 
@@ -47,7 +47,7 @@ void init_sock(uint8_t role, wfb_utils_fd_t *pfd, uint16_t port, const char *pin
     pfd->outaddr.sin_family = AF_INET;
     pfd->outaddr.sin_port = htons(port);
     pfd->outaddr.sin_addr.s_addr = inet_addr(pout);
-    memcpy(&pfd->ipstr, pout, sizeof(pfd->ipstr));
+    memcpy(&pfd->ipstr, pout, strlen(pout));
   }
 }
 
