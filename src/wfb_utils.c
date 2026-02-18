@@ -8,7 +8,9 @@
 #include <string.h>
 
 #define PORT_LOG 5000
-#define PORT_EXT 5100
+#define PORT_EXT 5010
+
+#define PORT_VID 5100
 
 #define PERIOD_DELAY_S  1
 
@@ -26,8 +28,6 @@ const char IP_TAB[MAXDRONE+1][EXT_NB][15] = {
   { "192.168.1.1", "192.168.4.1" }, 
   { "192.168.2.1", "192.168.3.2" }, 
   { "192.168.3.1", "192.168.4.2" } };
-
-const uint16_t PORT_TAB[WFB_NB] = { 0, 5100 };
 
 /*****************************************************************************/
 void init_sock(uint8_t role, wfb_utils_fd_t *pfd, uint16_t port, const char *pin, const char *pout) {
@@ -58,25 +58,25 @@ void wfb_utils_init(wfb_utils_init_t *u) {
   init_sock(1, &u->log.fd, PORT_LOG, (char *)0, IP_LOCAL);
   u->readnb = 0;
 
-  uint8_t devcpt = WFB_PRO;
-  if (-1 == (u->devtab[devcpt].fd.id = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
+  if (-1 == (u->dronetab[0].devtab[WFB_PRO].fd.id = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(u->devtab[devcpt].fd.id, 0, &period, NULL);
-  u->devtab[0].nbelt = 0;
-  u->readsets[0].fd = u->devtab[0].fd.id; u->readsets[0].events = POLLIN; u->readnb++;
+  timerfd_settime(u->dronetab[0].devtab[WFB_PRO].fd.id, 0, &period, NULL);
+  u->readsets[0].fd = u->dronetab[0].devtab[WFB_PRO].fd.id; u->readsets[0].events = POLLIN; u->readnb++;
 
 #if DRONEID == 0
-  init_sock(1,&u->devtab[WFB_VID].fd, PORT_TAB[WFB_VID], (char *)0, IP_LOCAL);
+  for (uint8_t cpt = 0; cpt < MAXDRONE ; cpt++) {
+    init_sock(1,&u->dronetab[cpt].devtab[WFB_VID].fd, PORT_VID + cpt, (char *)0, IP_LOCAL);
+  }
 #else
-  init_sock(0,&u->devtab[WFB_VID].fd, PORT_TAB[WFB_VID], IP_LOCAL, (char *)0);
+  init_sock(0,&u->dronetab[0].devtab[WFB_VID].fd, PORT_VID, IP_LOCAL, (char *)0);
+  u->readsets[1].fd = u->dronetab[0].devtab[WFB_VID].fd.id; u->readsets[1].events = POLLIN; u->readnb++;
 #endif
 
   for (uint8_t cpt = WFB_NB; cpt < DEV_NB; cpt++) {
-    init_sock(2, &u->devtab[cpt].fd, PORT_EXT, 
+    init_sock(2, &u->dronetab[0].devtab[cpt].fd, PORT_EXT, 
       (IP_TAB[DRONEID][(cpt - WFB_NB) % EXT_NB]), IP_TAB[DRONEID][(cpt - WFB_NB + 1) % EXT_NB]);
 
-    u->devtab[cpt].nbelt = cpt;
-    u->readsets[cpt].fd = u->devtab[cpt].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
+    u->readsets[cpt].fd = u->dronetab[0].devtab[cpt].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
   }
 
 }

@@ -30,8 +30,16 @@ typedef struct {
 } wfb_utils_dev_t;
 
 typedef struct {
-  wfb_utils_log_t log;
   wfb_utils_dev_t devtab[DEV_NB];
+} wfb_utils_drone_t;
+
+typedef struct {
+  wfb_utils_log_t log;
+#if DRONEID == 0
+  wfb_utils_drone_t dronetab[MAXDRONE];
+#else
+  wfb_utils_drone_t dronetab[1];
+#endif
   struct pollfd readsets[DEV_NB];
   uint8_t readnb;
 } wfb_utils_init_t;
