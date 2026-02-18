@@ -56,28 +56,28 @@ void wfb_utils_init(wfb_utils_init_t *u) {
 
   u->log.len =0; memset(u->log.buf, 0, sizeof(u->log.buf));
   init_sock(1, &u->log.fd, PORT_LOG, (char *)0, IP_LOCAL);
-  u->readnb = 0;
 
-  if (-1 == (u->dronetab[0].devtab[WFB_PRO].fd.id = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
+  u->readnb = 0;
+  if (-1 == (u->devtab[0].fd.id = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(u->dronetab[0].devtab[WFB_PRO].fd.id, 0, &period, NULL);
-  u->readsets[0].fd = u->dronetab[0].devtab[WFB_PRO].fd.id; u->readsets[0].events = POLLIN; u->readnb++;
+  timerfd_settime(u->devtab[0].fd.id, 0, &period, NULL);
+  u->readsets[0].fd = u->devtab[0].fd.id; u->readsets[0].events = POLLIN; u->readnb++;
+
+  for (uint8_t cpt = 1; cpt < EXT_NB; cpt++) {
+    init_sock(2, &u->devtab[cpt].fd, PORT_EXT,
+      (IP_TAB[DRONEID][(cpt - 1) % (EXT_NB - 1)]), IP_TAB[DRONEID][(cpt) % (EXT_NB - 1)]);
+    u->readsets[cpt].fd = u->devtab[cpt].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
+  }
 
 #if DRONEID == 0
   for (uint8_t cpt = 0; cpt < MAXDRONE ; cpt++) {
-    init_sock(1,&u->dronetab[cpt].devtab[WFB_VID].fd, PORT_VID + cpt, (char *)0, IP_LOCAL);
+    init_sock(1,&u->devdrone[cpt][WFB_VID].fd, PORT_VID + cpt, (char *)0, IP_LOCAL);
   }
 #else
-  init_sock(0,&u->dronetab[0].devtab[WFB_VID].fd, PORT_VID, IP_LOCAL, (char *)0);
-  u->readsets[1].fd = u->dronetab[0].devtab[WFB_VID].fd.id; u->readsets[1].events = POLLIN; u->readnb++;
+  cpt = u->readnb;
+  init_sock(0,&u->devtab[WFB_VID].fd, PORT_VID, IP_LOCAL, (char *)0);
+  u->readsets[cpt].fd = u->devtab[WFB_VID].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
 #endif
-
-  for (uint8_t cpt = WFB_NB; cpt < DEV_NB; cpt++) {
-    init_sock(2, &u->dronetab[0].devtab[cpt].fd, PORT_EXT, 
-      (IP_TAB[DRONEID][(cpt - WFB_NB) % EXT_NB]), IP_TAB[DRONEID][(cpt - WFB_NB + 1) % EXT_NB]);
-
-    u->readsets[cpt].fd = u->dronetab[0].devtab[cpt].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
-  }
 
 }
 
@@ -145,12 +145,11 @@ void wfb_utils_loop(wfb_utils_init_t *u) {
     if (0 != poll(u->readsets, u->readnb, -1)) {
       for (uint8_t cpt=0; cpt<u->readnb; cpt++) {
         if (u->readsets[cpt].revents == POLLIN) {
-          uint8_t cptid =  u->devtab[cpt].nbelt;
-	  if ( cptid == 0 ) {
+	  if ( cpt == 0 ) {
 	    len = read(u->readsets[cpt].fd, &exptime, sizeof(uint64_t)); 
 #if DRONEID == 0
+	    send_msg(u->devtab[1].fd, &u->log);
 	    send_msg(u->devtab[2].fd, &u->log);
-	    send_msg(u->devtab[3].fd, &u->log);
 #endif
 	    print_log(&u->log);
 	  } else {

@@ -4,10 +4,9 @@
 #include <poll.h>
 #include <arpa/inet.h>
 
-typedef enum { WFB_PRO, WFB_VID, WFB_NB } type_d;
+typedef enum { WFB_VID, WFB_NB } type_d;
 
-#define EXT_NB 2
-#define DEV_NB EXT_NB + WFB_NB
+#define EXT_NB 3
 
 #define PAY_MTU 1400
 
@@ -30,21 +29,19 @@ typedef struct {
 } wfb_utils_dev_t;
 
 typedef struct {
-  wfb_utils_dev_t devtab[DEV_NB];
-} wfb_utils_drone_t;
-
-typedef struct {
-  wfb_utils_log_t log;
 #if DRONEID == 0
-  wfb_utils_drone_t dronetab[MAXDRONE];
+  wfb_utils_dev_t devdrone[MAXDRONE][WFB_NB];
+#define READSETS_NB (EXT_NB + (MAXDRONE * WFB_NB))
 #else
-  wfb_utils_drone_t dronetab[1];
+#define READSETS_NB (EXT_NB + WFB_NB)
 #endif
-  struct pollfd readsets[DEV_NB];
+  wfb_utils_dev_t devtab[EXT_NB];
+  struct pollfd readsets[READSETS_NB];
   uint8_t readnb;
+  wfb_utils_log_t log;
 } wfb_utils_init_t;
 
 void wfb_utils_init(wfb_utils_init_t *u);
-void wfb_utils_loop(wfb_utils_init_t *u);
+void wfb_utils_loop(wfb_utils_init_t *u); 
 
 #endif // WFB_UTILS_H
