@@ -74,7 +74,7 @@ void wfb_utils_init(wfb_utils_init_t *u) {
     init_sock(1,&u->devdrone[cpt][WFB_VID].fd, PORT_VID + cpt, (char *)0, IP_LOCAL);
   }
 #else
-  cpt = u->readnb;
+  uint8_t cpt = u->readnb;
   init_sock(0,&u->devtab[WFB_VID].fd, PORT_VID, IP_LOCAL, (char *)0);
   u->readsets[cpt].fd = u->devtab[WFB_VID].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
 #endif
