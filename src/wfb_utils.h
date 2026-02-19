@@ -35,13 +35,13 @@ typedef struct {
 #else
 #define READSETS_NB (EXT_NB + WFB_NB)
 #endif
-  wfb_utils_dev_t devtab[EXT_NB];
+  wfb_utils_dev_t devtab[READSETS_NB];
   struct pollfd readsets[READSETS_NB];
   uint8_t readnb;
   wfb_utils_log_t log;
 } wfb_utils_init_t;
 
-void wfb_utils_init(wfb_utils_init_t *u);
-void wfb_utils_loop(wfb_utils_init_t *u); 
+void wfb_utils_init(wfb_utils_init_t *u); 
+void wfb_utils_periodic(wfb_utils_init_t *u); 
 
 #endif // WFB_UTILS_H

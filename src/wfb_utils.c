@@ -16,18 +16,20 @@
 
 #define IP_LOCAL "127.0.0.1"
 
-typedef struct {
-  uint8_t droneid;
-  uint32_t seq;
-  uint16_t len;
-  uint8_t dummy;
-} __attribute__((packed)) wfb_utils_heads_pay_t;
-
 const char IP_TAB[MAXDRONE+1][EXT_NB][15] = { 
   { "192.168.1.100", "192.168.2.100" }, 
   { "192.168.1.1", "192.168.4.1" }, 
   { "192.168.2.1", "192.168.3.2" }, 
   { "192.168.3.1", "192.168.4.2" } };
+
+/*****************************************************************************/
+void print_log(wfb_utils_log_t *plog) {
+
+  if (plog->len == 0) plog->len += sprintf((char *)plog->buf + plog->len, "TIC\n");
+
+  sendto(plog->fd.id, plog->buf, plog->len, 0,  (const struct sockaddr *)&plog->fd.outaddr, sizeof(struct sockaddr));
+  plog->len = 0;
+}
 
 /*****************************************************************************/
 void init_sock(uint8_t role, wfb_utils_fd_t *pfd, uint16_t port, const char *pin, const char *pout) {
@@ -75,114 +77,14 @@ void wfb_utils_init(wfb_utils_init_t *u) {
   }
 #else
   uint8_t cpt = u->readnb;
-  init_sock(0,&u->devtab[WFB_VID].fd, PORT_VID, IP_LOCAL, (char *)0);
+  init_sock(0,&u->devtab[EXT_NB + WFB_VID].fd, PORT_VID, IP_LOCAL, (char *)0);
   u->readsets[cpt].fd = u->devtab[WFB_VID].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
 #endif
 
 }
 
 /*****************************************************************************/
-void print_log(wfb_utils_log_t *plog) {
+void wfb_utils_periodic(wfb_utils_init_t *u) {
 
-  if (plog->len == 0) plog->len += sprintf((char *)plog->buf + plog->len, "TIC\n");
-
-  sendto(plog->fd.id, plog->buf, plog->len, 0,  (const struct sockaddr *)&plog->fd.outaddr, sizeof(struct sockaddr));
-  plog->len = 0;
-}
-
-/*****************************************************************************/
-void build_msg(struct iovec *iovheadpay, struct iovec *iovpay, struct iovec *iovtab[2], struct msghdr *msg) {
-
-  uint32_t sequence = 0;
-  uint8_t payloadbuf[1500];
-
-  wfb_utils_heads_pay_t headspay = { .droneid = DRONEID, .len = sizeof(payloadbuf), .seq = sequence};
-
-  iovheadpay->iov_base = &headspay;
-  iovheadpay->iov_len = sizeof(wfb_utils_heads_pay_t) };
-
-  iovpay->iov_base = &payloadbuf;
-  iovpay->iov_len = sizeof(payloadbuf); 
-
-  struct iovec iovtab[2] = { iovheadpay, iovpay }; uint8_t iovtablen = 2;
-
-  msg->msg_iov = iovtab;
-  msg->msg_iovlen = iovtablen;
-  msg->msg_namelen = sizeof(struct sockaddr_in);
-}
-
-/*****************************************************************************/
-void recv_msg(wfb_utils_fd_t fd, wfb_utils_log_t *plog) {
-
-  ssize_t len;
-  uint8_t payloadbuf[1500];
-
-  wfb_utils_heads_pay_t headspay;
-  memset(&headspay,0,sizeof(wfb_utils_heads_pay_t));
-  memset(&payloadbuf,0,sizeof(payloadbuf));
-
-  struct iovec iovheadpay = { .iov_base = &headspay, .iov_len = sizeof(wfb_utils_heads_pay_t) };
-  struct iovec iovpay = { .iov_base = &payloadbuf, .iov_len = sizeof(payloadbuf) };
-
-  struct iovec iovtab[2] = { iovheadpay, iovpay }; uint8_t tablen = 2;
-
-  struct msghdr msg = { .msg_iov = iovtab, .msg_iovlen = tablen };
-  len = recvmsg(fd.id, &msg, MSG_DONTWAIT) - sizeof(wfb_utils_heads_pay_t);
-
-  if (len > 0) {
-    if (headspay.len > 0) plog->len += sprintf((char *)plog->buf + plog->len, "(%ld) from DRONEID (%d) (%s)\n",len,headspay.droneid,fd.ipstr);
-  }
-}
-
-/*****************************************************************************/
-void recv_buf(uint8_t cpt, wfb_utils_fd_t fd, wfb_utils_log_t *plog) {
-
-#if DRONEID > 0
-  if (cpt == WFB_NB) {
-/*
-           memset(&vidbuf[vidcur][0],0,ONLINE_MTU);
-            struct iovec iov;
-            iov.iov_base = &vidbuf[vidcur][sizeof(wfb_utils_fechd_t)];
-            iov.iov_len = PAY_MTU;
-            lentab[WFB_VID][n.rc.mainraw] = readv( u.readsets[cpt].fd, &iov, 1) + sizeof(wfb_utils_fechd_t);
-            ((wfb_utils_fechd_t *)&vidbuf[vidcur][0])->feclen = lentab[WFB_VID][n.rc.mainraw];
-            vidcur++;
-*/
-  }
-#endif
-}
-
-/*****************************************************************************/
-void wfb_utils_loop(wfb_utils_init_t *u) {
-
-  struct msghdr msg;
-  struct iovec iovheadpay, iovpay, iovtab[2];
-  uint64_t exptime;
-  ssize_t len;
-
-  for(;;) {
-    if (0 != poll(u->readsets, u->readnb, -1)) {
-      for (uint8_t cpt=0; cpt<u->readnb; cpt++) {
-        if (u->readsets[cpt].revents == POLLIN) {
-	  if ( cpt == 0 ) {
-	    len = read(u->readsets[cpt].fd, &exptime, sizeof(uint64_t)); 
-	    print_log(&u->log);
-	  } else {
-            if (cpt < EXT_NB) recv_msg(u->devtab[cpt].fd, &u->log);
-	    else if (cpt < WFB_NB - 1) recv_buf(cpt, u->devtab[cpt].fd, &u->log);
-	  }
-	}
-      }
-#if DRONEID > 0
-      if (lentab[WFB_VID] > 0) {
-        build_msg(&iovheadpay,&iovpay,&iovtab,&msg);
-	msg.msg_name = &u->devtab[1].fd.outaddr; len = sendmsg(u->devtab[1].fd.id, (const struct msghdr *)&msg, MSG_DONTWAIT);
-        u->log.len += sprintf((char *)u->log.buf + u->log.len, "sendmsg (%ld)(%d)(%s)\n",len,u->devtab[1].fd.id,u->devtab[1].fd.ipstr);
-	msg.msg_name = &u->devtab[2].fd.outaddr; len = sendmsg(u->devtab[2].fd.id, (const struct msghdr *)&msg, MSG_DONTWAIT);
-        u->log.len += sprintf((char *)u->log.buf + u->log.len, "sendmsg (%ld)(%d)(%s)\n",len,u->devtab[2].fd.id,u->devtab[2].fd.ipstr);
-        lentab[WFB_VID] = 0;
-      }
-#endif
-    }
-  }
+  print_log(&u->log);
 }
