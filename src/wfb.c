@@ -77,18 +77,18 @@ int main(void) {
 #endif
 		}
               }
-
-	    } else if (cpt < (EXT_NB + WFB_NB - 1)) {
+	    } else if (cpt < (EXT_NB + WFB_NB)) {
 #if DRONEID > 0
-              uint8_t cptdev = cpt - EXT_NB;
-              if (cptdev  == WFB_NB) {
+              if (cpt  == (EXT_NB + WFB_VID)) {
 
                 memset(&payloadbuf_out[WFB_VID][0],0,ONLINE_MTU);
                 struct iovec iov;
                 iov.iov_base = &payloadbuf_out[WFB_VID][0];
                 iov.iov_len = PAY_MTU;
-                lentab[WFB_VID] = readv( u.devtab[cptdev].fd.id, &iov, 1);
-                u.log.len += sprintf((char *)u.log.buf + u.log.len, "readv (%ld)\n",lentab[WFB_VID]);
+                lentab[WFB_VID] = readv( u.devtab[cpt].fd.id, &iov, 1);
+//                u.log.len += sprintf((char *)u.log.buf + u.log.len, "readv (%ld)\n",lentab[WFB_VID]);
+                printf("len(%ld)\n",lentab[WFB_VID]);
+
               }
 #endif
 	    }
@@ -104,10 +104,13 @@ int main(void) {
 	iovpay_out.iov_base = &payloadbuf_out[WFB_VID][0]; iovpay_out.iov_len = lentab[WFB_VID];
 
 	msg_out.msg_name = &u.devtab[1].fd.outaddr; len = sendmsg(u.devtab[1].fd.id, (const struct msghdr *)&msg_out, MSG_DONTWAIT);
-        u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendmsg (%ld)(%d)(%s)\n",len,u.devtab[1].fd.id,u.devtab[1].fd.ipstr);
+//        u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendmsg (%ld)(%d)(%s)\n",len,u.devtab[1].fd.id,u.devtab[1].fd.ipstr);
+        printf("sendmsg (%ld)(%d)(%s)\n",len,u.devtab[1].fd.id,u.devtab[1].fd.ipstr);
+
 
 	msg_out.msg_name = &u.devtab[2].fd.outaddr; len = sendmsg(u.devtab[2].fd.id, (const struct msghdr *)&msg_out, MSG_DONTWAIT);
-        u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendmsg (%ld)(%d)(%s)\n",len,u.devtab[2].fd.id,u.devtab[2].fd.ipstr);
+//        u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendmsg (%ld)(%d)(%s)\n",len,u.devtab[2].fd.id,u.devtab[2].fd.ipstr);
+        printf("sendmsg (%ld)(%d)(%s)\n",len,u.devtab[2].fd.id,u.devtab[2].fd.ipstr);
 
         lentab[WFB_VID] = 0;
       }
