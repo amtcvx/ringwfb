@@ -65,9 +65,17 @@ void wfb_utils_init(wfb_utils_init_t *u) {
   timerfd_settime(u->devtab[0].fd.id, 0, &period, NULL);
   u->readsets[0].fd = u->devtab[0].fd.id; u->readsets[0].events = POLLIN; u->readnb++;
 
-  for (uint8_t cpt = 1; cpt < EXT_NB; cpt++) {
-    init_sock(2, &u->devtab[cpt].fd, PORT_EXT,
-      (IP_TAB[DRONEID][(cpt - 1) % (EXT_NB - 1)]), IP_TAB[DRONEID][(cpt) % (EXT_NB - 1)]);
+  for (uint8_t cpt = 0; cpt < (EXT_NB - 1); cpt++) {
+#if DRONEID == 0      
+    const char *pin = (IP_TAB[0][cpt]); const char *pout = IP_TAB[cpt + 1][0];
+    // cpt=0: 192.168.1.100 192.168.1.1  cpt=1:  192.168.2.100 192.168.2.1 //
+#else
+    const char *pin = (IP_TAB[DRONEID][cpt]); const char *pout = IP_TAB[cpt * MAXDRONE * (2 - DRONEID) ][cpt];
+    // DRONEID=1: cpt=0: 192.168.1.1 192.168.1.100   cpt=1: 192.168.4.1 192.168.4.2 //
+    // DRONEID=2: cpt=0: 192.168.2.1 192.168.2.100   cpt=1: 192.168.3.2 192.168.3.1 //
+    // DRONEID=3: cpt=0: 192.168.3.1 192.168.3.2     cpt=1: 192.168.4.2 192.168.4.1 // 
+#endif
+    init_sock(2, &u->devtab[cpt].fd, PORT_EXT, pin, pout);
     u->readsets[cpt].fd = u->devtab[cpt].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
   }
 
