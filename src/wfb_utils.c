@@ -17,8 +17,10 @@
 #define IP_LOCAL "127.0.0.1"
 
 const char IP_TAB[4][2][15] = { 
-  { "192.168.1.100", "192.168.2.100" }, 
-  { "192.168.1.1",   "192.168.4.1" }, 
+//  { "192.168.1.100", "192.168.2.100" }, 
+//  { "192.168.1.1",   "192.168.4.1" }, 
+  { "192.168.1.29", "192.168.2.100" }, 
+  { "192.168.1.129",   "192.168.4.1" }, 
   { "192.168.2.1",   "192.168.3.2" }, 
   { "192.168.3.1",   "192.168.4.2" }
 };
@@ -57,7 +59,7 @@ void init_sock(uint8_t role, wfb_utils_fd_t *pfd, uint16_t port, const char *pin
     pfd->outaddr.sin_family = AF_INET;
     pfd->outaddr.sin_port = htons(port);
     pfd->outaddr.sin_addr.s_addr = inet_addr(pout);
-    memcpy(&pfd->ipstr, pout, strlen(pout));
+    memcpy(&pfd->ipstr, pout,sizeof(pfd->ipstr));
   }
 }
 
