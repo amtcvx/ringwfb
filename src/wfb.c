@@ -45,25 +45,17 @@ int main(void) {
 
               memset(&headspay,0,sizeof(wfb_utils_heads_pay_t));
               memset(&payloadbuf_in,0,sizeof(payloadbuf_in));
-
               struct iovec iovpay = { .iov_base =  payloadbuf_in, .iov_len = sizeof(payloadbuf_in) };
               struct iovec iovpart[2] = { iovheadpay, iovpay };
 	      struct msghdr msg = { .msg_iov = iovpart, .msg_iovlen=2 };
 
-	      len = recvmsg(u.devtab[cpt].fd.id, &msg, MSG_DONTWAIT);
-
-	      printf("(%d)(%ld)(%d)\n",cpt,len,headspay.len);
-
-	      if (len > 0) {
-
+	      if ((len = recvmsg(u.devtab[cpt].fd.id, &msg, MSG_DONTWAIT)) > 0) {
                 if (headspay.len > 0) {
 #if DRONEID == 0
-	          if (headspay.droneid < MAXDRONE) {
-
+	          if (headspay.droneid <= MAXDRONE) {
 	            if (headspay.type == WFB_VID) {
-
 		      len = sendto(u.devdrone[ headspay.droneid ][WFB_VID].fd.id, 
-		        iovpay.iov_base, iovpay.iov_len,MSG_DONTWAIT, 
+		        iovpay.iov_base, headspay.len, MSG_DONTWAIT, 
 		        (struct sockaddr *)&u.devdrone[ headspay.droneid ][WFB_VID].fd.outaddr, 
 			sizeof(struct sockaddr_in));
 
