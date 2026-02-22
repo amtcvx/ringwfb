@@ -69,8 +69,10 @@ int main(void) {
 #if DRONEID == 0
 	          if (headspay_in[cpt - 1].droneid < MAXDRONE) {
 	            if (headspay_in[cpt - 1].type == WFB_NB) {
-		      len = sendto(u.devdrone[ headspay_in[cpt - 1].droneid ][WFB_VID].fd.id, iovpay_in[cpt - 1].iov_base, iovpay_in[cpt - 1].iov_len,
-		        MSG_DONTWAIT, (struct sockaddr *)&u.devdrone[ headspay_in[cpt - 1].droneid ][WFB_VID].fd.outaddr, sizeof(struct sockaddr_in));
+		      len = sendto(u.devdrone[ headspay_in[cpt - 1].droneid ][WFB_VID].fd.id, 
+		        iovpay_in[cpt - 1].iov_base, iovpay_in[cpt - 1].iov_len,MSG_DONTWAIT, 
+		        (struct sockaddr *)&u.devdrone[ headspay_in[cpt - 1].droneid ][WFB_VID].fd.outaddr, 
+			sizeof(struct sockaddr_in));
 		      u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendto (%ld)\n",len);
 		    }
 		  }
@@ -98,18 +100,25 @@ int main(void) {
 
 #if DRONEID > 0
       if (lentab[WFB_VID] > 0) {
-         
+
         headspay_out.type = WFB_VID;
         headspay_out.seq = sequence ++;
-	iovpay_out.iov_base = &payloadbuf_out[WFB_VID][0]; iovpay_out.iov_len = lentab[WFB_VID];
 
-	msg_out.msg_name = &u.devtab[1].fd.outaddr; len = sendmsg(u.devtab[1].fd.id, (const struct msghdr *)&msg_out, MSG_DONTWAIT);
-//        u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendmsg (%ld)(%d)(%s)\n",len,u.devtab[1].fd.id,u.devtab[1].fd.ipstr);
+        iovpay_out.iov_base = &payloadbuf_out[WFB_VID][0]; iovpay_out.iov_len = lentab[WFB_VID];
+
+        struct iovec iovtab[2] = { iovheadpay_out, iovpay_out }; uint8_t tablen = 2;
+        struct msghdr msg = 
+	  { .msg_iov = iovtab, .msg_iovlen=tablen, .msg_namelen=sizeof(struct sockaddr_in)}; 
+/*
+        struct msghdr msg = 
+	  { .msg_iov = iovpart_out, .msg_iovlen=2, .msg_namelen=sizeof(struct sockaddr_in)}; 
+*/
+        msg.msg_name = &u.devtab[1].fd.outaddr;
+        len = sendmsg(u.devtab[1].fd.id, (const struct msghdr *)&msg, MSG_DONTWAIT);
         printf("sendmsg (%ld)(%d)(%s)\n",len,u.devtab[1].fd.id,u.devtab[1].fd.ipstr);
 
-
-	msg_out.msg_name = &u.devtab[2].fd.outaddr; len = sendmsg(u.devtab[2].fd.id, (const struct msghdr *)&msg_out, MSG_DONTWAIT);
-//        u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendmsg (%ld)(%d)(%s)\n",len,u.devtab[2].fd.id,u.devtab[2].fd.ipstr);
+        msg.msg_name = &u.devtab[2].fd.outaddr;
+        len = sendmsg(u.devtab[2].fd.id, (const struct msghdr *)&msg, MSG_DONTWAIT);
         printf("sendmsg (%ld)(%d)(%s)\n",len,u.devtab[2].fd.id,u.devtab[2].fd.ipstr);
 
         lentab[WFB_VID] = 0;

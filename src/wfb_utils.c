@@ -9,29 +9,36 @@
 
 #define PORT_LOG 5000
 #define PORT_EXT 5010
-
 #define PORT_VID 5600
 
 #define PERIOD_DELAY_S  1
 
 #define IP_LOCAL "127.0.0.1"
 
+const char IP_TAB[1+MAXDRONE][2][15] = { 
+  { "192.168.1.29","192.168.2.100" }, 
+  { "192.168.1.129","192.168.2.1" }
+};
+const uint8_t IP_ROUTE[1+MAXDRONE][2][2][2] = {
+  {{{ 0,0 },{ 0,1 }},{{ 1,0 },{ 1,1 }}},
+  {{{ 0,1 },{ 0,0 }},{{ 1,1 },{ 1,0 }}}
+};
+/*
 const char IP_TAB[4][2][15] = { 
-//  { "192.168.1.100", "192.168.2.100" }, 
-//  { "192.168.1.1",   "192.168.4.1" }, 
-  { "192.168.1.29", "192.168.2.100" }, 
-  { "192.168.1.129",   "192.168.4.1" }, 
+  { "192.168.1.100", "192.168.2.100" }, 
+  { "192.168.1.1",   "192.168.4.1" }, 
+  { "192.168.1.29",  "192.168.2.100" }, 
+  { "192.168.1.129", "192.168.2.1" }, 
   { "192.168.2.1",   "192.168.3.2" }, 
   { "192.168.3.1",   "192.168.4.2" }
 };
-
 const uint8_t IP_ROUTE[4][2][2][2] = {
   {{{ 0,0 },{ 0,1 }},{{ 1,0 },{ 0,2 }}},  // 192.168.1.100 192.168.1.1   <->  192.168.2.100 192.168.2.1
-  {{{ 0,1 },{ 0,0 }},{{ 1,1 },{ 1,3 }}},  // 192.168.1.1   192.168.1.100 <->  192.168.4.1   192.168.4.2 					
+  {{{ 0,1 },{ 0,0 }},{{ 1,1 },{ 1,3 }}},  // 192.168.1.1   192.168.1.100 <->  192.168.4.1   192.168.4.2
   {{{ 0,2 },{ 1,0 }},{{ 1,2 },{ 0,3 }}},  // 192.168.2.1   192.168.2.100 <->  192.168.3.2   192.168.3.1
   {{{ 0,3 },{ 1,2 }},{{ 1,3 },{ 1,1 }}}   // 192.168.3.1   192.168.3.2   <->  192.168.4.2   192.168.4.1 
 };
-
+*/
 /*****************************************************************************/
 void print_log(wfb_utils_log_t *plog) {   
 
@@ -75,30 +82,28 @@ void wfb_utils_init(wfb_utils_init_t *u) {
   timerfd_settime(u->devtab[0].fd.id, 0, &period, NULL);
   u->readsets[0].fd = u->devtab[0].fd.id; u->readsets[0].events = POLLIN; u->readnb++;
 
-  uint8_t droneid = 0, cpt=1;
-#if DRONEID == 0
-  for (droneid = 0; droneid <= MAXDRONE ; droneid++) {
-#else   
-  droneid = DRONEID;
-#endif
-    for (uint8_t i = 0; i < 2; i++) {
-      init_sock(2, &u->devtab[cpt].fd, PORT_EXT, 
-		    IP_TAB[IP_ROUTE[droneid][i][0][1]][IP_ROUTE[droneid][i][0][0]],
-		    IP_TAB[IP_ROUTE[droneid][i][1][1]][IP_ROUTE[droneid][i][1][0]]);
-    }
+  uint8_t cpt = 1;
+  for (uint8_t i = 0; i < 2; i++) {
+    init_sock(2, &u->devtab[cpt].fd, PORT_EXT, 
+      IP_TAB[IP_ROUTE[DRONEID][i][0][1]][IP_ROUTE[DRONEID][i][0][0]],
+      IP_TAB[IP_ROUTE[DRONEID][i][1][1]][IP_ROUTE[DRONEID][i][1][0]]);
+
+    printf("(%s) (%s)\n", IP_TAB[IP_ROUTE[DRONEID][i][0][1]][IP_ROUTE[DRONEID][i][0][0]],
+      IP_TAB[IP_ROUTE[DRONEID][i][1][1]][IP_ROUTE[DRONEID][i][1][0]]);
+
     u->readsets[cpt].fd = u->devtab[cpt].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
-#if DRONEID == 0
+    cpt++;
   }
 
-  for (uint8_t cpt = 0; cpt < MAXDRONE ; cpt++) {
-    init_sock(1,&u->devdrone[cpt][WFB_VID].fd, PORT_VID + cpt, (char *)0, IP_LOCAL);
+#if DRONEID == 0
+  for (uint8_t i = 0; i < MAXDRONE ; i++) {
+    init_sock(1,&u->devdrone[i][WFB_VID].fd, PORT_VID + i, (char *)0, IP_LOCAL);
   }
 #else
   cpt = u->readnb;
-  init_sock(0,&u->devtab[EXT_NB + WFB_VID].fd, PORT_VID, IP_LOCAL, (char *)0);
-  u->readsets[cpt].fd = u->devtab[EXT_NB + WFB_VID].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
+  init_sock(0,&u->devtab[cpt].fd, PORT_VID, IP_LOCAL, (char *)0);
+  u->readsets[cpt].fd = u->devtab[cpt].fd.id; u->readsets[cpt].events = POLLIN; u->readnb++;
 #endif
-
 }
 
 /*****************************************************************************/
