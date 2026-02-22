@@ -29,17 +29,14 @@ int main(void) {
     { .iov_base = &headspay_in[0], .iov_len = sizeof(wfb_utils_heads_pay_t) },
     { .iov_base = &headspay_in[1], .iov_len = sizeof(wfb_utils_heads_pay_t) }};
 
-  struct iovec iovpay_out = { .iov_base = NULL, .iov_len = 0 };
   struct iovec iovpay_in[2] = { 
     { .iov_base = NULL, .iov_len = 0 },
     { .iov_base = NULL, .iov_len = 0 } };
 
-  struct iovec iovpart_out[2] = { iovheadpay_out, iovpay_out };
   struct iovec iovpart_in[2][2]= {
     { iovheadpay_in[0], iovpay_in[0] },
     { iovheadpay_in[1], iovpay_in[1] }};
 
-  struct msghdr msg_out =  { .msg_iov = iovpart_out, .msg_iovlen = 2 };
   struct msghdr msg_in[2] = { 
     { .msg_iov = iovpart_in[0], .msg_iovlen = 2 },
     { .msg_iov = iovpart_in[1], .msg_iovlen = 2 }};
@@ -104,15 +101,10 @@ int main(void) {
         headspay_out.type = WFB_VID;
         headspay_out.seq = sequence ++;
 
-        iovpay_out.iov_base = &payloadbuf_out[WFB_VID][0]; iovpay_out.iov_len = lentab[WFB_VID];
+        struct iovec iovpay_out = { .iov_base = &payloadbuf_out[WFB_VID][0], .iov_len = lentab[WFB_VID] };
+        struct iovec iovpart[2] = { iovheadpay_out, iovpay_out };
+	struct msghdr msg = { .msg_iov = iovpart, .msg_iovlen=2, .msg_namelen=sizeof(struct sockaddr_in)}; 
 
-        struct iovec iovtab[2] = { iovheadpay_out, iovpay_out }; uint8_t tablen = 2;
-        struct msghdr msg = 
-	  { .msg_iov = iovtab, .msg_iovlen=tablen, .msg_namelen=sizeof(struct sockaddr_in)}; 
-/*
-        struct msghdr msg = 
-	  { .msg_iov = iovpart_out, .msg_iovlen=2, .msg_namelen=sizeof(struct sockaddr_in)}; 
-*/
         msg.msg_name = &u.devtab[1].fd.outaddr;
         len = sendmsg(u.devtab[1].fd.id, (const struct msghdr *)&msg, MSG_DONTWAIT);
         printf("sendmsg (%ld)(%d)(%s)\n",len,u.devtab[1].fd.id,u.devtab[1].fd.ipstr);
