@@ -52,7 +52,7 @@ int main(void) {
 
 	      len = recvmsg(u.devtab[cpt].fd.id, &msg, MSG_DONTWAIT);
 
-	      printf("(%d)(%ld)\n",cpt,len);
+	      printf("(%d)(%ld)(%d)\n",cpt,len,headspay.len);
 
 	      if (len > 0) {
 
@@ -97,6 +97,7 @@ int main(void) {
 #if DRONEID > 0
       if (lentab[WFB_VID] > 0) {
 
+        headspay.len = lentab[WFB_VID]; 
         headspay.type = WFB_VID;
         headspay.seq = sequence ++;
 
