@@ -27,7 +27,7 @@ int main(void) {
   wfb_utils_heads_pay_t headspay;
   struct iovec iovheadpay = { .iov_base = &headspay, .iov_len = sizeof(wfb_utils_heads_pay_t) };
 
-  uint32_t sequence = 0;
+  uint32_t sequence = 1, refseq = 0;
 
   uint64_t exptime;
   ssize_t len = 0, lentab[WFB_NB] = { 0 };
@@ -53,13 +53,18 @@ int main(void) {
                 if (headspay.len > 0) {
 #if DRONEID == 0
 	          if (headspay.droneid <= MAXDRONE) {
-	            if (headspay.type == WFB_VID) {
-		      len = sendto(u.devdrone[ headspay.droneid ][WFB_VID].fd.id, 
-		        iovpay.iov_base, headspay.len, MSG_DONTWAIT, 
-		        (struct sockaddr *)&u.devdrone[ headspay.droneid ][WFB_VID].fd.outaddr, 
-			sizeof(struct sockaddr_in));
+                    
+		    if (headspay.seq > refseq ) {
+		      refseq = headspay.seq;
 
-		      printf("(%d)(%ld)\n",cpt,len);
+	              if (headspay.type == WFB_VID) {
+		        len = sendto(u.devdrone[ headspay.droneid - 1 ][WFB_VID].fd.id, 
+		          iovpay.iov_base, headspay.len, MSG_DONTWAIT, 
+		          (struct sockaddr *)&u.devdrone[ headspay.droneid - 1 ][WFB_VID].fd.outaddr, 
+			  sizeof(struct sockaddr_in));
+
+		        printf("(%d)(%ld)(%d)\n",cpt,len,headspay.seq);
+		      }
 
 //		      u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendto (%ld)\n",len);
 		    }
