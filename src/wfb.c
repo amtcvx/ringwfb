@@ -97,8 +97,9 @@ int main(void) {
 #if DRONEID > 0
       if (lentab[WFB_VID] > 0) {
 
-        headspay.len = lentab[WFB_VID]; 
+        headspay.droneid = DRONEID;
         headspay.type = WFB_VID;
+        headspay.len = lentab[WFB_VID]; 
         headspay.seq = sequence ++;
 
         struct iovec iovpay = { .iov_base = &payloadbuf_out[WFB_VID][0], .iov_len = lentab[WFB_VID] };
