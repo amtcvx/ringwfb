@@ -97,11 +97,11 @@ int main(void) {
 #if DRONEID > 0
       if (lentab[WFB_VID] > 0) {
 
-        headspay_out.type = WFB_VID;
-        headspay_out.seq = sequence ++;
+        headspay.type = WFB_VID;
+        headspay.seq = sequence ++;
 
         struct iovec iovpay = { .iov_base = &payloadbuf_out[WFB_VID][0], .iov_len = lentab[WFB_VID] };
-        struct iovec iovpart[2] = { iovheadpay_out, iovpay };
+        struct iovec iovpart[2] = { iovheadpay, iovpay };
 	struct msghdr msg = { .msg_iov = iovpart, .msg_iovlen=2, .msg_namelen=sizeof(struct sockaddr_in)}; 
 
         msg.msg_name = &u.devtab[1].fd.outaddr;
