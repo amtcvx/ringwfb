@@ -5,9 +5,6 @@
 #include <stdio.h>
 #include <sys/uio.h>
 
-#define PAY_MTU 1400
-#define ONLINE_MTU 1400
-
 typedef struct {
   uint8_t droneid;
   uint8_t type;
@@ -15,31 +12,20 @@ typedef struct {
   uint32_t seq;
 } __attribute__((packed)) wfb_utils_heads_pay_t;
 
+#define PAY_MTU 1400
+#define ONLINE_MTU PAY_MTU + sizeof(wfb_utils_heads_pay_t)
+
 /*****************************************************************************/
 int main(void) {
 
   wfb_utils_init_t u;
   wfb_utils_init(&u);
 
-  uint8_t payloadbuf_in[2], payloadbuf_out[WFB_NB][ONLINE_MTU];
+  uint8_t payloadbuf_out[WFB_NB][PAY_MTU];
+  uint8_t payloadbuf_in[ONLINE_MTU];
 
-  wfb_utils_heads_pay_t headspay_in[2], headspay_out = { .droneid = DRONEID };
-  struct iovec iovheadpay_out = { .iov_base = &headspay_out, .iov_len = sizeof(wfb_utils_heads_pay_t) };
-  struct iovec iovheadpay_in[2] = { 
-    { .iov_base = &headspay_in[0], .iov_len = sizeof(wfb_utils_heads_pay_t) },
-    { .iov_base = &headspay_in[1], .iov_len = sizeof(wfb_utils_heads_pay_t) }};
-
-  struct iovec iovpay_in[2] = { 
-    { .iov_base = NULL, .iov_len = 0 },
-    { .iov_base = NULL, .iov_len = 0 } };
-
-  struct iovec iovpart_in[2][2]= {
-    { iovheadpay_in[0], iovpay_in[0] },
-    { iovheadpay_in[1], iovpay_in[1] }};
-
-  struct msghdr msg_in[2] = { 
-    { .msg_iov = iovpart_in[0], .msg_iovlen = 2 },
-    { .msg_iov = iovpart_in[1], .msg_iovlen = 2 }};
+  wfb_utils_heads_pay_t headspay;
+  struct iovec iovheadpay = { .iov_base = &headspay, .iov_len = sizeof(wfb_utils_heads_pay_t) };
 
   uint32_t sequence = 0;
 
@@ -57,20 +43,33 @@ int main(void) {
 
             if (cpt < EXT_NB) {
 
-              memset(&headspay_in[cpt - 1],0,sizeof(wfb_utils_heads_pay_t));
-              memset(&payloadbuf_in[cpt - 1],0,sizeof(payloadbuf_in[cpt - 1]));
-  
-	      if ((len = recvmsg(u.devtab[cpt].fd.id, &msg_in[cpt - 1], MSG_DONTWAIT) - sizeof(wfb_utils_heads_pay_t)) > 0) {
+              memset(&headspay,0,sizeof(wfb_utils_heads_pay_t));
+              memset(&payloadbuf_in,0,sizeof(payloadbuf_in));
 
-                if (headspay_in[cpt - 1].len > 0) {
+              struct iovec iovpay = { .iov_base =  payloadbuf_in, .iov_len = sizeof(payloadbuf_in) };
+              struct iovec iovpart[2] = { iovheadpay, iovpay };
+	      struct msghdr msg = { .msg_iov = iovpart, .msg_iovlen=2 };
+
+	      len = recvmsg(u.devtab[cpt].fd.id, &msg, MSG_DONTWAIT);
+
+	      printf("(%d)(%ld)\n",cpt,len);
+
+	      if (len > 0) {
+
+                if (headspay.len > 0) {
 #if DRONEID == 0
-	          if (headspay_in[cpt - 1].droneid < MAXDRONE) {
-	            if (headspay_in[cpt - 1].type == WFB_NB) {
-		      len = sendto(u.devdrone[ headspay_in[cpt - 1].droneid ][WFB_VID].fd.id, 
-		        iovpay_in[cpt - 1].iov_base, iovpay_in[cpt - 1].iov_len,MSG_DONTWAIT, 
-		        (struct sockaddr *)&u.devdrone[ headspay_in[cpt - 1].droneid ][WFB_VID].fd.outaddr, 
+	          if (headspay.droneid < MAXDRONE) {
+
+	            if (headspay.type == WFB_VID) {
+
+		      len = sendto(u.devdrone[ headspay.droneid ][WFB_VID].fd.id, 
+		        iovpay.iov_base, iovpay.iov_len,MSG_DONTWAIT, 
+		        (struct sockaddr *)&u.devdrone[ headspay.droneid ][WFB_VID].fd.outaddr, 
 			sizeof(struct sockaddr_in));
-		      u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendto (%ld)\n",len);
+
+		      printf("(%d)(%ld)\n",cpt,len);
+
+//		      u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendto (%ld)\n",len);
 		    }
 		  }
 #endif
@@ -80,7 +79,7 @@ int main(void) {
 #if DRONEID > 0
               if (cpt  == (EXT_NB + WFB_VID)) {
 
-                memset(&payloadbuf_out[WFB_VID][0],0,ONLINE_MTU);
+                memset(&payloadbuf_out[WFB_VID][0],0,PAY_MTU);
                 struct iovec iov;
                 iov.iov_base = &payloadbuf_out[WFB_VID][0];
                 iov.iov_len = PAY_MTU;
@@ -101,8 +100,8 @@ int main(void) {
         headspay_out.type = WFB_VID;
         headspay_out.seq = sequence ++;
 
-        struct iovec iovpay_out = { .iov_base = &payloadbuf_out[WFB_VID][0], .iov_len = lentab[WFB_VID] };
-        struct iovec iovpart[2] = { iovheadpay_out, iovpay_out };
+        struct iovec iovpay = { .iov_base = &payloadbuf_out[WFB_VID][0], .iov_len = lentab[WFB_VID] };
+        struct iovec iovpart[2] = { iovheadpay_out, iovpay };
 	struct msghdr msg = { .msg_iov = iovpart, .msg_iovlen=2, .msg_namelen=sizeof(struct sockaddr_in)}; 
 
         msg.msg_name = &u.devtab[1].fd.outaddr;
