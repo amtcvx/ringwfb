@@ -53,10 +53,10 @@ int main(void) {
                 if (headspay.len > 0) {
 #if DRONEID == 0
 	          if (headspay.droneid <= MAXDRONE) {
-                    
+/*                    
 		    if (headspay.seq > refseq ) {
 		      refseq = headspay.seq;
-
+*/
 	              if (headspay.type == WFB_VID) {
 		        len = sendto(u.devdrone[ headspay.droneid - 1 ][WFB_VID].fd.id, 
 		          iovpay.iov_base, headspay.len, MSG_DONTWAIT, 
@@ -67,7 +67,7 @@ int main(void) {
 		      }
 
 //		      u.log.len += sprintf((char *)u.log.buf + u.log.len, "sendto (%ld)\n",len);
-		    }
+//		    }
 		  }
 #endif
 		}
