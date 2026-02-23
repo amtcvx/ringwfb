@@ -16,8 +16,8 @@
 #define IP_LOCAL "127.0.0.1"
 
 const char IP_TAB[1+MAXDRONE][2][15] = { 
-  { "192.168.1.29","192.168.2.100" }, 
-  { "192.168.1.129","192.168.2.1" }
+  { "192.168.1.100","192.168.4.100" }, 
+  { "192.168.1.1","192.168.4.1" }
 };
 const uint8_t IP_ROUTE[1+MAXDRONE][2][2][2] = {
   {{{ 0,0 },{ 0,1 }},{{ 1,0 },{ 1,1 }}},
@@ -97,7 +97,9 @@ void wfb_utils_init(wfb_utils_init_t *u) {
 
 #if DRONEID == 0
   for (uint8_t i = 0; i < MAXDRONE ; i++) {
-    init_sock(1,&u->devdrone[i][WFB_VID].fd, PORT_VID + i, (char *)0, IP_LOCAL);
+    init_sock(1,&u->devdrone[i][WFB_VID].fd, PORT_VID + i + 1, (char *)0, IP_LOCAL);
+
+    printf("(%d)(%d)(%s)\n",u->devdrone[i][WFB_VID].fd.id,PORT_VID + i + 1,u->devdrone[i][WFB_VID].fd.ipstr);
   }
 #else
   cpt = u->readnb;
