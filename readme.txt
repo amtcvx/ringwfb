@@ -33,6 +33,11 @@ sudo iptables -L
 sudo iptables -L -v -n -t mangle
 
 -------------------------------------------------------------------------------
+sudo iptables -t mangle -I PREROUTING -j TEE –gateway 10.20.0.129
+sudo iptables -t mangle -I POSTROUTING -j TEE –gateway 10.20.0.129
+iptables -t mangle -S
+
+-------------------------------------------------------------------------------
 Port 8001 to 8002
 -----------------
 sudo iptables -A PREROUTING -t mangle -p udp ! -s 127.0.0.1 --dport 8001 -j TEE --gateway 127.0.0.1
