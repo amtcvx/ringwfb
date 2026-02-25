@@ -33,9 +33,9 @@ sudo iptables -L
 sudo iptables -L -v -n -t mangle
 
 -------------------------------------------------------------------------------
-sudo iptables -t mangle -I PREROUTING -j TEE –gateway 10.20.0.129
-sudo iptables -t mangle -I POSTROUTING -j TEE –gateway 10.20.0.129
-iptables -t mangle -S
+sudo iptables -t mangle -I PREROUTING -j TEE --gateway 192.168.1.1
+sudo iptables -t mangle -I POSTROUTING -j TEE --gateway 192.168.1.1
+sudo iptables -t mangle -S
 
 -------------------------------------------------------------------------------
 Port 8001 to 8002
