@@ -42,6 +42,17 @@ sudo iptables -L -v -n -t nat
 #
 -------------------------------------------------------------------------------
 Octave1 : 192.168.1.1
+
+sudo iptables -A OUTPUT -p udp -d 127.0.0.1 -j TEE --dport 4000 --gateway 192.168.1.100
+(sudo iptables -t mangle -A POSTROUTING -p udp -d 127.0.0.1 --dport 4000 -j TEE --gateway 192.168.1.100)
+
+sudo iptables -t nat -A POSTROUTING -p udp -o lo -j SNAT --to-source 192.168.1.100:4000
+(sudo sysctl -w net.ipv4.conf.all.route_localnet=1)
+
+etc ...
+
+-------------------------------------------------------------------------------
+Octave1 : 192.168.1.1
 sudo iptables -A OUTPUT -p udp -d 192.168.1.100 -j TEE --gateway 192.168.4.1
 
 -------------------------------------------------------------------------------
