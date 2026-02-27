@@ -35,6 +35,12 @@ sudo iptables -L -v -n -t mangle
 sudo iptables -L -v -n -t nat
 
 -------------------------------------------------------------------------------
+# (APPLICATION)->-[OUTPUT]->--[POSTROUTING]->-(PACKET OUT)
+#                  -mangle        -mangle
+#                  -nat (src)     -nat (dst)
+#                  -filter
+#
+-------------------------------------------------------------------------------
 Octave1 : 192.168.1.1
 sudo iptables -A OUTPUT -p udp -d 192.168.1.100 -j TEE --gateway 192.168.4.1
 
