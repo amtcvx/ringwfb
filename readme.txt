@@ -73,7 +73,9 @@ nc -u -vv -l 192.168.1.200 4000
 Octave1 : 192.168.1.1, 192.168.1.2
 GCS : 192.168.1.100, 192.168.1.200
 
-sudo iptables -t nat -A OUTPUT -d 127.0.0.1 -p udp --dport 4000 -j TEE --gateway 192.168.1.100
+sudo iptables -A OUTPUT -d 127.0.0.1 -p udp --dport 4000 -j TEE --gateway 192.168.1.200
+(no NAT)
+
 TBC ...
 
 -------------------------------------------------------------------------------
