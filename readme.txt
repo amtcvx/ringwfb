@@ -25,6 +25,14 @@ bin/wfb
 nc -u -vv -l 5000
 
 -------------------------------------------------------------------------------
+socat udp-recv:4000 -
+
+echo hello | socat - UDP-DATAGRAM:192.168.1.100:4000
+echo hello | socat - UDP-DATAGRAM:192.168.1.200:4000
+echo hello | socat - UDP-DATAGRAM:192.168.1.255:4000,broadcast
+
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 sudo iptables -t mangle -F
 sudo iptables -t nat -F
 sudo iptables -F
