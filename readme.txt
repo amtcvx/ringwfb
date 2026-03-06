@@ -25,6 +25,15 @@ bin/wfb
 nc -u -vv -l 5000
 
 -------------------------------------------------------------------------------
+# apt-get install bridge-utils
+# ifconfig bnep0 up
+# ifconfig bnep1 up
+# brctl addbr br0
+# brctl addif br0 bnep0
+# brctl addif br0 bnep1
+# ifconfig br0 10.0.0.1 netmask 255.255.255.0
+
+-------------------------------------------------------------------------------
 socat udp-recv:4000 -
 
 echo hello | socat - UDP-DATAGRAM:192.168.1.100:4000
