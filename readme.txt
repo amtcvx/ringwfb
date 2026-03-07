@@ -30,8 +30,12 @@ sudo ip link set dev br0 up
 sudo ip link set dev eth0 master br0
 
 sudo iw dev wlan0 set 4addr on
+"4addr" mode aka "WDS" mode, which adds an extra MAC address field to Wi-Fi frames"
 
 sudo ip link set dev wlan0 master br0
+
+sudo nmcli connection show
+sudo nmcli connection del bridge-br0
 
 # apt-get install bridge-utils
 # ifconfig bnep0 up
