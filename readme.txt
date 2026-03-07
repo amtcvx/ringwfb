@@ -25,6 +25,14 @@ bin/wfb
 nc -u -vv -l 5000
 
 -------------------------------------------------------------------------------
+sudo ip link add name br0 type bridge
+sudo ip link set dev br0 up
+sudo ip link set dev eth0 master br0
+
+sudo iw dev wlan0 set 4addr on
+
+sudo ip link set dev wlan0 master br0
+
 # apt-get install bridge-utils
 # ifconfig bnep0 up
 # ifconfig bnep1 up
