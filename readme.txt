@@ -33,6 +33,33 @@ nc -u -vv -l 5000
 # brctl addif br0 bnep1
 # ifconfig br0 10.0.0.1 netmask 255.255.255.0
 
+https://wiki.archlinux.org/title/Network_bridge
+
+ip link add name br0 type bridge
+ip link set dev br0 up
+ip address add 10.2.3.4/8 dev br0
+ip route append default via 10.0.0.1 dev br0
+...
+ip link set eth0 master br0
+ip address del 10.2.3.4/8 dev eth0
+
+ip link add name br0 type bridge
+ip link set dev br0 up
+ip link set dev eth0 master br0
+ip link set dev eth1 master br0
+
+ip address add dev br0 192.168.66.66/24
+
+ip link set dev eth0 nomaster
+ip link del br0
+
+# nmcli connection add type bridge ifname br0 stp no
+# nmcli connection add type bridge-slave ifname enp30s0 master br0
+# nmcli connection down Connection
+# nmcli connection up bridge-br0
+# nmcli connection up bridge-slave-enp30s0
+# nmcli connection modify Connection connection.autoconnect no
+
 -------------------------------------------------------------------------------
 socat udp-recv:4000 -
 
