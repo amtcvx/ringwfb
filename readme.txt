@@ -26,17 +26,50 @@ nc -u -vv -l 5000
 
 -------------------------------------------------------------------------------
 sudo ip link add name br0 type bridge
-sudo ip link set dev br0 up
-sudo ip link set dev eth0 master br0
+(sudo ip link del name br0)
 
-sudo iw dev wlan0 set 4addr on
+#sudo nmcli
+#=> br0: non-géré
+
+ip link show br0
+ip address show br0
+=> 6: br0: <BROADCAST,MULTICAST> 
+
+sudo ip link set dev br0 up
+(sudo ip link set dev br0 down)
+
+ip link show br0
+ip address show br0
+=> 6: br0: <NO-CARRIER,BROADCAST,MULTICAST,UP>
+
+sudo ip address add 10.2.3.4/8 dev br0
+sudo ip route append default via 10.0.0.1 dev br0
+
+ip address show br0
+pprz@choubaca:~$ ip address show br0
+=> 6: br0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default qlen 1000
+    link/ether 4e:37:56:dc:75:4f brd ff:ff:ff:ff:ff:ff
+    inet 10.2.3.4/8 scope global br0
+
+sudo ip link set dev eno1 master br0
+ip link show master br0
+=> 2: eno1: <BROADCAST,MULTICAST,UP,LOWER_UP> 
+
+#sudo nmcli
+#=> br0: connecté (en externe) à br0
+
+sudo iw dev wlp1s0 set 4addr on
 "4addr" mode aka "WDS" mode, which adds an extra MAC address field to Wi-Fi frames"
 
-sudo ip link set dev wlan0 master br0
+sudo ip link set dev wlp1s0 master br0
+ip link show master br0
+2: eno1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel master br0 state UP mode DEFAULT group default qlen 1000
+3: wlp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br0 state UP mode DORMANT group default qlen 1000
 
-sudo nmcli connection show
-sudo nmcli connection del bridge-br0
+#sudo nmcli connection show
+#sudo nmcli connection del br0
 
+-------------------------------------------------------------------------------
 # apt-get install bridge-utils
 # ifconfig bnep0 up
 # ifconfig bnep1 up
