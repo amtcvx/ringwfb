@@ -51,23 +51,28 @@ pprz@choubaca:~$ ip address show br0
     link/ether 4e:37:56:dc:75:4f brd ff:ff:ff:ff:ff:ff
     inet 10.2.3.4/8 scope global br0
 
-sudo ip link set dev eno1 master br0
+sudo ip link set dev eth0 master br0
 ip link show master br0
 => 2: eno1: <BROADCAST,MULTICAST,UP,LOWER_UP> 
 
 #sudo nmcli
 #=> br0: connecté (en externe) à br0
 
-sudo iw dev wlp1s0 set 4addr on
+sudo iw dev wlan0 set 4addr on
 "4addr" mode aka "WDS" mode, which adds an extra MAC address field to Wi-Fi frames"
 
-sudo ip link set dev wlp1s0 master br0
+sudo ip link set dev wlan0 master br0
 ip link show master br0
-2: eno1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel master br0 state UP mode DEFAULT group default qlen 1000
-3: wlp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br0 state UP mode DORMANT group default qlen 1000
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel master br0 state UP mode DEFAULT group default qlen 1000
+3: wlan0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br0 state UP mode DORMANT group default qlen 1000
 
 #sudo nmcli connection show
 #sudo nmcli connection del br0
+
+-------------------------------------------------------------------------------
+CAN I BRIDGE WIFI RAW IN MONITOR MODE ?
+sudo ip link set dev wlx3c7c3fa9bdc6 master br0
+RTNETLINK answers: Invalid argument
 
 -------------------------------------------------------------------------------
 # apt-get install bridge-utils
