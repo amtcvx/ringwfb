@@ -1,8 +1,8 @@
 This project provides wireless communication between ground / board and board / board systems.
 
 -------------------------------------------------------------------------------
-git clone --recurse-submodules  http://github.com/amtcvx/ringwfb.git
-(git clone --recurse-submodules  git@github.com:amtcvx/ringwfb.git)
+git clone http://github.com/amtcvx/ringwfb.git
+(git clone git@github.com:amtcvx/ringwfb.git)
 
 Installation need internet connection and sudo 
 sudo ./install.sh
