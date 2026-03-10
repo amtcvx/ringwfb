@@ -5,8 +5,8 @@ git clone --recurse-submodules  http://github.com/amtcvx/ringwfb.git
 (git clone --recurse-submodules  git@github.com:amtcvx/ringwfb.git)
 
 Installation need internet connection and sudo 
-./install.sh
-(./uninstall.sh)
+sudo ./install.sh
+(sudo ./uninstall.sh)
 
 -------------------------------------------------------------------------------
 Before first run, set Makefile according to the target role
