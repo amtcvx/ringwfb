@@ -32,7 +32,14 @@ int main(int argc, char *argv[]) {
   struct nl_sock *sockrt;
   if (!(sockrt = nl_socket_alloc())) exit(-1);
   if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
+  
+  if ((rtnl_link_bridge_add(sockrt, TEST_BRIDGE_NAME)) < 0) exit(-1);
+  struct rtnl_link *link,*ltap;
+  if (!(link = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) exit(-1);
+  if (!(ltap = rtnl_link_get_by_name(cache, TEST_INTERFACE_NAME))) exit(-1);
+  if ((rtnl_link_enslave(sockrt, link, ltap)) < 0) exit(-1);
 
+/*
   struct nl_cache *cache;
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
 
@@ -48,7 +55,7 @@ int main(int argc, char *argv[]) {
 
   if ((rtnl_link_enslave(sockrt, link, ltap)) < 0) exit(-1);
   if ((rtnl_link_get_master(ltap) <= 0)) exit(-1);
-
+*/
   printf("HELLO\n");
 
   return 0;
