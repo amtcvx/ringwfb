@@ -134,13 +134,18 @@ int main(int argc, char *argv[]) {
   rtnl_link_set_flags(change, IFF_UP);
   if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
 
+  if (!(change = rtnl_link_alloc())) exit(-1);
+  rtnl_link_set_flags(change, IFF_UP);
+  if ((rtnl_link_change(sockrt, link, change, 0)) < 0) exit(-1);
+
+
   uint8_t sockfd;
   uint16_t protocol = 0;
   if (-1 == (sockfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
-  sll.sll_ifindex  = index;
+  sll.sll_ifindex  = rtnl_link_get_ifindex(link); //index;
   sll.sll_protocol = protocol;
   if (-1 == bind(sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
 
