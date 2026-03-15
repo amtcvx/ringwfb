@@ -18,7 +18,10 @@ sudo ip link show master br0
 sudo ip link del name br0
 
 */
-#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <linux/if_packet.h>
+#include <net/ethernet.h> 
+
 
 #include <linux/netlink.h>
 
@@ -103,7 +106,7 @@ int main(int argc, char *argv[]) {
 
   uint16_t index = rtnl_link_get_ifindex(ltap);
   struct nl_msg *nlmsg;
-/*
+
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
   nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, index);
@@ -118,7 +121,7 @@ int main(int argc, char *argv[]) {
   if (!(link = rtnl_link_alloc ())) exit(-1);
   if (!(link = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) exit(-1);
   if ((rtnl_link_enslave(sockrt, link, ltap)) < 0) exit(-1);
-*/
+
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
   nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, index);
@@ -131,13 +134,15 @@ int main(int argc, char *argv[]) {
   rtnl_link_set_flags(change, IFF_UP);
   if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
 
-
   uint8_t sockfd;
   uint16_t protocol = 0;
   if (-1 == (sockfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
-  struct ifreq ifr = { .ifr_name = TEST_INTERFACE_NAME };
-  //if (setsockopt(sockfd, SOL_SOCKET, SO_BINDTODEVICE, &ifr, sizeof(ifr)) < 0) exit(-1); 
-  if (ioctl( sockfd, SIOCGIFINDEX, &ifr ) < 0 ) exit(-1);
+  struct sockaddr_ll sll;
+  memset( &sll, 0, sizeof( sll ) );
+  sll.sll_family   = AF_PACKET;
+  sll.sll_ifindex  = index;
+  sll.sll_protocol = protocol;
+  if (-1 == bind(sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
 
    
   uint8_t dumbuf[1400] = {-1};
