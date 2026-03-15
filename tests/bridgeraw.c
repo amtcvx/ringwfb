@@ -83,45 +83,55 @@ struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(
 struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
 
 /*****************************************************************************/
-int main(int argc, char *argv[]) {
+void init(uint8_t *sockid, struct nl_sock **sockrt, struct nl_sock **socknl) {
+  if  (!(*socknl = nl_socket_alloc()))  exit(-1);
+  nl_socket_set_buffer_size(*socknl, 8192, 8192);
+  if (genl_connect(*socknl)) exit(-1);
+  if ((*sockid = genl_ctrl_resolve(*socknl, "nl80211")) < 0) exit(-1);
+  if (!(*sockrt = nl_socket_alloc())) exit(-1);
+  if (nl_connect(*sockrt, NETLINK_ROUTE)) exit(-1);
+}
 
-  struct nl_sock *socknl;
-  if  (!(socknl = nl_socket_alloc()))  exit(-1);
-  nl_socket_set_buffer_size(socknl, 8192, 8192);
-  if (genl_connect(socknl)) exit(-1);
-  uint8_t sockid;
-  if ((sockid = genl_ctrl_resolve(socknl, "nl80211")) < 0) exit(-1);
-  struct nl_sock *sockrt;
-  if (!(sockrt = nl_socket_alloc())) exit(-1);
-  if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
+/*****************************************************************************/
+void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, 
+  struct rtnl_link **ltap, uint16_t *index) {
 
   struct nl_cache *cache;
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
-  struct rtnl_link *ltap;
-  if (!(ltap = rtnl_link_get_by_name(cache, TEST_INTERFACE_NAME))) exit(-1);
+  if (!(*ltap = rtnl_link_get_by_name(cache, TEST_INTERFACE_NAME))) exit(-1);
   struct rtnl_link *change;
   if (!(change = rtnl_link_alloc())) exit(-1);
   rtnl_link_unset_flags(change, IFF_UP);
-  if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
+  if ((rtnl_link_change(sockrt, *ltap, change, 0)) < 0) exit(-1);
 
-  uint16_t index = rtnl_link_get_ifindex(ltap);
+  *index = rtnl_link_get_ifindex(*ltap);
   struct nl_msg *nlmsg;
 
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
-  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, index);
+  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, *index);
   nla_put_u8(nlmsg, NL80211_ATTR_4ADDR,1);
   nl_send_auto(socknl, nlmsg);
   if (nl_send_auto(socknl, nlmsg) >= 0)  nl_recvmsgs_default(socknl);
   nlmsg_free(nlmsg);
+}
+
+/*****************************************************************************/
+void set(struct nl_sock *sockrt, struct rtnl_link *ltap, struct rtnl_link **link) {
+  struct nl_cache *cache;
 
   if ((rtnl_link_bridge_add(sockrt, TEST_BRIDGE_NAME)) < 0) exit(-1);
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
-  struct rtnl_link *link;
-  if (!(link = rtnl_link_alloc ())) exit(-1);
-  if (!(link = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) exit(-1);
-  if ((rtnl_link_enslave(sockrt, link, ltap)) < 0) exit(-1);
+  if (!(*link = rtnl_link_alloc ())) exit(-1);
+  if (!(*link = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) exit(-1);
+  if ((rtnl_link_enslave(sockrt, *link, ltap)) < 0) exit(-1);
+}
 
+/*****************************************************************************/
+void postset(uint8_t sockid, uint16_t index, struct nl_sock *sockrt, struct nl_sock *socknl,
+  struct rtnl_link *ltap)  {
+
+  struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
   nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, index);
@@ -130,10 +140,27 @@ int main(int argc, char *argv[]) {
   if (nl_send_auto(socknl, nlmsg) >= 0)  nl_recvmsgs_default(socknl);
   nlmsg_free(nlmsg);
 
+  struct rtnl_link *change;
   if (!(change = rtnl_link_alloc())) exit(-1);
   rtnl_link_set_flags(change, IFF_UP);
   if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
+}
 
+/*****************************************************************************/
+int main(int argc, char *argv[]) {
+
+  uint8_t sockid; struct nl_sock *sockrt; struct nl_sock *socknl;
+  init(&sockid, &sockrt, &socknl);
+
+  struct rtnl_link *ltap; uint16_t index;
+  preset(sockid, sockrt, socknl, &ltap, &index);
+
+  struct rtnl_link *link;
+  set(sockrt, ltap, &link);
+
+  postset(sockid, index, socknl, socknl, ltap);
+
+  struct rtnl_link *change;
   if (!(change = rtnl_link_alloc())) exit(-1);
   rtnl_link_set_flags(change, IFF_UP);
   if ((rtnl_link_change(sockrt, link, change, 0)) < 0) exit(-1);
