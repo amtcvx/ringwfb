@@ -38,7 +38,7 @@ sudo ip link del name br0
 #include <net/if.h>
 
 #define TEST_BRIDGE_NAME "br0"
-#define TEST_INTERFACE_NAME "wlx3c7c3fa9bdc6"
+#define TEST_INTERFACE_NAME "wlx3c7c3fa9bdca"
 
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
@@ -158,13 +158,12 @@ int main(int argc, char *argv[]) {
   struct rtnl_link *link;
   set(sockrt, ltap, &link);
 
-  postset(sockid, index, socknl, socknl, ltap);
+  postset(sockid, index, sockrt, socknl, ltap);
 
   struct rtnl_link *change;
   if (!(change = rtnl_link_alloc())) exit(-1);
   rtnl_link_set_flags(change, IFF_UP);
   if ((rtnl_link_change(sockrt, link, change, 0)) < 0) exit(-1);
-
 
   uint8_t sockfd;
   uint16_t protocol = 0;
@@ -172,7 +171,7 @@ int main(int argc, char *argv[]) {
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
-  sll.sll_ifindex  = rtnl_link_get_ifindex(link); //index;
+  sll.sll_ifindex  = rtnl_link_get_ifindex(link);
   sll.sll_protocol = protocol;
   if (-1 == bind(sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
 
@@ -185,5 +184,6 @@ int main(int argc, char *argv[]) {
   ssize_t rawlen = sendmsg(sockfd, (const struct msghdr *)&msg, MSG_DONTWAIT);
   printf("(%ld)\n",rawlen);
 
+  printf("SALUT\n");
   return 0;
 }
