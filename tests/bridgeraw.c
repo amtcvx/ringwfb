@@ -22,6 +22,8 @@ sudo ip link del name br0
 #include <linux/if_packet.h>
 #include <net/ethernet.h> 
 
+#include <stdbool.h>
+
 
 #include <linux/netlink.h>
 
@@ -38,7 +40,8 @@ sudo ip link del name br0
 #include <net/if.h>
 
 #define TEST_BRIDGE_NAME "br0"
-char *rawnames[] = { "wlx3c7c3fa9c1e4","wlx3c7c3fa9bdca" };
+char *rawnames[] = { "wlxfc349725a319","wlx3c7c3fa9c1e8" };
+uint32_t rawfreqs[] = { 2484,5280 };
 
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
@@ -178,6 +181,23 @@ void sockset(uint16_t index, uint8_t *sockfd) {
 }
 
 /*****************************************************************************/
+bool setfreq(uint8_t sockid, struct nl_sock *socknl, int ifindex, uint32_t freq) {
+
+  bool ret=true;
+  struct nl_msg *nlmsg;
+  if (!(nlmsg  = nlmsg_alloc())) exit(-1);;
+  genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_CHANNEL,0);
+  NLA_PUT_U32(nlmsg,NL80211_ATTR_IFINDEX,ifindex);
+  NLA_PUT_U32(nlmsg,NL80211_ATTR_WIPHY_FREQ,freq);
+  if (nl_send_auto(socknl, nlmsg) < 0) ret=false;
+  nlmsg_free(nlmsg);
+  return(ret);
+  nla_put_failure:
+    nlmsg_free(nlmsg);
+    return(false);
+}
+
+/*****************************************************************************/
 int main(int argc, char *argv[]) {
 
   uint8_t sockid; struct nl_sock *sockrt; struct nl_sock *socknl;
@@ -199,6 +219,9 @@ int main(int argc, char *argv[]) {
   if (!(change = rtnl_link_alloc())) exit(-1);
   rtnl_link_set_flags(change, IFF_UP);
   if ((rtnl_link_change(sockrt, link, change, 0)) < 0) exit(-1);
+
+
+  for (uint8_t i=0;i<nbraws;i++) setfreq(sockid, socknl, rawdev[i].index, rawfreqs[i]);
 
   uint8_t sockfd;
   sockset(rtnl_link_get_ifindex(link), &sockfd);
