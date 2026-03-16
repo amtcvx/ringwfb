@@ -38,7 +38,7 @@ sudo ip link del name br0
 #include <net/if.h>
 
 #define TEST_BRIDGE_NAME "br0"
-#define TEST_INTERFACE_NAME "wlx3c7c3fa9bdca"
+char rawnames[][15] = { "wlx3c7c3fa9bdca" };
 
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
@@ -93,18 +93,18 @@ void init(uint8_t *sockid, struct nl_sock **sockrt, struct nl_sock **socknl) {
 }
 
 /*****************************************************************************/
-void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, 
-  struct rtnl_link **ltap, uint16_t *index) {
+void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char *name,  uint16_t *index) {
 
+  struct rtnl_link *ltap;
   struct nl_cache *cache;
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
-  if (!(*ltap = rtnl_link_get_by_name(cache, TEST_INTERFACE_NAME))) exit(-1);
+  if (!(ltap = rtnl_link_get_by_name(cache, name))) exit(-1);
   struct rtnl_link *change;
   if (!(change = rtnl_link_alloc())) exit(-1);
   rtnl_link_unset_flags(change, IFF_UP);
-  if ((rtnl_link_change(sockrt, *ltap, change, 0)) < 0) exit(-1);
+  if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
 
-  *index = rtnl_link_get_ifindex(*ltap);
+  *index = rtnl_link_get_ifindex(ltap);
   struct nl_msg *nlmsg;
 
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
@@ -117,19 +117,25 @@ void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,
 }
 
 /*****************************************************************************/
-void set(struct nl_sock *sockrt, struct rtnl_link *ltap, struct rtnl_link **link) {
+void set(struct nl_sock *sockrt, struct rtnl_link **link) {
   struct nl_cache *cache;
 
   if ((rtnl_link_bridge_add(sockrt, TEST_BRIDGE_NAME)) < 0) exit(-1);
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
   if (!(*link = rtnl_link_alloc ())) exit(-1);
   if (!(*link = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) exit(-1);
-  if ((rtnl_link_enslave(sockrt, *link, ltap)) < 0) exit(-1);
 }
 
 /*****************************************************************************/
-void postset(uint8_t sockid, uint16_t index, struct nl_sock *sockrt, struct nl_sock *socknl,
-  struct rtnl_link *ltap)  {
+void postset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,  uint16_t index, 
+  struct rtnl_link *link) {
+  
+  struct rtnl_link *ltap;
+  struct nl_cache *cache;
+  if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
+  if (!(ltap = rtnl_link_get(cache, index))) exit(-1);
+
+  if ((rtnl_link_enslave(sockrt, link, ltap)) < 0) exit(-1);
 
   struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
@@ -152,13 +158,16 @@ int main(int argc, char *argv[]) {
   uint8_t sockid; struct nl_sock *sockrt; struct nl_sock *socknl;
   init(&sockid, &sockrt, &socknl);
 
-  struct rtnl_link *ltap; uint16_t index;
-  preset(sockid, sockrt, socknl, &ltap, &index);
+  uint8_t nbraws = sizeof(rawnames)/sizeof(rawnames[0]);
+
+  struct rawdev_t { uint16_t index; char *name; } rawdev[nbraws];
+  for (uint8_t i=0;i<nbraws;i++) rawdev[i].name = &rawnames[i][0];
+  for (uint8_t i=0;i<nbraws;i++) preset(sockid, sockrt, socknl, rawdev[i].name, &rawdev[i].index);
 
   struct rtnl_link *link;
-  set(sockrt, ltap, &link);
+  set(sockrt, &link);
 
-  postset(sockid, index, sockrt, socknl, ltap);
+  for (uint8_t i=0;i<nbraws;i++) postset(sockid, sockrt, socknl, rawdev[i].index, link);
 
   struct rtnl_link *change;
   if (!(change = rtnl_link_alloc())) exit(-1);
