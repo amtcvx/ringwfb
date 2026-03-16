@@ -40,8 +40,8 @@ sudo ip link del name br0
 #include <net/if.h>
 
 #define TEST_BRIDGE_NAME "br0"
-char *rawnames[] = { "wlxfc349725a319","wlx3c7c3fa9c1e8" };
-uint32_t rawfreqs[] = { 2484,5280 };
+char *rawnames[] = { "wlx3c7c3fa9bdc6","wlx3c7c3fa9bfb6" };
+uint32_t rawfreqs[] = { 2472,5280 };
 
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
