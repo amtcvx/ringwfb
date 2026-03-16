@@ -38,7 +38,7 @@ sudo ip link del name br0
 #include <net/if.h>
 
 #define TEST_BRIDGE_NAME "br0"
-char rawnames[][15] = { "wlx3c7c3fa9bdca" };
+char *rawnames[] = { "wlx3c7c3fa9c1e4","wlx3c7c3fa9bdca" };
 
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
@@ -162,6 +162,7 @@ int main(int argc, char *argv[]) {
 
   struct rawdev_t { uint16_t index; char *name; } rawdev[nbraws];
   for (uint8_t i=0;i<nbraws;i++) rawdev[i].name = &rawnames[i][0];
+
   for (uint8_t i=0;i<nbraws;i++) preset(sockid, sockrt, socknl, rawdev[i].name, &rawdev[i].index);
 
   struct rtnl_link *link;
@@ -193,6 +194,5 @@ int main(int argc, char *argv[]) {
   ssize_t rawlen = sendmsg(sockfd, (const struct msghdr *)&msg, MSG_DONTWAIT);
   printf("(%ld)\n",rawlen);
 
-  printf("SALUT\n");
   return 0;
 }
