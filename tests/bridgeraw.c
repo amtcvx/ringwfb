@@ -83,6 +83,18 @@ struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(
 struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
 
 /*****************************************************************************/
+
+typedef struct {
+  uint8_t droneid;
+  uint8_t type;
+  uint16_t len;
+  uint32_t seq;
+} __attribute__((packed)) wfb_utils_heads_pay_t;
+
+#define PAY_MTU 1400
+#define ONLINE_MTU PAY_MTU + sizeof(wfb_utils_heads_pay_t)
+
+/*****************************************************************************/
 void init(uint8_t *sockid, struct nl_sock **sockrt, struct nl_sock **socknl) {
   if  (!(*socknl = nl_socket_alloc()))  exit(-1);
   nl_socket_set_buffer_size(*socknl, 8192, 8192);
@@ -153,6 +165,19 @@ void postset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,  ui
 }
 
 /*****************************************************************************/
+void sockset(uint16_t index, uint8_t *sockfd) {
+
+  uint16_t protocol = 0;
+  if (-1 == (*sockfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+  struct sockaddr_ll sll;
+  memset( &sll, 0, sizeof( sll ) );
+  sll.sll_family   = AF_PACKET;
+  sll.sll_ifindex  = index;
+  sll.sll_protocol = protocol;
+  if (-1 == bind(*sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
+}
+
+/*****************************************************************************/
 int main(int argc, char *argv[]) {
 
   uint8_t sockid; struct nl_sock *sockrt; struct nl_sock *socknl;
@@ -176,16 +201,10 @@ int main(int argc, char *argv[]) {
   if ((rtnl_link_change(sockrt, link, change, 0)) < 0) exit(-1);
 
   uint8_t sockfd;
-  uint16_t protocol = 0;
-  if (-1 == (sockfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
-  struct sockaddr_ll sll;
-  memset( &sll, 0, sizeof( sll ) );
-  sll.sll_family   = AF_PACKET;
-  sll.sll_ifindex  = rtnl_link_get_ifindex(link);
-  sll.sll_protocol = protocol;
-  if (-1 == bind(sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
+  sockset(rtnl_link_get_ifindex(link), &sockfd);
+  uint8_t fd[nbraws];
+  for (uint8_t i=0;i<nbraws;i++) sockset(rawdev[i].index, &fd[i]);
 
-   
   uint8_t dumbuf[1400] = {-1};
   struct iovec iovdum = { .iov_base = dumbuf, .iov_len = sizeof(dumbuf) };
   struct iovec iovtab[4] = { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iovdum };
@@ -193,6 +212,36 @@ int main(int argc, char *argv[]) {
 
   ssize_t rawlen = sendmsg(sockfd, (const struct msghdr *)&msg, MSG_DONTWAIT);
   printf("(%ld)\n",rawlen);
+
+  struct pollfd readsets[2] = { { .fd = fd[0], .events = POLLIN }, { .fd = fd[1], .events = POLLIN }};
+
+  uint8_t payloadbuf_in[ONLINE_MTU];
+
+  wfb_utils_heads_pay_t headspay;
+  struct iovec iovheadpay = { .iov_base = &headspay, .iov_len = sizeof(wfb_utils_heads_pay_t) };
+
+  ssize_t len;
+
+  for(;;) {
+    if (0 != poll(readsets, nbraws, -1)) {
+      for (uint8_t i=0; i<nbraws; i++) {
+        if (readsets[i].revents == POLLIN) {
+
+          printf("(%d)\n",i);
+
+          memset(&headspay,0,sizeof(wfb_utils_heads_pay_t));
+          memset(&payloadbuf_in,0,sizeof(payloadbuf_in));
+          struct iovec iovpay = { .iov_base =  payloadbuf_in, .iov_len = sizeof(payloadbuf_in) };
+          struct iovec iovpart[2] = { iovheadpay, iovpay };
+          struct msghdr msg = { .msg_iov = iovpart, .msg_iovlen=2 };
+
+          if ((len = recvmsg(fd[i], &msg, MSG_DONTWAIT)) > 0) {
+	  }
+
+	}
+      }
+    }
+  }
 
   return 0;
 }
