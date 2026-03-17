@@ -153,30 +153,29 @@ int main(int argc, char **argv) {
   if (!(sockrt = nl_socket_alloc())) exit(-1);
   if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
 
-  struct ifreq ifr;
-  memset(&ifr, 0, sizeof(struct ifreq));
-  strncpy( ifr.ifr_name, argv[1], sizeof( ifr.ifr_name ) - 1 );
-  if (ioctl( fd[1], SIOCGIFINDEX, &ifr ) < 0 ) exit(-1);
+  struct rtnl_link *ltap;
+  struct nl_cache *cache;
+  if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
+  if (!(ltap = rtnl_link_get_by_name(cache, argv[1]))) exit(-1);
+  struct rtnl_link *change;
+  if (!(change = rtnl_link_alloc())) exit(-1);
+  rtnl_link_unset_flags(change, IFF_UP);
+  if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
+
+  uint16_t index = rtnl_link_get_ifindex(ltap);
 
   struct nl_msg *nlmsg;
-
-  if (!(nlmsg  = nlmsg_alloc())) exit(-1);;
+  if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
-  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, ifr.ifr_ifindex);
+  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, index);
   nla_put_u32(nlmsg, NL80211_ATTR_IFTYPE,NL80211_IFTYPE_MONITOR);
   nl_send_auto(socknl, nlmsg);
   if (nl_send_auto(socknl, nlmsg) >= 0)  nl_recvmsgs_default(socknl);
   nlmsg_free(nlmsg);
 
-  struct nl_cache *cache;
-  struct rtnl_link *link, *change;
-  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
-  if (!(link = rtnl_link_get(cache,ifr.ifr_ifindex))) exit(-1);
-  if (!(rtnl_link_get_flags (link) & IFF_UP)) {
-    change = rtnl_link_alloc ();
-    rtnl_link_set_flags (change, IFF_UP);
-    rtnl_link_change(sockrt, link, change, 0);
-  }
+  if (!(change = rtnl_link_alloc())) exit(-1);
+  rtnl_link_set_flags(change, IFF_UP);
+  if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
 
   static rawdev_t rawdev; memset(&rawdev, 0, sizeof(rawdev));
   bool msg_received = false;
@@ -187,16 +186,17 @@ int main(int argc, char **argv) {
 
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg, NL_AUTO_PORT, NL_AUTO_SEQ, sockid, 0, NLM_F_DUMP, NL80211_CMD_GET_WIPHY, 0);
-  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, ifr.ifr_ifindex);
+  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, index);
   nl_send_auto(socknl, nlmsg);
   msg_received = false;
   while (!msg_received) nl_recvmsgs(socknl, cb);
   nlmsg_free(nlmsg);
 
+
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
-  sll.sll_ifindex  = ifr.ifr_ifindex;
+  sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
   if (-1 == bind(fd[1], (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // BIND must be AFTER wifi setting
 
@@ -217,7 +217,7 @@ int main(int argc, char **argv) {
     for (i=0;i<rawdev.nbfreqs; i++) if (rawdev.freqs[i] == atoi(argv[2])) break;
     if (rawdev.freqs[i] == atoi(argv[2])) rawdev.cptfreqs = i; else exit(-1);
   }
-  setfreq(sockid, socknl, ifr.ifr_ifindex, rawdev.freqs[rawdev.cptfreqs]);
+  setfreq(sockid, socknl, index, rawdev.freqs[rawdev.cptfreqs]);
 
   struct pollfd readsets[2] = { { .fd = fd[0], .events = POLLIN }, { .fd = fd[1], .events = POLLIN }};
 
@@ -229,6 +229,7 @@ int main(int argc, char **argv) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 	    printf("[%d] (%d) ",rawdev.freqs[rawdev.cptfreqs],rawnb);
 	    if (argc == 3) {
+/*
               if (rawnb > 0) {
                 if ((uint16_t)dumbuf[2] == 35) 
                   printf("Antenna Signal (%d); Signal Quality (%d); Antenna (%d) signal (%d); Antenna (%d) signal (%d)",
@@ -238,9 +239,10 @@ int main(int argc, char **argv) {
                   dumbuf[27]-256,dumbuf[28]-256,(uint16_t)dumbuf[30],dumbuf[32],
 		  dumbuf[33]-256,dumbuf[34]-256,(uint16_t)dumbuf[36],dumbuf[38]);
 	      }
+*/
 	    } else {
 	      if (rawdev.cptfreqs < (rawdev.nbfreqs - 1)) rawdev.cptfreqs++; else rawdev.cptfreqs = 0;
-	      setfreq(sockid, socknl, ifr.ifr_ifindex, rawdev.freqs[rawdev.cptfreqs]);
+	      setfreq(sockid, socknl, index, rawdev.freqs[rawdev.cptfreqs]);
 	    }
 	    printf("\n");
 	    rawnb = 0;
