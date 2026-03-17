@@ -53,7 +53,7 @@ sudo ip link del name br0
 
 #define TEST_BRIDGE_NAME "br0"
 
-char *rawnames[] = { "wlxfc349725a319", "wlx3c7c3fa9bdc6" };
+char *rawnames[] = { "wlx3c7c3fa9bfb6", "wlx3c7c3fa9c1e8" };
 uint32_t rawfreqs[] = { 2484, 2412 };
 
 /*****************************************************************************/
@@ -98,7 +98,8 @@ void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char
 
   struct utsname uts;
   uname(&uts);
-  if (strcmp(uts.release,"6.17.0-19-generic")==0) {
+  if ((strcmp(uts.release,"6.17.0-19-generic")==0)
+    || (strcmp(uts.release,"6.11.0-29-generic")==0)) {
     struct rtnl_link *change;
     if (!(change = rtnl_link_alloc())) exit(-1);
     rtnl_link_unset_flags(change, IFF_UP);

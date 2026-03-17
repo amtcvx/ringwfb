@@ -166,7 +166,8 @@ int main(int argc, char **argv) {
 
   struct utsname uts;
   uname(&uts);
-  if (strcmp(uts.release,"6.17.0-19-generic")==0) {
+  if ((strcmp(uts.release,"6.17.0-19-generic")==0)
+    || (strcmp(uts.release,"6.11.0-29-generic")==0)) {
     if (!(change = rtnl_link_alloc())) exit(-1);
     rtnl_link_unset_flags(change, IFF_UP);
     if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
@@ -235,17 +236,7 @@ int main(int argc, char **argv) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 	    printf("[%d] (%d) ",rawdev.freqs[rawdev.cptfreqs],rawnb);
-	    if (argc == 3) {
-              if (rawnb > 0) {
-                if ((uint16_t)dumbuf[2] == 35) 
-                  printf("Antenna Signal (%d); Signal Quality (%d); Antenna (%d) signal (%d); Antenna (%d) signal (%d)",
-                    dumbuf[22]-256,(uint16_t)dumbuf[24],dumbuf[32],dumbuf[31]-256,dumbuf[34],dumbuf[33]-256);
-                if ((uint16_t)dumbuf[2] == 39) 
-                  printf("Antenna signal (%d); Antenna noise (%d); Signal Quality (%d); Antenna (%d); Antenna signal (%d); Antenna noise (%d); Signal Quality (%d); Antenna (%d);",
-                  dumbuf[27]-256,dumbuf[28]-256,(uint16_t)dumbuf[30],dumbuf[32],
-		  dumbuf[33]-256,dumbuf[34]-256,(uint16_t)dumbuf[36],dumbuf[38]);
-	      }
-	    } else {
+	    if (argc == 2) {
 	      if (rawdev.cptfreqs < (rawdev.nbfreqs - 1)) rawdev.cptfreqs++; else rawdev.cptfreqs = 0;
 	      setfreq(sockid, socknl, index, rawdev.freqs[rawdev.cptfreqs]);
 	    }
