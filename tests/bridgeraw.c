@@ -53,8 +53,8 @@ sudo ip link del name br0
 
 #define TEST_BRIDGE_NAME "br0"
 
-char *rawnames[] = { "wlx3c7c3fa9bdca" };
-uint32_t rawfreqs[] = { 2412 };
+char *rawnames[] = { "wlx3c7c3fa9bdca", "wlx3c7c3fa9c1e4" };
+uint32_t rawfreqs[] = { 2484, 2412 };
 
 /*****************************************************************************/
 #define PERIOD_DELAY_S  1
@@ -190,13 +190,13 @@ int main(int argc, char **argv) {
   struct iovec iovtab[1] = { iov_dum };
   struct msghdr msg = { .msg_iov = iovtab, .msg_iovlen = 1 };
 
-  ssize_t len = 0;
-  uint8_t rawpkt = 0;
-
   for (uint8_t i=0; i<nbraws; i++) setfreq(sockid, socknl, rawdev[i].index, rawfreqs[i]);
 
   struct pollfd readsets[nbfds];
   for (uint8_t i=0; i<nbfds; i++) { readsets[i].fd = fd[i]; readsets[i].events = POLLIN; }
+
+  ssize_t len = 0;
+  uint8_t rawpkt[2] = { 0, 0 };
 
   for(;;) {
     if (0 != poll(readsets, 2, -1)) {
@@ -204,11 +204,11 @@ int main(int argc, char **argv) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
-	    printf("[%d]\n",rawpkt);
-	    rawpkt = 0;
+	    printf("[%d][%d]\n",rawpkt[0],rawpkt[1]);
+	    rawpkt[0] = 0; rawpkt[1] = 0;
 	  } else {
             len = recvmsg(fd[1], &msg, MSG_DONTWAIT);
-	    rawpkt++;
+	    rawpkt[cpt-1]++;
 	  }
 	}
       }
