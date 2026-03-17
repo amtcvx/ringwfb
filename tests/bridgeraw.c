@@ -7,8 +7,6 @@ cc bridgeraw.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_bridgeraw
 
 sudo rfkill unblock ...
 
-!! will not get packet after first plugin !!
-
 sudo ./exe_bridgeraw 
 
 sudo ip link add name br0 type bridge
@@ -199,8 +197,8 @@ int main(int argc, char **argv) {
   uint8_t rawpkt[2] = { 0, 0 };
 
   for(;;) {
-    if (0 != poll(readsets, 2, -1)) {
-      for (uint8_t cpt=0; cpt<2; cpt++) {
+    if (0 != poll(readsets, nbfds, -1)) {
+      for (uint8_t cpt=0; cpt<nbfds; cpt++) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
