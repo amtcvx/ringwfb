@@ -61,6 +61,7 @@ uint32_t rawfreqs[] = { 2412 };
 
 /*****************************************************************************/
 void init(uint8_t *sockid, struct nl_sock **sockrt, struct nl_sock **socknl) {
+
   if  (!(*socknl = nl_socket_alloc()))  exit(-1);
   nl_socket_set_buffer_size(*socknl, 8192, 8192);
   if (genl_connect(*socknl)) exit(-1);
@@ -93,10 +94,6 @@ void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char
   struct nl_cache *cache;
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get_by_name(cache, name))) exit(-1);
-  struct rtnl_link *change;
-  if (!(change = rtnl_link_alloc())) exit(-1);
-  rtnl_link_unset_flags(change, IFF_UP);
-  if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
   *index = rtnl_link_get_ifindex(ltap);
 
   struct nl_msg *nlmsg;
@@ -107,7 +104,6 @@ void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char
   nl_send_auto(socknl, nlmsg);
   if (nl_send_auto(socknl, nlmsg) >= 0)  nl_recvmsgs_default(socknl);
   nlmsg_free(nlmsg);
-
 }
 
 /*****************************************************************************/
@@ -143,9 +139,6 @@ void set(struct nl_sock *sockrt, struct rtnl_link **link) {
   if ((rtnl_link_bridge_add(sockrt, TEST_BRIDGE_NAME)) < 0) exit(-1);
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
   if (!(*link = rtnl_link_alloc ())) exit(-1);
-
-  struct nl_cache *cache;
-  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
   if (!(*link = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) exit(-1);
 }
 
@@ -200,7 +193,7 @@ int main(int argc, char **argv) {
   ssize_t len = 0;
   uint8_t rawpkt = 0;
 
-  for (uint8_t i=0; i<nbraws; i++) setfreq(sockid, socknl, rawdev[i].index, 2484);
+  for (uint8_t i=0; i<nbraws; i++) setfreq(sockid, socknl, rawdev[i].index, rawfreqs[i]);
 
   struct pollfd readsets[nbfds];
   for (uint8_t i=0; i<nbfds; i++) { readsets[i].fd = fd[i]; readsets[i].events = POLLIN; }
