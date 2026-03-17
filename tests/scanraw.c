@@ -50,6 +50,7 @@ sudo ip link set $DEVICE down
 #include <sys/timerfd.h>
 
 #include <errno.h>
+#include <sys/utsname.h> 
 
 /*****************************************************************************/
 #define NBFREQS 65
@@ -160,8 +161,16 @@ int main(int argc, char **argv) {
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get_by_name(cache, argv[1]))) exit(-1);
 
-  struct rtnl_link *change;
   uint16_t index = rtnl_link_get_ifindex(ltap);
+  struct rtnl_link *change;
+
+  struct utsname uts;
+  uname(&uts);
+  if (strcmp(uts.release,"6.17.0-19-generic")==0) {
+    if (!(change = rtnl_link_alloc())) exit(-1);
+    rtnl_link_unset_flags(change, IFF_UP);
+    if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
+  }
 
   struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);

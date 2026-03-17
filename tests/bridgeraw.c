@@ -48,10 +48,12 @@ sudo ip link del name br0
 #include <sys/timerfd.h>
 
 #include <errno.h>
+#include <sys/utsname.h>
+
 
 #define TEST_BRIDGE_NAME "br0"
 
-char *rawnames[] = { "wlx3c7c3fa9bdca", "wlx3c7c3fa9c1e4" };
+char *rawnames[] = { "wlxfc349725a319", "wlx3c7c3fa9bdc6" };
 uint32_t rawfreqs[] = { 2484, 2412 };
 
 /*****************************************************************************/
@@ -93,6 +95,15 @@ void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get_by_name(cache, name))) exit(-1);
   *index = rtnl_link_get_ifindex(ltap);
+
+  struct utsname uts;
+  uname(&uts);
+  if (strcmp(uts.release,"6.17.0-19-generic")==0) {
+    struct rtnl_link *change;
+    if (!(change = rtnl_link_alloc())) exit(-1);
+    rtnl_link_unset_flags(change, IFF_UP);
+    if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
+  }
 
   struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
