@@ -13,9 +13,11 @@ sudo ./exe_scanraw $DEVICE 2442
 
 export DEVICE=wlx3c7c3fa9c1e4
 sudo ip link set $DEVICE down
-sudo iw dev $DEVICE set type monitor
-sudo ip link set $DEVICE up
-sudo iw dev $DEVICE set channel 3
+
+#sudo iw dev $DEVICE set type monitor
+#sudo ip link set $DEVICE up
+#sudo iw dev $DEVICE set channel 3
+#sudo iw dev $DEVICE set freq 2412
 
 */
 
@@ -157,11 +159,8 @@ int main(int argc, char **argv) {
   struct nl_cache *cache;
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get_by_name(cache, argv[1]))) exit(-1);
-  struct rtnl_link *change;
-  if (!(change = rtnl_link_alloc())) exit(-1);
-  rtnl_link_unset_flags(change, IFF_UP);
-  if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
 
+  struct rtnl_link *change;
   uint16_t index = rtnl_link_get_ifindex(ltap);
 
   struct nl_msg *nlmsg;
@@ -191,7 +190,6 @@ int main(int argc, char **argv) {
   msg_received = false;
   while (!msg_received) nl_recvmsgs(socknl, cb);
   nlmsg_free(nlmsg);
-
 
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
@@ -229,7 +227,6 @@ int main(int argc, char **argv) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 	    printf("[%d] (%d) ",rawdev.freqs[rawdev.cptfreqs],rawnb);
 	    if (argc == 3) {
-/*
               if (rawnb > 0) {
                 if ((uint16_t)dumbuf[2] == 35) 
                   printf("Antenna Signal (%d); Signal Quality (%d); Antenna (%d) signal (%d); Antenna (%d) signal (%d)",
@@ -239,7 +236,6 @@ int main(int argc, char **argv) {
                   dumbuf[27]-256,dumbuf[28]-256,(uint16_t)dumbuf[30],dumbuf[32],
 		  dumbuf[33]-256,dumbuf[34]-256,(uint16_t)dumbuf[36],dumbuf[38]);
 	      }
-*/
 	    } else {
 	      if (rawdev.cptfreqs < (rawdev.nbfreqs - 1)) rawdev.cptfreqs++; else rawdev.cptfreqs = 0;
 	      setfreq(sockid, socknl, index, rawdev.freqs[rawdev.cptfreqs]);
