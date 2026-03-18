@@ -50,7 +50,6 @@ sudo ip link set $DEVICE down
 #include <sys/timerfd.h>
 
 #include <errno.h>
-#include <sys/utsname.h> 
 
 /*****************************************************************************/
 #define NBFREQS 65
