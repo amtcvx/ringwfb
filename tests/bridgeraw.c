@@ -101,7 +101,7 @@ void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char
   if ((strcmp(uts.release,"6.17.0-19-generic")==0)
     || (strcmp(uts.release,"6.11.0-29-generic")==0)) {
 */
-  if (IFF_UP & (rtnl_link_get_flags(ltap))) {
+  if (IFF_UP & rtnl_link_get_flags(ltap)) {
     struct rtnl_link *change;
     if (!(change = rtnl_link_alloc())) exit(-1);
     rtnl_link_unset_flags(change, IFF_UP);
@@ -156,6 +156,19 @@ void set(struct nl_sock *sockrt, struct rtnl_link **link) {
   if (!(*link = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) exit(-1);
 }
 
+/******************************************************************************/
+void drain(uint8_t fd) {
+
+  struct sock_filter zero_bytecode = BPF_STMT(BPF_RET | BPF_K, 0);
+  struct sock_fprog zero_program = { 1, &zero_bytecode};
+  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &zero_program, sizeof(zero_program));
+  char drain[1];
+  while (recv(fd, drain, sizeof(drain), MSG_DONTWAIT) >= 0) printf("----\n");
+  struct sock_filter full_bytecode = BPF_STMT(BPF_RET | BPF_K, (u_int)-1);
+  struct sock_fprog full_program = { 1, &full_bytecode};
+  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &full_program, sizeof(full_program));
+}
+
 /*****************************************************************************/
 void sockset(uint16_t index, uint8_t *fd) {
 
@@ -168,6 +181,8 @@ void sockset(uint16_t index, uint8_t *fd) {
   sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
   if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // BIND must be AFTER wifi setting
+
+  drain(*fd);
 
   const int32_t sock_qdisc_bypass = 1;
   if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
