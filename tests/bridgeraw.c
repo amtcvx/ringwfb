@@ -51,6 +51,9 @@ sudo ip link del name br0
 
 #include <errno.h>
 
+#define DRIVER_NAME "rtw88_8812au"
+//#define DRIVER_NAME "rtw_8812au"
+
 #define TEST_BRIDGE_NAME "br0"
 
 char *rawnames[] = { "wlx3c7c3fa9bfb6", "wlxfc349725a319" };
@@ -187,7 +190,7 @@ void sockset(uint16_t index, uint8_t *fd) {
 void rebind(char *ifname) {
 
   char *ptr,*netpath = "/sys/class/net";
-  char *driverpath = "/sys/bus/usb/drivers/rtw_8812au";
+  char *driverpath = "/sys/bus/usb/drivers/";
   char path[1024],buf[1024];
   ssize_t lenlink;
   FILE *fd;
@@ -198,10 +201,12 @@ void rebind(char *ifname) {
     ptr = strrchr( buf, '/' );
     ptr++;
     strcpy(path,driverpath);
+    strcat(path,DRIVER_NAME);
     strcat(path,"/unbind");
     fd = fopen(path,"a");
     fputs(ptr,fd);fflush(fd);
     strcpy(path,driverpath);
+    strcat(path,DRIVER_NAME);
     strcat(path,"/bind");
     fd = fopen(path,"a");
     fputs(ptr,fd);fflush(fd);
