@@ -47,14 +47,14 @@ sudo ip link del name br0
 
 #include <sys/timerfd.h>
 
+#include <dirent.h>
+
 #include <errno.h>
 
 #define TEST_BRIDGE_NAME "br0"
 
-//char *rawnames[] = { "wlx3c7c3fa9bdca", "wlx3c7c3fa9c1e4" };
-//uint32_t rawfreqs[] = { 5220, 2484 };
-char *rawnames[] = { "wlx3c7c3fa9bfb6" };
-uint32_t rawfreqs[] = { 5220, 2484 };
+char *rawnames[] = { "wlx3c7c3fa9bfb6", "wlxfc349725a319" };
+uint32_t rawfreqs[] = { 2484, 2432 };
 
 /*****************************************************************************/
 #define PERIOD_DELAY_S  1
@@ -122,7 +122,7 @@ void postset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,  ui
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get(cache, index))) exit(-1);
 
-  if ((rtnl_link_enslave(sockrt, link, ltap)) < 0) exit(-1);
+//  if ((rtnl_link_enslave(sockrt, link, ltap)) < 0) exit(-1);
 
   struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
@@ -182,6 +182,33 @@ void sockset(uint16_t index, uint8_t *fd) {
 }
 
 /*****************************************************************************/
+//sudo sh -c "echo -n '1-1:1.0' > /sys/bus/usb/drivers/rtw_8812au/bind"
+
+void rebind(char *ifname) {
+
+  char *ptr,*netpath = "/sys/class/net";
+  char *driverpath = "/sys/bus/usb/drivers/rtw_8812au";
+  char path[1024],buf[1024];
+  ssize_t lenlink;
+  FILE *fd;
+
+  sprintf(path,"%s/%s/device",netpath,ifname);
+  if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
+    buf[lenlink] = '\0';
+    ptr = strrchr( buf, '/' );
+    ptr++;
+    strcpy(path,driverpath);
+    strcat(path,"/unbind");
+    fd = fopen(path,"a");
+    fputs(ptr,fd);fflush(fd);
+    strcpy(path,driverpath);
+    strcat(path,"/bind");
+    fd = fopen(path,"a");
+    fputs(ptr,fd);fflush(fd);
+  }
+}
+
+/*****************************************************************************/
 int main(int argc, char **argv) {
 
   uint8_t nbraws = sizeof(rawnames)/sizeof(rawnames[0]);
@@ -189,6 +216,8 @@ int main(int argc, char **argv) {
   uint8_t fd[nbfds];
   struct rawdev_t { uint16_t index; char *name; } rawdev[nbraws];
   for (uint8_t i=0;i<nbraws;i++) rawdev[i].name = &rawnames[i][0];
+  for (uint8_t i=0;i<nbraws;i++) rebind(rawdev[i].name);
+  sleep(1);
 
   uint64_t exptime;
   if (-1 == (fd[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
