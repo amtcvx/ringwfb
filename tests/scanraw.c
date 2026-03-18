@@ -163,21 +163,13 @@ int main(int argc, char **argv) {
 
   uint16_t index = rtnl_link_get_ifindex(ltap);
   struct rtnl_link *change;
-/*
-  struct utsname uts;
-  uname(&uts);
-  if ((strcmp(uts.release,"6.17.0-19-generic")==0)
-    || (strcmp(uts.release,"6.11.0-29-generic")==0)) {
-*/
+
   if (IFF_UP & (rtnl_link_get_flags(ltap))) {
     if (!(change = rtnl_link_alloc())) exit(-1);
     rtnl_link_unset_flags(change, IFF_UP);
     if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
   }
-
   
-
-
   struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
