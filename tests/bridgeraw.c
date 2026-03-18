@@ -53,8 +53,8 @@ sudo ip link del name br0
 
 #define TEST_BRIDGE_NAME "br0"
 
-char *rawnames[] = { "wlx3c7c3fa9bfb6", "wlx3c7c3fa9c1e8" };
-uint32_t rawfreqs[] = { 2484, 2412 };
+char *rawnames[] = { "wlx3c7c3fa9bdca", "wlx3c7c3fa9c1e4" };
+uint32_t rawfreqs[] = { 5220, 2484 };
 
 /*****************************************************************************/
 #define PERIOD_DELAY_S  1
@@ -95,16 +95,20 @@ void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get_by_name(cache, name))) exit(-1);
   *index = rtnl_link_get_ifindex(ltap);
-
+/*
   struct utsname uts;
   uname(&uts);
   if ((strcmp(uts.release,"6.17.0-19-generic")==0)
     || (strcmp(uts.release,"6.11.0-29-generic")==0)) {
+*/
+  if (IFF_UP & (rtnl_link_get_flags(ltap))) {
     struct rtnl_link *change;
     if (!(change = rtnl_link_alloc())) exit(-1);
     rtnl_link_unset_flags(change, IFF_UP);
     if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
   }
+
+
 
   struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
@@ -206,7 +210,9 @@ int main(int argc, char **argv) {
   for (uint8_t i=0; i<nbfds; i++) { readsets[i].fd = fd[i]; readsets[i].events = POLLIN; }
 
   ssize_t len = 0;
-  uint8_t rawpkt[2] = { 0, 0 };
+  uint32_t rawpkt[2] = { 0, 0 };
+
+  for (uint8_t i=0; i<2; i++) { printf("(%d) (%d)  (%s)\n",rawdev[i].index, fd[i+1], rawdev[i].name); }
 
   for(;;) {
     if (0 != poll(readsets, nbfds, -1)) {
@@ -217,7 +223,7 @@ int main(int argc, char **argv) {
 	    printf("[%d][%d]\n",rawpkt[0],rawpkt[1]);
 	    rawpkt[0] = 0; rawpkt[1] = 0;
 	  } else {
-            len = recvmsg(fd[1], &msg, MSG_DONTWAIT);
+            if ((len = recvmsg(fd[cpt], &msg, MSG_DONTWAIT)) > 0)
 	    rawpkt[cpt-1]++;
 	  }
 	}
