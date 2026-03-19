@@ -51,7 +51,8 @@ sudo ip link del name br0
 
 #include <errno.h>
 
-#define DRIVER_NAME "rtw88_8812au"
+#define DRIVER_NAME "rtl88XXau"
+//#define DRIVER_NAME "rtw88_8812au"
 //#define DRIVER_NAME "rtw_8812au"
 
 #define TEST_BRIDGE_NAME "br0"
