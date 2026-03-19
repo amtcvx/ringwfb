@@ -105,7 +105,7 @@ struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(
 struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
 
 /*****************************************************************************/
-void init(uint8_t *sockid, struct nl_sock **sockrt, struct nl_sock **socknl) {
+void rawinit(uint8_t *sockid, struct nl_sock **sockrt, struct nl_sock **socknl) {
 
   if  (!(*socknl = nl_socket_alloc()))  exit(-1);
   nl_socket_set_buffer_size(*socknl, 8192, 8192);
@@ -116,7 +116,7 @@ void init(uint8_t *sockid, struct nl_sock **sockrt, struct nl_sock **socknl) {
 }
 
 /*****************************************************************************/
-bool setfreq(uint8_t sockid, struct nl_sock *socknl, int ifindex, uint32_t freq) {
+bool rawsetfreq(uint8_t sockid, struct nl_sock *socknl, int ifindex, uint32_t freq) {
 
   bool ret=true;
   struct nl_msg *nlmsg;
@@ -133,7 +133,7 @@ bool setfreq(uint8_t sockid, struct nl_sock *socknl, int ifindex, uint32_t freq)
 }
 
 /*****************************************************************************/
-void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char *name,  uint16_t *index) {
+void rawpreset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char *name,  uint16_t *index) {
 
   struct rtnl_link *ltap;
   struct nl_cache *cache;
@@ -159,7 +159,7 @@ void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char
 }
 
 /*****************************************************************************/
-void set(struct nl_sock *sockrt, struct rtnl_link **link) {
+void bridgepreset(struct nl_sock *sockrt, struct rtnl_link **link) {
 
   struct rtnl_link *old;
   struct nl_cache *cache;
@@ -176,7 +176,28 @@ void set(struct nl_sock *sockrt, struct rtnl_link **link) {
 }
 
 /*****************************************************************************/
-void postset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,  uint16_t index,
+void bridgesocket(struct nl_sock *sockrt,struct rtnl_link *link, uint8_t *fd) {
+
+  struct rtnl_link *change;
+  if (!(change = rtnl_link_alloc())) exit(-1);
+  rtnl_link_set_flags(change, IFF_UP);
+  if ((rtnl_link_change(sockrt, link, change, 0)) < 0) exit(-1);
+
+  uint8_t  index = rtnl_link_get_ifindex(link);
+
+  uint16_t protocol = htons(ETH_P_ALL);
+  if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+
+  struct sockaddr_ll sll;
+  memset( &sll, 0, sizeof( sll ) );
+  sll.sll_family   = AF_PACKET;
+  sll.sll_ifindex  = index;
+  sll.sll_protocol = protocol;
+  if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
+}
+
+/*****************************************************************************/
+void rawpostset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,  uint16_t index,
   struct rtnl_link *link) {
 
   struct rtnl_link *ltap;
@@ -202,7 +223,7 @@ void postset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,  ui
 }
 
 /******************************************************************************/
-void drain(uint8_t fd) {
+void rawdrain(uint8_t fd) {
 
   struct sock_filter zero_bytecode = BPF_STMT(BPF_RET | BPF_K, 0);
   struct sock_fprog zero_program = { 1, &zero_bytecode};
@@ -215,7 +236,7 @@ void drain(uint8_t fd) {
 }
 
 /*****************************************************************************/
-void sockset(uint16_t index, uint8_t *fd) {
+void rawsockset(uint16_t index, uint8_t *fd) {
 
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
@@ -227,7 +248,7 @@ void sockset(uint16_t index, uint8_t *fd) {
   sll.sll_protocol = protocol;
   if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // BIND must be AFTER wifi setting
 
-  drain(*fd);
+  rawdrain(*fd);
 
   const int32_t sock_qdisc_bypass = 1;
   if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
@@ -235,7 +256,7 @@ void sockset(uint16_t index, uint8_t *fd) {
 
 /*****************************************************************************/
 //sudo sh -c "echo -n '1-1:1.0' > /sys/bus/usb/drivers/rtw_8812au/bind"
-bool rebind(char *ifname) {
+bool rawrebind(char *ifname) {
   bool ret = false;
 
   char *ptr,*netpath = "/sys/class/net";
@@ -275,7 +296,7 @@ int main(int argc, char **argv) {
   uint8_t fd[nbfds];
   struct rawdev_t { uint16_t index; char *name; } rawdev[nbraws];
   for (uint8_t i=0;i<nbraws;i++) rawdev[i].name = &rawnames[i][0];
-  for (uint8_t i=0;i<nbraws;i++) if (rebind(rawdev[i].name) == false) exit(-1);
+  for (uint8_t i=0;i<nbraws;i++) if (rawrebind(rawdev[i].name) == false) exit(-1);
   sleep(1);
 
   uint64_t exptime;
@@ -284,23 +305,26 @@ int main(int argc, char **argv) {
   timerfd_settime(fd[0], 0, &period, NULL);
 
   uint8_t sockid; struct nl_sock *sockrt; struct nl_sock *socknl;
-  init(&sockid, &sockrt, &socknl);
+  rawinit(&sockid, &sockrt, &socknl);
 
-  for(uint8_t i=0; i<nbraws; i++) preset(sockid, sockrt, socknl, rawdev[i].name, &rawdev[i].index );
+  for(uint8_t i=0; i<nbraws; i++) rawpreset(sockid, sockrt, socknl, rawdev[i].name, &rawdev[i].index );
 
   struct rtnl_link *link;
-  set(sockrt, &link);
+  bridgepreset(sockrt, &link);
 
-  for (uint8_t i=0; i<nbraws; i++) postset(sockid, sockrt, socknl, rawdev[i].index, link);
+  for (uint8_t i=0; i<nbraws; i++) rawpostset(sockid, sockrt, socknl, rawdev[i].index, link);
 
-  for (uint8_t i=0; i<nbraws; i++) sockset(rawdev[i].index, &fd[i + 1]);
+  for (uint8_t i=0; i<nbraws; i++) rawsockset(rawdev[i].index, &fd[i + 1]);
 
-  for (uint8_t i=0; i<nbraws; i++) setfreq(sockid, socknl, rawdev[i].index, rawfreqs[i]);
+  for (uint8_t i=0; i<nbraws; i++) rawsetfreq(sockid, socknl, rawdev[i].index, rawfreqs[i]);
 
   struct pollfd readsets[nbfds];
   for (uint8_t i=0; i<nbfds; i++) { readsets[i].fd = fd[i]; readsets[i].events = POLLIN; }
 
-  ssize_t len = 0, len1 = 0, len2 = 0;
+  uint8_t brdfd = 0;
+  bridgesocket(sockrt, link, &brdfd);
+
+  ssize_t len = 0;
   uint32_t rawpkt[2] = { 0, 0 };
 
   uint8_t dumbuf[1400] = {-1};
@@ -314,9 +338,10 @@ int main(int argc, char **argv) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
-            len1 = sendmsg(fd[1], (const struct msghdr *)&msg, MSG_DONTWAIT);
-            len2 = sendmsg(fd[2], (const struct msghdr *)&msg, MSG_DONTWAIT);
-	    printf("[%d][%d]  (%ld)(%ld)\n",rawpkt[0],rawpkt[1],len1,len2);
+            len = sendmsg(brdfd, (const struct msghdr *)&msg, MSG_DONTWAIT);
+//            len1 = sendmsg(fd[1], (const struct msghdr *)&msg, MSG_DONTWAIT);
+ //           len2 = sendmsg(fd[2], (const struct msghdr *)&msg, MSG_DONTWAIT);
+	    printf("[%d][%d]  (%ld)\n",rawpkt[0],rawpkt[1],len);
 	    rawpkt[0] = 0; rawpkt[1] = 0;
 	  } else {
             if ((len = recvmsg(fd[cpt], &msg, MSG_DONTWAIT)) > 0)
