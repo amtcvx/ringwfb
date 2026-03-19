@@ -62,6 +62,48 @@ uint32_t rawfreqs[] = { 2484, 2432 };
 /*****************************************************************************/
 #define PERIOD_DELAY_S  1
 
+/************************************************************************************************/
+#define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
+#define IEEE80211_RADIOTAP_MCS_HAVE_MCS   0x02
+#define IEEE80211_RADIOTAP_MCS_HAVE_GI    0x04
+
+#define IEEE80211_RADIOTAP_MCS_HAVE_STBC  0x20
+
+#define IEEE80211_RADIOTAP_MCS_BW_20    0
+#define IEEE80211_RADIOTAP_MCS_SGI      0x04
+
+#define IEEE80211_RADIOTAP_MCS_STBC_1  1
+#define IEEE80211_RADIOTAP_MCS_STBC_SHIFT 5
+
+#define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
+
+#define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI | (IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT))
+
+#define MCS_INDEX  2
+
+/************************************************************************************************/
+
+uint8_t radiotaphd_tx[] = {
+        0x00, 0x00, // <-- radiotap version
+        0x0d, 0x00, // <- radiotap header length
+        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
+        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
+        MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
+};
+uint8_t ieeehd_tx[] = {
+        0x08, 0x01,                         // Frame Control : Data frame from STA to DS
+        0x00, 0x00,                         // Duration
+        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Receiver MAC
+        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Transmitter MAC
+        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
+        0x10, 0x86                          // Sequence control
+};
+uint8_t llchd_tx[4];
+
+struct iovec iov_radiotaphd_tx = { .iov_base = radiotaphd_tx, .iov_len = sizeof(radiotaphd_tx)};
+struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(ieeehd_tx)};
+struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
+
 /*****************************************************************************/
 void init(uint8_t *sockid, struct nl_sock **sockrt, struct nl_sock **socknl) {
 
@@ -117,6 +159,23 @@ void preset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl, char
 }
 
 /*****************************************************************************/
+void set(struct nl_sock *sockrt, struct rtnl_link **link) {
+
+  struct rtnl_link *old;
+  struct nl_cache *cache;
+  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
+  if (!(old = rtnl_link_alloc ())) exit(-1);
+  if ((old = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) {
+    if (rtnl_link_delete(sockrt, old) < 0) exit(-1);
+  }
+
+  if ((rtnl_link_bridge_add(sockrt, TEST_BRIDGE_NAME)) < 0) exit(-1);
+  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
+  if (!(*link = rtnl_link_alloc ())) exit(-1);
+  if (!(*link = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) exit(-1);
+}
+
+/*****************************************************************************/
 void postset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,  uint16_t index,
   struct rtnl_link *link) {
 
@@ -125,7 +184,7 @@ void postset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,  ui
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get(cache, index))) exit(-1);
 
-//  if ((rtnl_link_enslave(sockrt, link, ltap)) < 0) exit(-1);
+  if ((rtnl_link_enslave(sockrt, link, ltap)) < 0) exit(-1);
 
   struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
@@ -140,16 +199,6 @@ void postset(uint8_t sockid, struct nl_sock *sockrt, struct nl_sock *socknl,  ui
   if (!(change = rtnl_link_alloc())) exit(-1);
   rtnl_link_set_flags(change, IFF_UP);
   if ((rtnl_link_change(sockrt, ltap, change, 0)) < 0) exit(-1);
-}
-
-/*****************************************************************************/
-void set(struct nl_sock *sockrt, struct rtnl_link **link) {
-
-  struct nl_cache *cache;
-  if ((rtnl_link_bridge_add(sockrt, TEST_BRIDGE_NAME)) < 0) exit(-1);
-  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
-  if (!(*link = rtnl_link_alloc ())) exit(-1);
-  if (!(*link = rtnl_link_get_by_name(cache, TEST_BRIDGE_NAME))) exit(-1);
 }
 
 /******************************************************************************/
@@ -246,20 +295,18 @@ int main(int argc, char **argv) {
 
   for (uint8_t i=0; i<nbraws; i++) sockset(rawdev[i].index, &fd[i + 1]);
 
-  uint8_t dumbuf[1500];
-  struct iovec iov_dum = { .iov_base = dumbuf, .iov_len = sizeof(dumbuf)};
-  struct iovec iovtab[1] = { iov_dum };
-  struct msghdr msg = { .msg_iov = iovtab, .msg_iovlen = 1 };
-
   for (uint8_t i=0; i<nbraws; i++) setfreq(sockid, socknl, rawdev[i].index, rawfreqs[i]);
 
   struct pollfd readsets[nbfds];
   for (uint8_t i=0; i<nbfds; i++) { readsets[i].fd = fd[i]; readsets[i].events = POLLIN; }
 
-  ssize_t len = 0;
+  ssize_t len = 0, len1 = 0, len2 = 0;
   uint32_t rawpkt[2] = { 0, 0 };
 
-  for (uint8_t i=0; i<nbraws; i++) { printf("(%d) (%d)  (%s)\n",rawdev[i].index, fd[i+1], rawdev[i].name); }
+  uint8_t dumbuf[1400] = {-1};
+  struct iovec iovdum = { .iov_base = dumbuf, .iov_len = sizeof(dumbuf) };
+  struct iovec iovtab[4] = { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iovdum };
+  struct msghdr msg = { .msg_iov = iovtab, .msg_iovlen = 4 };
 
   for(;;) {
     if (0 != poll(readsets, nbfds, -1)) {
@@ -267,7 +314,9 @@ int main(int argc, char **argv) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
-	    printf("[%d][%d]\n",rawpkt[0],rawpkt[1]);
+            len1 = sendmsg(fd[1], (const struct msghdr *)&msg, MSG_DONTWAIT);
+            len2 = sendmsg(fd[2], (const struct msghdr *)&msg, MSG_DONTWAIT);
+	    printf("[%d][%d]  (%ld)(%ld)\n",rawpkt[0],rawpkt[1],len1,len2);
 	    rawpkt[0] = 0; rawpkt[1] = 0;
 	  } else {
             if ((len = recvmsg(fd[cpt], &msg, MSG_DONTWAIT)) > 0)
