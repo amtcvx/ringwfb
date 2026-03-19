@@ -56,7 +56,7 @@ sudo ip link del name br0
 
 #define TEST_BRIDGE_NAME "br0"
 
-char *rawnames[] = { "wlx3c7c3fa9bfb6", "wlxfc349725a319" };
+char *rawnames[] = { "wlx3c7c3fa9c1e4", "wlx3c7c3fa9bdca" };
 uint32_t rawfreqs[] = { 2484, 2432 };
 
 /*****************************************************************************/
@@ -186,8 +186,8 @@ void sockset(uint16_t index, uint8_t *fd) {
 
 /*****************************************************************************/
 //sudo sh -c "echo -n '1-1:1.0' > /sys/bus/usb/drivers/rtw_8812au/bind"
-
-void rebind(char *ifname) {
+bool rebind(char *ifname) {
+  bool ret = false;
 
   char *ptr,*netpath = "/sys/class/net";
   char *driverpath = "/sys/bus/usb/drivers/";
@@ -195,22 +195,27 @@ void rebind(char *ifname) {
   ssize_t lenlink;
   FILE *fd;
 
+  char dirpath[1024];
+  strcpy(dirpath,driverpath);
+  strcat(dirpath,DRIVER_NAME);
+  if (!(opendir(dirpath))) exit(-1);
+
   sprintf(path,"%s/%s/device",netpath,ifname);
   if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
     buf[lenlink] = '\0';
     ptr = strrchr( buf, '/' );
     ptr++;
-    strcpy(path,driverpath);
-    strcat(path,DRIVER_NAME);
+    strcpy(path,dirpath);
     strcat(path,"/unbind");
     fd = fopen(path,"a");
     fputs(ptr,fd);fflush(fd);
-    strcpy(path,driverpath);
-    strcat(path,DRIVER_NAME);
+    strcpy(path,dirpath);
     strcat(path,"/bind");
     fd = fopen(path,"a");
     fputs(ptr,fd);fflush(fd);
+    ret = true;
   }
+  return(ret);
 }
 
 /*****************************************************************************/
@@ -221,7 +226,7 @@ int main(int argc, char **argv) {
   uint8_t fd[nbfds];
   struct rawdev_t { uint16_t index; char *name; } rawdev[nbraws];
   for (uint8_t i=0;i<nbraws;i++) rawdev[i].name = &rawnames[i][0];
-  for (uint8_t i=0;i<nbraws;i++) rebind(rawdev[i].name);
+  for (uint8_t i=0;i<nbraws;i++) if (rebind(rawdev[i].name) == false) exit(-1);
   sleep(1);
 
   uint64_t exptime;
