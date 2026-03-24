@@ -1,3 +1,18 @@
+Issues:
+OK : 5.10.110-15-rockchip to 5.10.110-15-rockchip
+NOK : 6.17.0-19-generic can monitor but not inject
+
+5.10.110-15-rockchip 
+https://github.com/aircrack-ng/rtl8812AU
+v5.6.4.2
+DEPRECATED
+No compilation on 6.17.0-19-generic
+
+6.17.0-19-generic
+Already in kernel
+(https://github.com/lwfinger/rtw88)
+
+-------------------------------------------------------------------------------
 This project provides wireless communication between ground / board and board / board systems.
 
 -------------------------------------------------------------------------------
@@ -5,8 +20,8 @@ git clone http://github.com/amtcvx/ringwfb.git
 (git clone git@github.com:amtcvx/ringwfb.git)
 
 Installation need internet connection and sudo 
-sudo ./install.sh
-(sudo ./uninstall.sh)
+./install.sh
+(./uninstall.sh)
 
 -------------------------------------------------------------------------------
 Before first run, set Makefile according to the target role
