@@ -1,18 +1,27 @@
 /*
 sudo apt-get install libnl-3-dev libnl-genl-3-dev libnl-route-3-dev
 
-gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c netlink_main.c -o netlink_main.o
+gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -c netlink_msg_main.c -o netlink_msg_main.o
 
-cc netlink_utils.o netlink_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_netlinkmain
+cc netlink_utils.o msg_utils.o netlink_msg_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_netlinkmain
 
 */
 
+#include <unistd.h>
+#include <sys/socket.h>
+#include <poll.h>
+#include <sys/uio.h>
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/timerfd.h>
 
 #include "netlink_utils.h"
+#include "msg_utils.h"
 
 #define DRIVERNAME "rtl88XXau"
+
+#define PERIOD_DELAY_S 1
 
 /*****************************************************************************/
 int main(int argc, char **argv) {
@@ -21,7 +30,7 @@ int main(int argc, char **argv) {
 
   if (false == netlink_utils_init(&n,DRIVERNAME)) { printf("NO WIFI\n"); exit(-2); }
   for (uint8_t i=0;i<n.nbraws;i++) printf("(%s)\n",n.rawdevs[i]->ifname);
-/*
+
   uint8_t nbfds = (1 + n.nbraws);
   uint8_t fd[nbfds];
 
@@ -39,13 +48,11 @@ int main(int argc, char **argv) {
   struct pollfd readsets[nbfds];
   for (uint8_t nbfdscpt=0; nbfdscpt < nbfds; nbfdscpt++) { readsets[nbfdscpt].fd = fd[nbfdscpt]; readsets[nbfdscpt].events = POLLIN; }
 
-  ssize_t len = 0, len1;
-  uint32_t rawpkt[2] = { 0, 0 };
+  ssize_t len = 0;
+  uint32_t rawpkt[n.nbraws]; 
 
-  uint8_t dumbuf[1400] = {-1};
-  struct iovec iovdum = { .iov_base = dumbuf, .iov_len = sizeof(dumbuf) };
-  struct iovec iovtab[4] = { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iovdum };
-  struct msghdr msg = { .msg_iov = iovtab, .msg_iovlen = 4 };
+  msg_utils_init_t u;
+  msg_utils_init(&u);
 
   for(;;) {
     if (0 != poll(readsets, nbfds, -1)) {
@@ -54,17 +61,18 @@ int main(int argc, char **argv) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 //            len = sendmsg(brdfd, (const struct msghdr *)&msg, MSG_DONTWAIT);
-            len1 = sendmsg(fd[1], (const struct msghdr *)&msg, MSG_DONTWAIT);
- //           len2 = sendmsg(fd[2], (const struct msghdr *)&msg, MSG_DONTWAIT);
-            printf("[%d][%d]  (%ld)\n",rawpkt[0],rawpkt[1],len1);
-            rawpkt[0] = 0; rawpkt[1] = 0;
+            for (uint8_t i=0;i<n.nbraws;i++) {
+//              len = sendmsg(fd[i+1], (const struct msghdr *)&msg, MSG_DONTWAIT);
+              len = sendmsg(fd[i+1], (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
+              printf("[%d](%ld)\n",rawpkt[i],len);
+	      rawpkt[i] = 0;
+	    }
           } else {
-            if ((len = recvmsg(fd[cpt], &msg, MSG_DONTWAIT)) > 0)
+            if ((len = recvmsg(fd[cpt], &u.msg_in, MSG_DONTWAIT)) > 0)
             rawpkt[cpt-1]+=len;
           }
         }
       }
     }
   }
-*/
 }

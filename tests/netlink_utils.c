@@ -203,6 +203,7 @@ uint8_t setwifi(elt_t *elt, netlink_utils_socknl_t *n, char *drivername) {
   if (elt->nb == 0) return(0);
 
   for(uint8_t i=0;i<elt->nb;i++) reload(elt->devs[i].ifname, drivername);
+  sleep(1.0);
 
   struct rtnl_link *ltap;
   struct nl_cache *cache;
