@@ -15,6 +15,7 @@ Already in kernel
 sudo add-apt-repository ppa:cappelikan/ppa
 sudo apt update
 sudo apt install mainline
+mainline install 6.8
 
 -------------------------------------------------------------------------------
 This project provides wireless communication between ground / board and board / board systems.
