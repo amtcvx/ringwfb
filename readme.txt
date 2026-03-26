@@ -15,6 +15,8 @@ Already in kernel
 sudo add-apt-repository ppa:cappelikan/ppa
 sudo apt update
 sudo apt install mainline
+sudo dkms status
+(=> none)
 mainline install 6.8
 
 -------------------------------------------------------------------------------
