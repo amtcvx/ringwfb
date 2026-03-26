@@ -2,7 +2,7 @@
 This project provides wireless communication between ground / board and board / board systems.
 
 -------------------------------------------------------------------------------
-Recommended Ubuntu 22.04 (6.8.0-106-generic)
+For Desktop (ex: GCS) recommended Ubuntu 22.04 (6.8.0-106-generic)
 
 Or
 
