@@ -12,6 +12,10 @@ No compilation on 6.17.0-19-generic
 Already in kernel
 (https://github.com/lwfinger/rtw88)
 
+sudo add-apt-repository ppa:cappelikan/ppa
+sudo apt update
+sudo apt install mainline
+
 -------------------------------------------------------------------------------
 This project provides wireless communication between ground / board and board / board systems.
 
