@@ -24,7 +24,6 @@ gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing
 #include <dirent.h>
 #include <net/ethernet.h>
 #include <linux/filter.h>
-#include <sys/ioctl.h>
 #include <linux/if_packet.h>
 
 
@@ -278,14 +277,11 @@ uint8_t setraw(elt_t *elt, netlink_utils_raw_t *arr[], char *drivername) {
   for(uint8_t i=0;i<elt->nb;i++) {
     if (strcmp(elt->devs[i].drivername,drivername)!=0) continue;
     if (-1 == (elt->devs[i].sockfd = socket(AF_PACKET,SOCK_RAW,protocol))) continue;
-    struct ifreq ifr;
-    memset(&ifr, 0, sizeof(struct ifreq));
-    strncpy( ifr.ifr_name, elt->devs[i].ifname, sizeof( ifr.ifr_name ) - 1 );
-    if (ioctl( elt->devs[i].sockfd, SIOCGIFINDEX, &ifr ) < 0 ) continue;
+
     struct sockaddr_ll sll;
     memset( &sll, 0, sizeof( sll ) );
     sll.sll_family   = AF_PACKET;
-    sll.sll_ifindex  = ifr.ifr_ifindex;
+    sll.sll_ifindex  = elt->devs[i].ifindex;
     sll.sll_protocol = protocol;
     if (-1 == bind(elt->devs[i].sockfd, (struct sockaddr *)&sll, sizeof(sll))) continue;
 
