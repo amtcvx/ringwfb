@@ -1,9 +1,9 @@
 /*
 sudo apt-get install libnl-3-dev libnl-genl-3-dev libnl-route-3-dev
 
-gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -c netlink_msg_main.c -o netlink_msg_main.o
+gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -c wfb_main.c -o wfb_main.o
 
-cc netlink_utils.o msg_utils.o netlink_msg_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_netlinkmain
+cc wfb_utils_netlink.o wfb_utils_msg.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_main
 
 */
 
@@ -16,8 +16,8 @@ cc netlink_utils.o msg_utils.o netlink_msg_main.o -g -lnl-route-3 -lnl-genl-3 -l
 #include <stdlib.h>
 #include <sys/timerfd.h>
 
-#include "netlink_utils.h"
-#include "msg_utils.h"
+#include "wfb_utils_netlink.h"
+#include "wfb_utils_msg.h"
 
 #define DRIVERNAME "rtl88XXau"
 
@@ -26,9 +26,9 @@ cc netlink_utils.o msg_utils.o netlink_msg_main.o -g -lnl-route-3 -lnl-genl-3 -l
 /*****************************************************************************/
 int main(int argc, char **argv) {
 
-  netlink_utils_init_t n;
+  wfb_utils_netlink_init_t n;
 
-  if (false == netlink_utils_init(&n,DRIVERNAME)) { printf("NO WIFI\n"); exit(-2); }
+  if (false == wfb_utils_netlink_init(&n,DRIVERNAME)) { printf("NO WIFI\n"); exit(-2); }
   for (uint8_t i=0;i<n.nbraws;i++) printf("(%s)\n",n.rawdevs[i]->ifname);
 
   uint8_t nbfds = (1 + n.nbraws);
@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
   for (uint8_t rawcpt=0; rawcpt < n.nbraws; rawcpt++) {
     fd[rawcpt + 1] = n.rawdevs[rawcpt]->sockfd;
     n.rawdevs[rawcpt]->freq = (n.nbraws - rawcpt - 1) * (n.rawdevs[rawcpt]->nbfreqs / n.nbraws);
-    netlink_utils_setfreq(&n.sockidnl, n.rawdevs[rawcpt]->ifindex, n.rawdevs[rawcpt]->freqs[n.rawdevs[rawcpt]->freq]);
+    wfb_utils_netlink_setfreq(&n.sockidnl, n.rawdevs[rawcpt]->ifindex, n.rawdevs[rawcpt]->freqs[n.rawdevs[rawcpt]->freq]);
   }
 
   struct pollfd readsets[nbfds];
@@ -51,8 +51,8 @@ int main(int argc, char **argv) {
   ssize_t len = 0;
   uint32_t rawpkt[n.nbraws]; 
 
-  msg_utils_init_t u;
-  msg_utils_init(&u);
+  wfb_utils_msg_init_t u;
+  wfb_utils_msg_init(&u);
 
   for(;;) {
     if (0 != poll(readsets, nbfds, -1)) {

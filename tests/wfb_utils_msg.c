@@ -1,10 +1,10 @@
 /*
 
-gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -c msg_utils.c -o msg_utils.o
+gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -c wfb_utils_msg.c -o wfb_utils_msg.o
 
 */
 
-#include "msg_utils.h"
+#include "wfb_utils_msg.h"
 
 #include <stdint.h>
 
@@ -69,7 +69,7 @@ const struct iovec iovpay_rx = { .iov_base = payloadbuf_rx, .iov_len = sizeof(pa
 struct iovec iovtab_rx[4] = { iov_radiotaphd_rx, iov_ieeehd_rx, iov_llchd_tx, iovpay_rx };
 
 /*****************************************************************************/
-void msg_utils_init(msg_utils_init_t *u) {
+void wfb_utils_msg_init(wfb_utils_msg_init_t *u) {
 
   u->msg_out.msg_iov = iovtab_tx; u->msg_out.msg_iovlen = 4;
   u->msg_in.msg_iov = iovtab_rx; u->msg_in.msg_iovlen = 4;

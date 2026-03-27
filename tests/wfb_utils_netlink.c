@@ -1,7 +1,7 @@
 /*
 sudo apt-get install libnl-3-dev libnl-genl-3-dev libnl-route-3-dev
 
-gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c netlink_utils.c -o netlink_utils.o
+gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c wfb_utils_netlink.c -o wfb_utils_netlink.o
 
 */
 
@@ -27,14 +27,14 @@ gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing
 #include <linux/if_packet.h>
 
 
-#include "netlink_utils.h"
+#include "wfb_utils_netlink.h"
 
 
 /************************************************************************************************/
 typedef struct {
   uint8_t nb;
   uint8_t curr;
-  netlink_utils_raw_t *devs;
+  wfb_utils_netlink_raw_t *devs;
 } elt_t;
 
 /******************************************************************************/
@@ -51,7 +51,7 @@ int getallinterfaces_callback(struct nl_msg *msg, void *arg) {
   struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
   nla_parse(tb_msg, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
 
-  netlink_utils_raw_t *ptr = &(((elt_t *)arg)->devs[((elt_t *)arg)->nb]);
+  wfb_utils_netlink_raw_t *ptr = &(((elt_t *)arg)->devs[((elt_t *)arg)->nb]);
 
   char ifname[30];
   if (tb_msg[NL80211_ATTR_IFNAME]) {
@@ -83,7 +83,7 @@ int getsinglewifi_callback(struct nl_msg *msg, void *arg) {
     int rem_band, rem_freq;
     int last_band = -1;
 
-    netlink_utils_raw_t *ptr = &(((elt_t *)arg)->devs[((elt_t *)arg)->curr]);
+    wfb_utils_netlink_raw_t *ptr = &(((elt_t *)arg)->devs[((elt_t *)arg)->curr]);
 
     nla_for_each_nested(nl_band, tb_msg[NL80211_ATTR_WIPHY_BANDS], rem_band) {
       if (last_band != nl_band->nla_type) last_band = nl_band->nla_type;
@@ -179,7 +179,7 @@ bool reload(char *ifname, char *drivername) {
 }
 
 /******************************************************************************/
-uint8_t setwifi(elt_t *elt, netlink_utils_socknl_t *n, char *drivername) {
+uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, char *drivername) {
 
   bool msg_received = false;
 
@@ -270,7 +270,7 @@ void drain(uint8_t fd) {
 }
 
 /******************************************************************************/
-uint8_t setraw(elt_t *elt, netlink_utils_raw_t *arr[], char *drivername) {
+uint8_t setraw(elt_t *elt, wfb_utils_netlink_raw_t *arr[], char *drivername) {
 
   uint8_t cpt = 0;
   uint16_t protocol = htons(ETH_P_ALL);
@@ -298,7 +298,7 @@ uint8_t setraw(elt_t *elt, netlink_utils_raw_t *arr[], char *drivername) {
 }
 
 /*****************************************************************************/
-bool netlink_utils_setfreq(netlink_utils_socknl_t *psock, int ifindex, uint32_t freq) {
+bool wfb_utils_netlink_setfreq(wfb_utils_netlink_socknl_t *psock, int ifindex, uint32_t freq) {
 
   bool ret=true;
   struct nl_msg *msg=nlmsg_alloc();
@@ -314,14 +314,14 @@ bool netlink_utils_setfreq(netlink_utils_socknl_t *psock, int ifindex, uint32_t 
 }
 
 /******************************************************************************/
-bool netlink_utils_init(netlink_utils_init_t *n, char *drivername) {
+bool wfb_utils_netlink_init(wfb_utils_netlink_init_t *n, char *drivername) {
 
   if  (!(n->sockidnl.socknl = nl_socket_alloc())) return(false);
   nl_socket_set_buffer_size(n->sockidnl.socknl, 8192, 8192);
   if (genl_connect(n->sockidnl.socknl)) return(false);
   if ((n->sockidnl.sockid = genl_ctrl_resolve(n->sockidnl.socknl, "nl80211")) < 0) return(false);
 
-  static netlink_utils_raw_t all[MAXRAWDEV];
+  static wfb_utils_netlink_raw_t all[MAXRAWDEV];
   elt_t elt; memset(&elt, 0, sizeof(elt_t)); elt.devs = all;
 
   uint8_t nb;
