@@ -3,6 +3,11 @@ sudo apt-get install libnl-3-dev libnl-genl-3-dev libnl-route-3-dev
 
 gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c wfb_utils_netlink.c -o wfb_utils_netlink.o
 
+sudo ip address show wfbbrg
+sudo ip link show master wfbbrg 
+
+sudo ip link del name wfbbrg
+
 */
 
 
@@ -26,9 +31,13 @@ gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing
 #include <linux/filter.h>
 #include <linux/if_packet.h>
 
+#include <netlink/route/link.h>
+#include <netlink/route/link/bridge.h>
+
 
 #include "wfb_utils_netlink.h"
 
+#define BRIDGE_NAME "wfbbrg"
 
 /************************************************************************************************/
 typedef struct {
@@ -179,6 +188,23 @@ bool reload(char *ifname, char *drivername) {
 }
 
 /******************************************************************************/
+void setbridge(struct nl_sock *sockrt, char *bridgename, struct rtnl_link **link) {
+
+  struct rtnl_link *old;
+  struct nl_cache *cache;
+  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
+  if (!(old = rtnl_link_alloc ())) exit(-1);
+  if ((old = rtnl_link_get_by_name(cache, bridgename))) {
+    if (rtnl_link_delete(sockrt, old) < 0) exit(-1);
+  }
+
+  if ((rtnl_link_bridge_add(sockrt, bridgename)) < 0) exit(-1);
+  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
+  if (!(*link = rtnl_link_alloc ())) exit(-1);
+  if (!(*link = rtnl_link_get_by_name(cache, bridgename))) exit(-1);
+}
+
+/******************************************************************************/
 uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, char *drivername) {
 
   bool msg_received = false;
@@ -205,29 +231,59 @@ uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, char *drivername) {
   for(uint8_t i=0;i<elt->nb;i++) reload(elt->devs[i].ifname, drivername);
   sleep(1.0);
 
-  struct rtnl_link *ltap;
+  struct rtnl_link *ltap[MAXRAWDEV];
   struct nl_cache *cache;
   for(uint8_t i=0;i<elt->nb;i++) {
     if ((rtnl_link_alloc_cache(sockrt, n->sockid, &cache)) < 0) exit(-1);
-    if (!(ltap = rtnl_link_get_by_name(cache, elt->devs[i].ifname))) exit(-1);
-    elt->devs[i].ifindex = rtnl_link_get_ifindex(ltap);
+    if (!(ltap[i] = rtnl_link_get_by_name(cache, elt->devs[i].ifname))) exit(-1);
+    elt->devs[i].ifindex = rtnl_link_get_ifindex(ltap[i]);
   }
 
+
+  struct nl_msg *nlmsg3; 
+  struct rtnl_link *change;
   for(uint8_t i=0;i<elt->nb;i++) {
-    struct nl_msg *msg3 = nlmsg_alloc();
-    if (!msg3) return(0);
-    genlmsg_put(msg3,0,0,n->sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
-    nla_put_u32(msg3, NL80211_ATTR_IFINDEX, elt->devs[i].ifindex);
-    nla_put_u32(msg3, NL80211_ATTR_IFTYPE,NL80211_IFTYPE_MONITOR);
-    nl_send_auto(n->socknl, msg3);
-    if (nl_send_auto(n->socknl, msg3) >= 0)  nl_recvmsgs_default(n->socknl);
-    nlmsg_free(msg3);
+    if (IFF_UP & rtnl_link_get_flags(ltap[i])) {
+      if (!(change = rtnl_link_alloc())) exit(-1);
+      rtnl_link_unset_flags(change, IFF_UP);
+      if ((rtnl_link_change(sockrt, ltap[i], change, 0)) < 0) exit(-1);
+    }
+/*
+    if (!(nlmsg3  = nlmsg_alloc())) exit(-1);
+    genlmsg_put(nlmsg3,0,0,n->sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
+    nla_put_u32(nlmsg3, NL80211_ATTR_IFINDEX, elt->devs[i].ifindex);
+    nla_put_u8(nlmsg3, NL80211_ATTR_4ADDR,1);
+    nl_send_auto(n->socknl, nlmsg3);
+    if (nl_send_auto(n->socknl, nlmsg3) >= 0)  nl_recvmsgs_default(n->socknl);
+    nlmsg_free(nlmsg3);
+*/
+  }
+
+  struct rtnl_link *link;
+  setbridge(sockrt, BRIDGE_NAME, &link);
+
+  exit(0);
+
+/*
+  for(uint8_t i=0;i<elt->nb;i++) {
+    if ((rtnl_link_enslave(sockrt, link, ltap[i])) < 0) exit(-1);
+  }
+*/
+
+  struct nl_msg *nlmsg4;
+  for(uint8_t i=0;i<elt->nb;i++) {
+    if (!(nlmsg4  = nlmsg_alloc())) exit(-1);
+    genlmsg_put(nlmsg4,0,0,n->sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
+    nla_put_u32(nlmsg4, NL80211_ATTR_IFINDEX, elt->devs[i].ifindex);
+    nla_put_u32(nlmsg4, NL80211_ATTR_IFTYPE,NL80211_IFTYPE_MONITOR);
+    nl_send_auto(n->socknl, nlmsg4);
+    if (nl_send_auto(n->socknl, nlmsg4) >= 0)  nl_recvmsgs_default(n->socknl);
+    nlmsg_free(nlmsg4);
   }
 
   unblock_rfkill(elt);
 
   int8_t err = 0;
-  struct rtnl_link *link, *change;
   if ((err = rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) >= 0) {
     for(uint8_t i=0;i<elt->nb;i++) {
       if ((link = rtnl_link_get(cache,elt->devs[i].ifindex))) {
