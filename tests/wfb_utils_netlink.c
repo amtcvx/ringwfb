@@ -3,10 +3,10 @@ sudo apt-get install libnl-3-dev libnl-genl-3-dev libnl-route-3-dev
 
 gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c wfb_utils_netlink.c -o wfb_utils_netlink.o
 
-sudo ip address show wfbbrg
-sudo ip link show master wfbbrg 
+sudo ip address show wfbbond
+sudo ip link show master wfbbond 
 
-sudo ip link del name wfbbrg
+sudo ip link del name wfbbond
 
 */
 
@@ -33,19 +33,17 @@ sudo ip link del name wfbbrg
 
 #include <netlink/route/link.h>
 #include <netlink/route/link/bonding.h>
-//#include <netlink/route/link/bridge.h>
 
 
 #include "wfb_utils_netlink.h"
 
 #define BOND_NAME "wfbbond"
-//#define BRIDGE_NAME "wfbbrg"
 
 /************************************************************************************************/
 typedef struct {
   uint8_t nb;
   uint8_t curr;
-  wfb_utils_netlink_raw_t *devs;
+  struct rtnl_link *ltap;
 } elt_t;
 
 /******************************************************************************/
@@ -190,8 +188,8 @@ bool reload(char *ifname, char *drivername) {
 }
 
 /******************************************************************************/
-//void setbridge(struct nl_sock *sockrt, char *name, struct rtnl_link **link) {
-void setbond(struct nl_sock *sockrt, char *name, struct rtnl_link **link) {
+/*
+void setbond(elt_t *elt, struct nl_sock *sockrt, char *name, struct rtnl_link **link) {
 
   struct rtnl_link *old;
   struct nl_cache *cache;
@@ -204,13 +202,15 @@ void setbond(struct nl_sock *sockrt, char *name, struct rtnl_link **link) {
   struct rtnl_link *opts; 
   if (!(opts = rtnl_link_alloc ())) exit(-1);
   if ((rtnl_link_bond_add(sockrt, name, opts)) < 0) exit(-1); 
-//  if ((rtnl_link_bridge_add(sockrt, bridgename)) < 0) exit(-1);
 
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
   if (!(*link = rtnl_link_alloc ())) exit(-1);
   if (!(*link = rtnl_link_get_by_name(cache, name))) exit(-1);
-}
 
+  for(uint8_t i=0;i<elt->nb;i++) 
+    if ((rtnl_link_bond_enslave(sockrt, *link, elt->ltap[i])) < 0) exit(-1);
+}
+*/
 /******************************************************************************/
 uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, char *drivername) {
 
@@ -242,10 +242,9 @@ uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, char *drivername) {
   struct nl_cache *cache;
   for(uint8_t i=0;i<elt->nb;i++) {
     if ((rtnl_link_alloc_cache(sockrt, n->sockid, &cache)) < 0) exit(-1);
-    if (!(ltap[i] = rtnl_link_get_by_name(cache, elt->devs[i].ifname))) exit(-1);
+    if (!(elt->devs[i].ltap[i] = rtnl_link_get_by_name(cache, elt->devs[i].ifname))) exit(-1);
     elt->devs[i].ifindex = rtnl_link_get_ifindex(ltap[i]);
   }
-
 
   struct nl_msg *nlmsg3; 
   struct rtnl_link *change;
@@ -255,29 +254,7 @@ uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, char *drivername) {
       rtnl_link_unset_flags(change, IFF_UP);
       if ((rtnl_link_change(sockrt, ltap[i], change, 0)) < 0) exit(-1);
     }
-/*
-    if (!(nlmsg3  = nlmsg_alloc())) exit(-1);
-    genlmsg_put(nlmsg3,0,0,n->sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
-    nla_put_u32(nlmsg3, NL80211_ATTR_IFINDEX, elt->devs[i].ifindex);
-    nla_put_u8(nlmsg3, NL80211_ATTR_4ADDR,1);
-    nl_send_auto(n->socknl, nlmsg3);
-    if (nl_send_auto(n->socknl, nlmsg3) >= 0)  nl_recvmsgs_default(n->socknl);
-    nlmsg_free(nlmsg3);
-*/
   }
-
-  struct rtnl_link *link;
-  setbond(sockrt, BOND_NAME, &link);
-//  setbridge(sockrt, BRIDGE_NAME, &link);
-
-  exit(0);
-
-/*
-  for(uint8_t i=0;i<elt->nb;i++) {
-    if ((rtnl_link_bond_enslave(sockrt, link, ltap[i])) < 0) exit(-1);
-    if ((rtnl_link_enslave(sockrt, link, ltap[i])) < 0) exit(-1);
-  }
-*/
 
   struct nl_msg *nlmsg4;
   for(uint8_t i=0;i<elt->nb;i++) {
@@ -392,8 +369,10 @@ bool wfb_utils_netlink_init(wfb_utils_netlink_init_t *n, char *drivername) {
   uint8_t nb;
   if ((nb = setwifi(&elt, &n->sockidnl, drivername)) > 0) {
     if ((nb = setraw(&elt, n->rawdevs, drivername)) > 0) {
-      n->nbraws = nb;
-      return(true);
+//      if ((nb = setbond(&elt, n->rawdevs, drivername)) > 0) {
+        n->nbraws = nb;
+        return(true);
+//      }
     }
   }
   return(false);
