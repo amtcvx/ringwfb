@@ -32,12 +32,14 @@ sudo ip link del name wfbbrg
 #include <linux/if_packet.h>
 
 #include <netlink/route/link.h>
-#include <netlink/route/link/bridge.h>
+#include <netlink/route/link/bonding.h>
+//#include <netlink/route/link/bridge.h>
 
 
 #include "wfb_utils_netlink.h"
 
-#define BRIDGE_NAME "wfbbrg"
+#define BOND_NAME "wfbbond"
+//#define BRIDGE_NAME "wfbbrg"
 
 /************************************************************************************************/
 typedef struct {
@@ -188,20 +190,25 @@ bool reload(char *ifname, char *drivername) {
 }
 
 /******************************************************************************/
-void setbridge(struct nl_sock *sockrt, char *bridgename, struct rtnl_link **link) {
+//void setbridge(struct nl_sock *sockrt, char *name, struct rtnl_link **link) {
+void setbond(struct nl_sock *sockrt, char *name, struct rtnl_link **link) {
 
   struct rtnl_link *old;
   struct nl_cache *cache;
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
   if (!(old = rtnl_link_alloc ())) exit(-1);
-  if ((old = rtnl_link_get_by_name(cache, bridgename))) {
+  if ((old = rtnl_link_get_by_name(cache, name))) {
     if (rtnl_link_delete(sockrt, old) < 0) exit(-1);
   }
 
-  if ((rtnl_link_bridge_add(sockrt, bridgename)) < 0) exit(-1);
+  struct rtnl_link *opts; 
+  if (!(opts = rtnl_link_alloc ())) exit(-1);
+  if ((rtnl_link_bond_add(sockrt, name, opts)) < 0) exit(-1); 
+//  if ((rtnl_link_bridge_add(sockrt, bridgename)) < 0) exit(-1);
+
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
   if (!(*link = rtnl_link_alloc ())) exit(-1);
-  if (!(*link = rtnl_link_get_by_name(cache, bridgename))) exit(-1);
+  if (!(*link = rtnl_link_get_by_name(cache, name))) exit(-1);
 }
 
 /******************************************************************************/
@@ -260,12 +267,14 @@ uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, char *drivername) {
   }
 
   struct rtnl_link *link;
-  setbridge(sockrt, BRIDGE_NAME, &link);
+  setbond(sockrt, BOND_NAME, &link);
+//  setbridge(sockrt, BRIDGE_NAME, &link);
 
   exit(0);
 
 /*
   for(uint8_t i=0;i<elt->nb;i++) {
+    if ((rtnl_link_bond_enslave(sockrt, link, ltap[i])) < 0) exit(-1);
     if ((rtnl_link_enslave(sockrt, link, ltap[i])) < 0) exit(-1);
   }
 */
