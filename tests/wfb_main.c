@@ -57,8 +57,8 @@ int main(int argc, char **argv) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
-//          len = sendmsg(n.bonds[0].sockfd, (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
-//	    printf("bond (%ld)\n",len);
+            len = sendmsg(n.bonds[0].sockfd, (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
+	    printf("bond (%ld)\n",len);
             for (uint8_t i=0;i<n.nbraws;i++) {
               len = sendmsg(fd[i+1], (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
               printf("[%d](%ld)  recv[%d)\n",i,len,rawpkt[i]);
