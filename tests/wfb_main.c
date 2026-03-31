@@ -12,14 +12,15 @@ cc wfb_utils_netlink.o wfb_utils_msg.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -l
 #include <poll.h>
 #include <sys/uio.h>
 
+#include <string.h>
+#include <errno.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/timerfd.h>
 
 #include "wfb_utils_netlink.h"
 #include "wfb_utils_msg.h"
-
-#define DRIVERNAME "rtl88XXau"
 
 #define PERIOD_DELAY_S 1
 
@@ -28,7 +29,7 @@ int main(int argc, char **argv) {
 
   wfb_utils_netlink_init_t n;
 
-  if (false == wfb_utils_netlink_init(&n,DRIVERNAME)) { printf("NO WIFI\n"); exit(-2); }
+  if (false == wfb_utils_netlink_init(&n)) { printf("NO WIFI\n"); exit(-2); }
   for (uint8_t i=0;i<n.nbraws;i++) printf("(%s)\n",n.rawdevs[i]->ifname);
 
   uint8_t nbfds = (1 + n.nbraws);
@@ -60,13 +61,16 @@ int main(int argc, char **argv) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
-//            len = sendmsg(brdfd, (const struct msghdr *)&msg, MSG_DONTWAIT);
+            len = sendmsg(n.bonds[0].sockfd, (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
+	    printf(" %s \n", strerror(errno));
+	    //printf("(%d)(%ld)\n",n.bonds[0].sockfd,len);
+/*
             for (uint8_t i=0;i<n.nbraws;i++) {
-//              len = sendmsg(fd[i+1], (const struct msghdr *)&msg, MSG_DONTWAIT);
               len = sendmsg(fd[i+1], (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
               printf("[%d](%ld)\n",rawpkt[i],len);
 	      rawpkt[i] = 0;
 	    }
+*/
           } else {
             if ((len = recvmsg(fd[cpt], &u.msg_in, MSG_DONTWAIT)) > 0)
             rawpkt[cpt-1]+=len;

@@ -34,20 +34,21 @@ sudo ip link del name wfbbond
 #include <netlink/route/link.h>
 #include <netlink/route/link/bonding.h>
 
-
 #include "wfb_utils_netlink.h"
 
+#define DRIVER_NAME "rtl88XXau"
 #define BOND_NAME "wfbbond"
 
 /************************************************************************************************/
 typedef struct {
   uint8_t nb;
   uint8_t curr;
-  struct rtnl_link *ltap;
+  wfb_utils_netlink_raw_t *devs;
 } elt_t;
 
 /******************************************************************************/
 int finish_callback(struct nl_msg *msg, void *arg) {
+
   bool* finished = arg;
   *finished = true;
   return NL_SKIP;
@@ -154,7 +155,7 @@ void unblock_rfkill(elt_t *elt) {
 
 /*****************************************************************************/
 //sudo sh -c "echo -n '1-1:1.0' > /sys/bus/usb/drivers/rtw_8812au/bind"
-bool reload(char *ifname, char *drivername) {
+bool reload(char *ifname) {
 
   bool ret = false;
 
@@ -166,7 +167,7 @@ bool reload(char *ifname, char *drivername) {
 
   char dirpath[1024];
   strcpy(dirpath,driverpath);
-  strcat(dirpath,drivername);
+  strcat(dirpath,DRIVER_NAME);
   if (!(opendir(dirpath))) exit(-1);
 
   sprintf(path,"%s/%s/device",netpath,ifname);
@@ -188,8 +189,8 @@ bool reload(char *ifname, char *drivername) {
 }
 
 /******************************************************************************/
-/*
-void setbond(elt_t *elt, struct nl_sock *sockrt, char *name, struct rtnl_link **link) {
+void setbond(struct rtnl_link *ltap[2], char *name, struct nl_sock *sockrt, wfb_utils_netlink_bond_t *bonds) {
+      // 	struct rtnl_link **link) {
 
   struct rtnl_link *old;
   struct nl_cache *cache;
@@ -204,21 +205,33 @@ void setbond(elt_t *elt, struct nl_sock *sockrt, char *name, struct rtnl_link **
   if ((rtnl_link_bond_add(sockrt, name, opts)) < 0) exit(-1); 
 
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
-  if (!(*link = rtnl_link_alloc ())) exit(-1);
-  if (!(*link = rtnl_link_get_by_name(cache, name))) exit(-1);
+  if (!(bonds->link = rtnl_link_alloc ())) exit(-1);
+  if (!(bonds->link = rtnl_link_get_by_name(cache, name))) exit(-1);
 
-  for(uint8_t i=0;i<elt->nb;i++) 
-    if ((rtnl_link_bond_enslave(sockrt, *link, elt->ltap[i])) < 0) exit(-1);
+  if ((rtnl_link_bond_enslave(sockrt, bonds->link, ltap[0])) < 0) exit(-1);
+  if ((rtnl_link_bond_enslave(sockrt, bonds->link, ltap[1])) < 0) exit(-1);
+
+  struct rtnl_link *change;
+  if (!(rtnl_link_get_flags (bonds->link) & IFF_UP)) {
+    change = rtnl_link_alloc ();
+    rtnl_link_set_flags (change, IFF_UP);
+    rtnl_link_change(sockrt, bonds->link, change, 0);
+  }
+
+  uint16_t protocol = htons(ETH_P_ALL);
+  if (-1 == (bonds->sockfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+  struct sockaddr_ll sll;
+  memset( &sll, 0, sizeof( sll ) );
+  sll.sll_family   = AF_PACKET;
+  sll.sll_ifindex  = rtnl_link_get_ifindex(bonds->link);
+  sll.sll_protocol = protocol;
+  if (-1 == bind(bonds->sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
 }
-*/
+
 /******************************************************************************/
-uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, char *drivername) {
+uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, struct nl_sock *sockrt) {
 
   bool msg_received = false;
-
-  struct nl_sock *sockrt;
-  if (!(sockrt = nl_socket_alloc())) return(false);
-  if (nl_connect(sockrt, NETLINK_ROUTE)) return(false);
 
   struct nl_cb *cb1 = nl_cb_alloc(NL_CB_DEFAULT);
   if (!cb1) return(0);
@@ -235,50 +248,43 @@ uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, char *drivername) {
 
   if (elt->nb == 0) return(0);
 
-  for(uint8_t i=0;i<elt->nb;i++) reload(elt->devs[i].ifname, drivername);
+  for(uint8_t i=0;i<elt->nb;i++) reload(elt->devs[i].ifname);
   sleep(1.0);
 
-  struct rtnl_link *ltap[MAXRAWDEV];
   struct nl_cache *cache;
   for(uint8_t i=0;i<elt->nb;i++) {
     if ((rtnl_link_alloc_cache(sockrt, n->sockid, &cache)) < 0) exit(-1);
-    if (!(elt->devs[i].ltap[i] = rtnl_link_get_by_name(cache, elt->devs[i].ifname))) exit(-1);
-    elt->devs[i].ifindex = rtnl_link_get_ifindex(ltap[i]);
+    if (!(elt->devs[i].ltap = rtnl_link_get_by_name(cache, elt->devs[i].ifname))) exit(-1);
+    elt->devs[i].ifindex = rtnl_link_get_ifindex(elt->devs[i].ltap);
   }
 
-  struct nl_msg *nlmsg3; 
   struct rtnl_link *change;
   for(uint8_t i=0;i<elt->nb;i++) {
-    if (IFF_UP & rtnl_link_get_flags(ltap[i])) {
+    if (IFF_UP & rtnl_link_get_flags(elt->devs[i].ltap)) {
       if (!(change = rtnl_link_alloc())) exit(-1);
       rtnl_link_unset_flags(change, IFF_UP);
-      if ((rtnl_link_change(sockrt, ltap[i], change, 0)) < 0) exit(-1);
+      if ((rtnl_link_change(sockrt, elt->devs[i].ltap, change, 0)) < 0) exit(-1);
     }
   }
 
-  struct nl_msg *nlmsg4;
+  struct nl_msg *nlmsg;
   for(uint8_t i=0;i<elt->nb;i++) {
-    if (!(nlmsg4  = nlmsg_alloc())) exit(-1);
-    genlmsg_put(nlmsg4,0,0,n->sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
-    nla_put_u32(nlmsg4, NL80211_ATTR_IFINDEX, elt->devs[i].ifindex);
-    nla_put_u32(nlmsg4, NL80211_ATTR_IFTYPE,NL80211_IFTYPE_MONITOR);
-    nl_send_auto(n->socknl, nlmsg4);
-    if (nl_send_auto(n->socknl, nlmsg4) >= 0)  nl_recvmsgs_default(n->socknl);
-    nlmsg_free(nlmsg4);
+    if (!(nlmsg  = nlmsg_alloc())) exit(-1);
+    genlmsg_put(nlmsg,0,0,n->sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
+    nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, elt->devs[i].ifindex);
+    nla_put_u32(nlmsg, NL80211_ATTR_IFTYPE,NL80211_IFTYPE_MONITOR);
+    nl_send_auto(n->socknl, nlmsg);
+    if (nl_send_auto(n->socknl, nlmsg) >= 0)  nl_recvmsgs_default(n->socknl);
+    nlmsg_free(nlmsg);
   }
 
   unblock_rfkill(elt);
 
-  int8_t err = 0;
-  if ((err = rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) >= 0) {
-    for(uint8_t i=0;i<elt->nb;i++) {
-      if ((link = rtnl_link_get(cache,elt->devs[i].ifindex))) {
-        if (!(rtnl_link_get_flags (link) & IFF_UP)) {
-          change = rtnl_link_alloc ();
-          rtnl_link_set_flags (change, IFF_UP);
-          rtnl_link_change(sockrt, link, change, 0);
-        }
-      }
+  for(uint8_t i=0;i<elt->nb;i++) {
+    if (!(rtnl_link_get_flags (elt->devs[i].ltap) & IFF_UP)) {
+      change = rtnl_link_alloc ();
+      rtnl_link_set_flags (change, IFF_UP);
+      rtnl_link_change(sockrt, elt->devs[i].ltap, change, 0);
     }
   }
 
@@ -312,13 +318,13 @@ void drain(uint8_t fd) {
 }
 
 /******************************************************************************/
-uint8_t setraw(elt_t *elt, wfb_utils_netlink_raw_t *arr[], char *drivername) {
+uint8_t setraw(elt_t *elt, wfb_utils_netlink_raw_t *arr[]) {
 
   uint8_t cpt = 0;
   uint16_t protocol = htons(ETH_P_ALL);
 
   for(uint8_t i=0;i<elt->nb;i++) {
-    if (strcmp(elt->devs[i].drivername,drivername)!=0) continue;
+    if (strcmp(elt->devs[i].drivername,DRIVER_NAME)!=0) continue;
     if (-1 == (elt->devs[i].sockfd = socket(AF_PACKET,SOCK_RAW,protocol))) continue;
 
     struct sockaddr_ll sll;
@@ -340,6 +346,7 @@ uint8_t setraw(elt_t *elt, wfb_utils_netlink_raw_t *arr[], char *drivername) {
 }
 
 /*****************************************************************************/
+/*****************************************************************************/
 bool wfb_utils_netlink_setfreq(wfb_utils_netlink_socknl_t *psock, int ifindex, uint32_t freq) {
 
   bool ret=true;
@@ -356,23 +363,30 @@ bool wfb_utils_netlink_setfreq(wfb_utils_netlink_socknl_t *psock, int ifindex, u
 }
 
 /******************************************************************************/
-bool wfb_utils_netlink_init(wfb_utils_netlink_init_t *n, char *drivername) {
+bool wfb_utils_netlink_init(wfb_utils_netlink_init_t *n) {
 
   if  (!(n->sockidnl.socknl = nl_socket_alloc())) return(false);
   nl_socket_set_buffer_size(n->sockidnl.socknl, 8192, 8192);
   if (genl_connect(n->sockidnl.socknl)) return(false);
   if ((n->sockidnl.sockid = genl_ctrl_resolve(n->sockidnl.socknl, "nl80211")) < 0) return(false);
 
+  struct nl_sock *sockrt;
+  if (!(sockrt = nl_socket_alloc())) return(false);
+  if (nl_connect(sockrt, NETLINK_ROUTE)) return(false);
+
   static wfb_utils_netlink_raw_t all[MAXRAWDEV];
   elt_t elt; memset(&elt, 0, sizeof(elt_t)); elt.devs = all;
 
   uint8_t nb;
-  if ((nb = setwifi(&elt, &n->sockidnl, drivername)) > 0) {
-    if ((nb = setraw(&elt, n->rawdevs, drivername)) > 0) {
-//      if ((nb = setbond(&elt, n->rawdevs, drivername)) > 0) {
-        n->nbraws = nb;
-        return(true);
-//      }
+  if ((nb = setwifi(&elt, &n->sockidnl, sockrt)) > 0) {
+    if ((nb = setraw(&elt, n->rawdevs)) > 0) {
+      if (nb > 1) {
+        struct rtnl_link *ltap[2]; ltap[0] = elt.devs[0].ltap; ltap[1] = elt.devs[1].ltap;
+	//setbond(ltap, BOND_NAME, sockrt, &n->bonds[0].link);
+	setbond(ltap, BOND_NAME, sockrt, &n->bonds[0]);
+      }
+      n->nbraws = nb;
+      return(true);
     }
   }
   return(false);
