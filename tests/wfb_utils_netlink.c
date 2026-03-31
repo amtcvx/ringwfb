@@ -190,7 +190,6 @@ bool reload(char *ifname) {
 
 /******************************************************************************/
 void setbond(struct rtnl_link *ltap[2], char *name, struct nl_sock *sockrt, wfb_utils_netlink_bond_t *bonds) {
-      // 	struct rtnl_link **link) {
 
   struct rtnl_link *old;
   struct nl_cache *cache;
@@ -280,14 +279,6 @@ uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, struct nl_sock *sockr
 
   unblock_rfkill(elt);
 
-  for(uint8_t i=0;i<elt->nb;i++) {
-    if (!(rtnl_link_get_flags (elt->devs[i].ltap) & IFF_UP)) {
-      change = rtnl_link_alloc ();
-      rtnl_link_set_flags (change, IFF_UP);
-      rtnl_link_change(sockrt, elt->devs[i].ltap, change, 0);
-    }
-  }
-
   nl_cb_set(cb1, NL_CB_VALID, NL_CB_CUSTOM, getsinglewifi_callback, elt);
   for(uint8_t i=0;i<elt->nb;i++) {
     elt->curr = i;
@@ -345,6 +336,19 @@ uint8_t setraw(elt_t *elt, wfb_utils_netlink_raw_t *arr[]) {
   return(cpt);
 }
 
+/******************************************************************************/
+void setup(elt_t *elt, struct nl_sock *sockrt) {
+
+  struct rtnl_link *change;
+  for(uint8_t i=0;i<elt->nb;i++) {
+    if (!(rtnl_link_get_flags (elt->devs[i].ltap) & IFF_UP)) {
+      change = rtnl_link_alloc ();
+      rtnl_link_set_flags (change, IFF_UP);
+      rtnl_link_change(sockrt, elt->devs[i].ltap, change, 0);
+    }
+  }
+}
+
 /*****************************************************************************/
 /*****************************************************************************/
 bool wfb_utils_netlink_setfreq(wfb_utils_netlink_socknl_t *psock, int ifindex, uint32_t freq) {
@@ -384,6 +388,7 @@ bool wfb_utils_netlink_init(wfb_utils_netlink_init_t *n) {
         struct rtnl_link *ltap[2]; ltap[0] = elt.devs[0].ltap; ltap[1] = elt.devs[1].ltap;
 	setbond(ltap, BOND_NAME, sockrt, &n->bonds[0]);
       }
+      setup(&elt, sockrt);
       n->nbraws = nb;
       return(true);
     }
