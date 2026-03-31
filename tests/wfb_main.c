@@ -11,10 +11,6 @@ cc wfb_utils_netlink.o wfb_utils_msg.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -l
 #include <sys/socket.h>
 #include <poll.h>
 #include <sys/uio.h>
-
-#include <string.h>
-#include <errno.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/timerfd.h>
@@ -61,16 +57,13 @@ int main(int argc, char **argv) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
-            len = sendmsg(n.bonds[0].sockfd, (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
-	    printf(" %s \n", strerror(errno));
-	    //printf("(%d)(%ld)\n",n.bonds[0].sockfd,len);
-/*
+//          len = sendmsg(n.bonds[0].sockfd, (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
+//	    printf("bond (%ld)\n",len);
             for (uint8_t i=0;i<n.nbraws;i++) {
               len = sendmsg(fd[i+1], (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
-              printf("[%d](%ld)\n",rawpkt[i],len);
+              printf("[%d](%ld)  recv[%d)\n",i,len,rawpkt[i]);
 	      rawpkt[i] = 0;
 	    }
-*/
           } else {
             if ((len = recvmsg(fd[cpt], &u.msg_in, MSG_DONTWAIT)) > 0)
             rawpkt[cpt-1]+=len;
