@@ -7,6 +7,8 @@ cc wfb_utils_netlink.o wfb_utils_msg.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -l
 
 */
 
+#include <sys/utsname.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <poll.h>
@@ -18,10 +20,16 @@ cc wfb_utils_netlink.o wfb_utils_msg.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -l
 #include "wfb_utils_netlink.h"
 #include "wfb_utils_msg.h"
 
+#define RELEASE "6.8.0-060800-generic"
+
 #define PERIOD_DELAY_S 1
 
 /*****************************************************************************/
 int main(int argc, char **argv) {
+
+  struct utsname utsnamebuf;
+  if (uname(&utsnamebuf) != 0) exit(-1);
+  if (strcmp(utsnamebuf.release, RELEASE)!=0) exit(-1);
 
   wfb_utils_netlink_init_t n;
 

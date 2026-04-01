@@ -55,6 +55,7 @@ int finish_callback(struct nl_msg *msg, void *arg) {
 }
 
 /******************************************************************************/
+/*
 int getallinterfaces_callback(struct nl_msg *msg, void *arg) {
 
   struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
@@ -68,16 +69,16 @@ int getallinterfaces_callback(struct nl_msg *msg, void *arg) {
     strcpy(ifname, nla_get_string(tb_msg[NL80211_ATTR_IFNAME]));
     if (strlen(ifname) > 0) {
       strcpy(ptr->ifname, ifname);
-//      if (tb_msg[NL80211_ATTR_IFINDEX]) ptr->ifindex = nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]);
-//      if (tb_msg[NL80211_ATTR_IFTYPE])  ptr->iftype = nla_get_u32(tb_msg[NL80211_ATTR_IFTYPE]);
-//      if (((elt_t *)arg)->nb < 2) ((((elt_t *)arg)->nb)++);
+      if (tb_msg[NL80211_ATTR_IFINDEX]) ptr->ifindex = nla_get_u32(tb_msg[NL80211_ATTR_IFINDEX]);
+      if (tb_msg[NL80211_ATTR_IFTYPE])  ptr->iftype = nla_get_u32(tb_msg[NL80211_ATTR_IFTYPE]);
+      if (((elt_t *)arg)->nb < 2) ((((elt_t *)arg)->nb)++);
       ((((elt_t *)arg)->nb)++);
     }
   }
 
   return NL_SKIP;
 }
-
+*/
 /******************************************************************************/
 int getsinglewifi_callback(struct nl_msg *msg, void *arg) {
 
@@ -118,6 +119,30 @@ int getsinglewifi_callback(struct nl_msg *msg, void *arg) {
   }
 
   return NL_SKIP;
+}
+
+/******************************************************************************/
+uint8_t getwifi(elt_t *elt) {
+
+  char *netpath = "/sys/class/net";
+  char path[1024],buf[1024],*ptr;
+  ssize_t lenlink;
+  uint8_t i=0;
+
+  DIR *d1;
+  struct dirent *dir1;
+  d1 = opendir(netpath);
+  while ((dir1 = readdir(d1)) != NULL) {
+    sprintf(path,"%s/%s/device/driver",netpath,dir1->d_name);
+    if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
+      buf[lenlink] = '\0';
+      ptr = strrchr( buf, '/' );
+      if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(elt->devs[i++].ifname,dir1->d_name);
+    }
+  }
+
+  elt->nb = i;
+  return(i);
 }
 
 /******************************************************************************/
@@ -234,9 +259,9 @@ uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, struct nl_sock *sockr
 
   struct nl_cb *cb1 = nl_cb_alloc(NL_CB_DEFAULT);
   if (!cb1) return(0);
-  nl_cb_set(cb1, NL_CB_VALID, NL_CB_CUSTOM, getallinterfaces_callback, elt);
+//  nl_cb_set(cb1, NL_CB_VALID, NL_CB_CUSTOM, getallinterfaces_callback, elt);
   nl_cb_set(cb1, NL_CB_FINISH, NL_CB_CUSTOM, finish_callback, &msg_received);
-
+/*
   struct nl_msg *msg1 = nlmsg_alloc();
   if (!msg1) return(0);
   genlmsg_put(msg1, NL_AUTO_PORT, NL_AUTO_SEQ, n->sockid, 0, NLM_F_DUMP, NL80211_CMD_GET_INTERFACE, 0);
@@ -244,7 +269,7 @@ uint8_t setwifi(elt_t *elt, wfb_utils_netlink_socknl_t *n, struct nl_sock *sockr
   msg_received = false;
   while (!msg_received) nl_recvmsgs(n->socknl, cb1);
   nlmsg_free(msg1);
-
+*/
   if (elt->nb == 0) return(0);
 
   for(uint8_t i=0;i<elt->nb;i++) reload(elt->devs[i].ifname);
@@ -382,15 +407,17 @@ bool wfb_utils_netlink_init(wfb_utils_netlink_init_t *n) {
   elt_t elt; memset(&elt, 0, sizeof(elt_t)); elt.devs = all;
 
   uint8_t nb;
-  if ((nb = setwifi(&elt, &n->sockidnl, sockrt)) > 0) {
-    if ((nb = setraw(&elt, n->rawdevs)) > 0) {
-      if (nb > 1) {
-        struct rtnl_link *ltap[2]; ltap[0] = elt.devs[0].ltap; ltap[1] = elt.devs[1].ltap;
-	setbond(ltap, BOND_NAME, sockrt, &n->bonds[0]);
+  if ((nb = getwifi(&elt)) > 0) {
+    if ((nb = setwifi(&elt, &n->sockidnl, sockrt)) > 0) {
+      if ((nb = setraw(&elt, n->rawdevs)) > 0) {
+        if (nb > 1) {
+          struct rtnl_link *ltap[2]; ltap[0] = elt.devs[0].ltap; ltap[1] = elt.devs[1].ltap;
+  	  setbond(ltap, BOND_NAME, sockrt, &n->bonds[0]);
+        }
+        setup(&elt, sockrt);
+        n->nbraws = nb;
+        return(true);
       }
-      setup(&elt, sockrt);
-      n->nbraws = nb;
-      return(true);
     }
   }
   return(false);
