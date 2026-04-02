@@ -29,17 +29,15 @@ int main(int argc, char **argv) {
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
-  sll.sll_ifindex  = 5;
+  sll.sll_ifindex  = 6;
   sll.sll_protocol = protocol;
   if (-1 == bind(sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
 
-
-  titi_init_t *param1;
-  struct msghdr *param2;
-  titi_init(&param1, &param2);
+  titi_init_t param1;
+  titi_init(&param1);
 
   do {
-    ssize_t rawlen = sendmsg(sockfd, (const struct msghdr *)param2, MSG_DONTWAIT);
+    ssize_t rawlen = sendmsg(sockfd, (const struct msghdr *)(param1.msg), MSG_DONTWAIT);
     printf("(%ld)\n",rawlen);
     sleep(1);
   } while (true);
