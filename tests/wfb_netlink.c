@@ -100,18 +100,33 @@ const struct iovec iov_radiotaphd_rx = { .iov_base = radiotaphd_rx, .iov_len = s
 const struct iovec iov_ieeehd_rx =     { .iov_base = ieeehd_rx,     .iov_len = sizeof(ieeehd_rx)};
 const struct iovec iov_llchd_rx =      { .iov_base = llchd_rx,      .iov_len = sizeof(llchd_rx)};
 
-uint8_t payloadbuf_rx[1400] = {-1};
-const struct iovec iovpay_rx = { .iov_base = payloadbuf_rx, .iov_len = sizeof(payloadbuf_rx) };
-struct iovec iovtab_rx[4] = { iov_radiotaphd_rx, iov_ieeehd_rx, iov_llchd_tx, iovpay_rx };
-
-static struct msghdr msg_in = { .msg_iov = iovtab_rx, .msg_iovlen = 4 };
-
 /************************************************************************************************/
 typedef struct {
   uint8_t nb;
   uint8_t curr;
   wfb_netlink_raw_t *devs;
 } elt_t;
+
+/******************************************************************************/
+struct msghdr *setmsgin(void) {
+
+  static uint8_t payloadbuf_rx[2][1400] = { {-1} };
+
+  static struct iovec iovpay_rx[2];
+  static struct iovec iovtab_rx[2][4];
+  static struct msghdr msg_in[2];
+
+  for(uint8_t i=0; i<2; i++) {
+    iovpay_rx[i].iov_base = payloadbuf_rx[i]; iovpay_rx[i].iov_len = sizeof(payloadbuf_rx[i]);
+
+    iovtab_rx[i][0] = iov_radiotaphd_rx; iovtab_rx[i][1] = iov_ieeehd_rx; 
+    iovtab_rx[i][2] = iov_llchd_tx; iovtab_rx[i][3] = iovpay_rx[i];
+
+    msg_in[i].msg_iov = iovtab_rx[i]; msg_in[i].msg_iovlen = 4;
+  }
+
+  return(&msg_in[0]);
+}
 
 /******************************************************************************/
 int finish_callback(struct nl_msg *msg, void *arg) {
@@ -451,8 +466,9 @@ bool wfb_netlink_init(wfb_netlink_init_t *n) {
         setup(&elt, sockrt);
         n->nbraws = nb;
 
-        n->msg.msg_in = &msg_in;
-        n->msg.msg_out = &msg_out;
+        n->msg.msg_in = setmsgin();
+	n->msg.msg_out = &msg_out;
+
         return(true);
       }
     }

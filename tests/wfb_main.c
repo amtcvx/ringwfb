@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
 	      rawpkt[i] = 0;
 	    }
           } else {
-            if ((len = recvmsg(fd[cpt], n.msg.msg_in, MSG_DONTWAIT)) > 0)
+            if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0)
             rawpkt[cpt-1]+=len;
           }
         }
