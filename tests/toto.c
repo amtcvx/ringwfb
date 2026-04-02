@@ -33,11 +33,13 @@ int main(int argc, char **argv) {
   sll.sll_protocol = protocol;
   if (-1 == bind(sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
 
-  struct msghdr *param;
-  titi_init(&param);
+
+  titi_init_t *param1;
+  struct msghdr *param2;
+  titi_init(&param1, &param2);
 
   do {
-    ssize_t rawlen = sendmsg(sockfd, (const struct msghdr *)param, MSG_DONTWAIT);
+    ssize_t rawlen = sendmsg(sockfd, (const struct msghdr *)param2, MSG_DONTWAIT);
     printf("(%ld)\n",rawlen);
     sleep(1);
   } while (true);

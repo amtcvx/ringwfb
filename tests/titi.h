@@ -3,12 +3,12 @@
 
 #include <sys/socket.h>
 
-void titi_init(struct msghdr **param);
-/*
+//void titi_init(struct msghdr **param);
+
 typedef struct {
   struct msghdr **msg;
 } titi_init_t;
-void titi_init(titi_init_t *param);
-*/
+void titi_init(titi_init_t **param1, struct msghdr **param2 );
+
 
 #endif // TITI_H

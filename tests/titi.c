@@ -61,11 +61,17 @@ struct iovec iovtab[4] = { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iovdu
 static struct msghdr msg = { .msg_iov = iovtab, .msg_iovlen = 4 };
 
 /************************************************************************************************/
+/*
 void titi_init(struct msghdr **param) {
   *param = &msg;
 }
-/*
-void titi_init(titi_init_t *param) {
-  *param->msg = &msg;
-}
 */
+
+void titi_init(titi_init_t **param1, struct msghdr **param2) {
+/*
+  static struct msghdr **dummy;
+  *dummy = &msg;
+  (*param1)->msg = dummy;
+*/
+  *param2 = &msg;
+}
