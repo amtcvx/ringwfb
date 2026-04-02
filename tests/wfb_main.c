@@ -3,7 +3,7 @@ sudo apt-get install libnl-3-dev libnl-genl-3-dev libnl-route-3-dev
 
 gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -c wfb_main.c -o wfb_main.o
 
-cc wfb_utils_netlink.o wfb_utils_msg.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_main
+cc wfb_netlink.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_main
 
 */
 
@@ -17,8 +17,8 @@ cc wfb_utils_netlink.o wfb_utils_msg.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -l
 #include <stdlib.h>
 #include <sys/timerfd.h>
 
-#include "wfb_utils_netlink.h"
-#include "wfb_utils_msg.h"
+#include "wfb_netlink.h"
+
 
 #define RELEASE "6.8.0-060800-generic"
 
@@ -31,9 +31,9 @@ int main(int argc, char **argv) {
   if (uname(&utsnamebuf) != 0) exit(-1);
   if (strcmp(utsnamebuf.release, RELEASE)!=0) exit(-1);
 
-  wfb_utils_netlink_init_t n;
+  wfb_netlink_init_t n;
 
-  if (false == wfb_utils_netlink_init(&n)) { printf("NO WIFI\n"); exit(-2); }
+  if (false == wfb_netlink_init(&n)) { printf("NO WIFI\n"); exit(-2); }
   for (uint8_t i=0;i<n.nbraws;i++) printf("(%s)\n",n.rawdevs[i]->ifname);
 
   uint8_t nbfds = (1 + n.nbraws);
@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
   for (uint8_t rawcpt=0; rawcpt < n.nbraws; rawcpt++) {
     fd[rawcpt + 1] = n.rawdevs[rawcpt]->sockfd;
     n.rawdevs[rawcpt]->freq = (n.nbraws - rawcpt - 1) * (n.rawdevs[rawcpt]->nbfreqs / n.nbraws);
-    wfb_utils_netlink_setfreq(&n.sockidnl, n.rawdevs[rawcpt]->ifindex, n.rawdevs[rawcpt]->freqs[n.rawdevs[rawcpt]->freq]);
+    wfb_netlink_setfreq(&n.sockidnl, n.rawdevs[rawcpt]->ifindex, n.rawdevs[rawcpt]->freqs[n.rawdevs[rawcpt]->freq]);
   }
 
   struct pollfd readsets[nbfds];
@@ -56,24 +56,21 @@ int main(int argc, char **argv) {
   ssize_t len = 0;
   uint32_t rawpkt[n.nbraws]; 
 
-  wfb_utils_msg_init_t u;
-  wfb_utils_msg_init(&u);
-
   for(;;) {
     if (0 != poll(readsets, nbfds, -1)) {
       for (uint8_t cpt=0; cpt<nbfds; cpt++) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
-            len = sendmsg(n.bonds[0].sockfd, (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
+            len = sendmsg(n.bonds[0].sockfd, n.msg.msg_out, MSG_DONTWAIT);
 	    printf("bond (%ld)\n",len);
             for (uint8_t i=0;i<n.nbraws;i++) {
-              len = sendmsg(fd[i+1], (const struct msghdr *)&u.msg_out, MSG_DONTWAIT);
+              len = sendmsg(fd[i+1], n.msg.msg_out, MSG_DONTWAIT);
               printf("[%d](%ld)  recv[%d)\n",i,len,rawpkt[i]);
 	      rawpkt[i] = 0;
 	    }
           } else {
-            if ((len = recvmsg(fd[cpt], &u.msg_in, MSG_DONTWAIT)) > 0)
+            if ((len = recvmsg(fd[cpt], n.msg.msg_in, MSG_DONTWAIT)) > 0)
             rawpkt[cpt-1]+=len;
           }
         }
