@@ -49,13 +49,23 @@ uint8_t ieeehd_tx[] = {
 };
 uint8_t llchd_tx[4];
 
-struct iovec iov_radiotaphd_tx = { .iov_base = radiotaphd_tx, .iov_len = sizeof(radiotaphd_tx)};
-struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(ieeehd_tx)};
-struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
+const struct iovec iov_radiotaphd_tx = { .iov_base = radiotaphd_tx, .iov_len = sizeof(radiotaphd_tx)};
+const struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(ieeehd_tx)};
+const struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
+
+uint8_t dumbuf[1400] = {-1};
+const struct iovec iovdum = { .iov_base = dumbuf, .iov_len = sizeof(dumbuf) };
+
+struct iovec iovtab[4] = { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iovdum };
+
+static struct msghdr msg = { .msg_iov = iovtab, .msg_iovlen = 4 };
 
 /************************************************************************************************/
+void titi_init(struct msghdr **param) {
+  *param = &msg;
+}
 /*
-void titi_init(titi_init_t param) {
-  param.msg = &msg;
+void titi_init(titi_init_t *param) {
+  *param->msg = &msg;
 }
 */
