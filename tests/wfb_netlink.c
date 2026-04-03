@@ -43,12 +43,20 @@ sudo ip link del name wfbbond
 
 #define BOND_NAME "wfbbond"
 
+#define PAY_MTU 1400
+
 /************************************************************************************************/
 typedef struct {
   uint8_t nb;
   uint8_t curr;
   wfb_netlink_raw_t *devs;
 } elt_t;
+
+typedef struct {
+  uint8_t droneid;
+  uint64_t seq;
+  uint16_t msglen;
+} __attribute__((packed)) payhd_t; 
 
 /*****************************************************************************/
 struct msghdr *setmsgout(void) {
@@ -71,7 +79,6 @@ struct msghdr *setmsgout(void) {
 
 #define MCS_INDEX  2
 
-
   uint8_t radiotaphd_tx[] = {
         0x00, 0x00, // <-- radiotap version
         0x0d, 0x00, // <- radiotap header length
@@ -89,21 +96,25 @@ struct msghdr *setmsgout(void) {
   };
   uint8_t llchd_tx[4];
 
+  payhd_t payhd_tx;
+
   struct iovec iov_radiotaphd_tx = { .iov_base = radiotaphd_tx, .iov_len = sizeof(radiotaphd_tx)};
   struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(ieeehd_tx)};
   struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
 
-  static uint8_t payloadbuf_tx[1400] = {-1};
+  struct iovec iov_payhd_tx =      { .iov_base = &payhd_tx,      .iov_len = sizeof(payhd_tx)};
+
+  static uint8_t payloadbuf_tx[PAY_MTU] = {-1};
 
   static struct iovec iovpay_tx; 
   iovpay_tx.iov_base = payloadbuf_tx; iovpay_tx.iov_len = sizeof(payloadbuf_tx);
 
-  static struct iovec iovtab_tx[4]; 
+  static struct iovec iovtab_tx[5]; 
   iovtab_tx[0] = iov_radiotaphd_tx; iovtab_tx[1] = iov_ieeehd_tx;
-  iovtab_tx[2] = iov_llchd_tx; iovtab_tx[3] = iovpay_tx;
+  iovtab_tx[2] = iov_llchd_tx; iovtab_tx[3] = iovpay_tx; iovtab_tx[4] = iov_payhd_tx;
 
   static struct msghdr msg_out;
-  msg_out.msg_iov = iovtab_tx; msg_out.msg_iovlen = 4;
+  msg_out.msg_iov = iovtab_tx; msg_out.msg_iovlen = 5;
 
   return(&msg_out);
 }
@@ -117,23 +128,29 @@ struct msghdr *setmsgin(void) {
   uint8_t ieeehd_rx[24];
   uint8_t llchd_rx[4];
 
+  payhd_t payhd_rx[2];
+
   struct iovec iov_radiotaphd_rx = { .iov_base = radiotaphd_rx, .iov_len = sizeof(radiotaphd_rx)};
   struct iovec iov_ieeehd_rx =     { .iov_base = ieeehd_rx,     .iov_len = sizeof(ieeehd_rx)};
   struct iovec iov_llchd_rx =      { .iov_base = llchd_rx,      .iov_len = sizeof(llchd_rx)};
 
-  static uint8_t payloadbuf_rx[2][1400] = { {-1} };
+  struct iovec iov_payhd_rx[2];
+  iov_payhd_rx[0].iov_base = &payhd_rx[0]; iov_payhd_rx[0].iov_len = sizeof(payhd_rx);
+  iov_payhd_rx[1].iov_base = &payhd_rx[1]; iov_payhd_rx[1].iov_len = sizeof(payhd_rx);
+
+  static uint8_t payloadbuf_rx[2][PAY_MTU] = { {-1} };
 
   static struct iovec iovpay_rx[2];
-  static struct iovec iovtab_rx[2][4];
+  static struct iovec iovtab_rx[2][5];
   static struct msghdr msg_in[2];
 
   for(uint8_t i=0; i<2; i++) {
     iovpay_rx[i].iov_base = payloadbuf_rx[i]; iovpay_rx[i].iov_len = sizeof(payloadbuf_rx[i]);
 
     iovtab_rx[i][0] = iov_radiotaphd_rx; iovtab_rx[i][1] = iov_ieeehd_rx; 
-    iovtab_rx[i][2] = iov_llchd_rx; iovtab_rx[i][3] = iovpay_rx[i];
+    iovtab_rx[i][2] = iov_llchd_rx; iovtab_rx[i][3] = iovpay_rx[i]; iovtab_rx[i][4] = iov_payhd_rx[i];
 
-    msg_in[i].msg_iov = iovtab_rx[i]; msg_in[i].msg_iovlen = 4;
+    msg_in[i].msg_iov = iovtab_rx[i]; msg_in[i].msg_iovlen = 5;
   }
 
   return(&msg_in[0]);
