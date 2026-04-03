@@ -11,8 +11,7 @@ gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing
 #include <sys/timerfd.h>
 
 #define PERIOD_DELAY_S 1
-#define TIME2FREE_S  5
-#define TIMEINFREE_S 5
+#define FREETIME_S  5
 
 /******************************************************************************/
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
@@ -31,11 +30,14 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
       l->len += sprintf(l->buf + l->len, "freq update (%d)(%d)\n", n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
 
       wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
+
       s->nbpkt[i]=0;
+      s->cptfree[i]=0;
 
     } else {
-      if ((++(s->cptfree[i])) >= TIME2FREE_S) {
-        s->cptfree[i] = 0;
+      if (s->cptfree[i] < FREETIME_S) (s->cptfree[i])++;
+      else {
+        l->len += sprintf(l->buf + l->len, "freq free (%d)(%d)\n", n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
       }
     }
   }

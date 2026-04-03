@@ -10,6 +10,7 @@
 typedef struct {
   uint64_t exptime;
   uint8_t nbpkt[MAXRAWDEV];
+  uint8_t cptfree[MAXRAWDEV];
   uint8_t fd;
 } wfb_sync_init_t;
 
