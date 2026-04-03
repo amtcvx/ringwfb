@@ -10,6 +10,13 @@
 #define MAXNBFREQS 65
 
 typedef struct {
+  uint8_t droneid;
+  uint64_t seq;
+  uint16_t msglen;
+} __attribute__((packed)) wfb_netlink_payhd_t;
+
+
+typedef struct {
   struct msghdr *msg_in;
   struct msghdr *msg_out;
 } wfb_netlink_msg_t;

@@ -66,7 +66,10 @@ int main(int argc, char **argv) {
 	    }
 */
           } else {
-            if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0) s.nbpkt[cpt-1]++;
+            if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0) {
+	      s.nbpkt[cpt-1]++;
+	      if (((wfb_netlink_payhd_t *)(n.msg.msg_in[cpt-1].msg_iov[3].iov_base))->droneid == 1) printf("BINGO\n"); 
+	    }
           }
         }
       }

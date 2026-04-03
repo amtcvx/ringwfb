@@ -38,6 +38,7 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
       if (s->cptfree[i] < FREETIME_S) (s->cptfree[i])++;
       else {
         l->len += sprintf(l->buf + l->len, "freq free (%d)(%d)\n", n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
+	if (s->fdmain == -1) s->fdmain = i; else if (s->fdback == -1) s->fdback = i;
       }
     }
   }
@@ -55,6 +56,8 @@ void wfb_sync_init(wfb_sync_init_t *s, wfb_netlink_init_t *n) {
   if (-1 == (s->fd = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
   timerfd_settime(s->fd, 0, &period, NULL);
+
+  s->fdmain = -1; s->fdback = -1;
 
   for (uint8_t i=0; i<n->nbraws; i++) {
     n->rawdevs[i]->cptfreq = (n->nbraws - i - 1) * (n->rawdevs[i]->nbfreqs / n->nbraws);

@@ -52,12 +52,6 @@ typedef struct {
   wfb_netlink_raw_t *devs;
 } elt_t;
 
-typedef struct {
-  uint8_t droneid;
-  uint64_t seq;
-  uint16_t msglen;
-} __attribute__((packed)) payhd_t; 
-
 /*****************************************************************************/
 struct msghdr *setmsgout(void) {
 
@@ -97,7 +91,7 @@ struct msghdr *setmsgout(void) {
   uint8_t llchd[4];
 
   static struct rx_t {
-    payhd_t payhd;
+    wfb_netlink_payhd_t payhd;
     uint8_t paybuf[PAY_MTU]; 
     struct msghdr msg;
     struct iovec iov[5];
@@ -125,7 +119,7 @@ struct msghdr *setmsgin(void) {
     uint8_t radiotaphd[RADIOTAPSIZE];
     uint8_t ieeehd[24];
     uint8_t llchd[4];
-    payhd_t payhd;
+    wfb_netlink_payhd_t payhd;
     uint8_t paybuf[PAY_MTU]; 
     struct msghdr msg;
     struct iovec iov[5];

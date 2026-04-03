@@ -12,6 +12,8 @@ typedef struct {
   uint8_t nbpkt[MAXRAWDEV];
   uint8_t cptfree[MAXRAWDEV];
   uint8_t fd;
+  int8_t fdmain;
+  int8_t fdback;
 } wfb_sync_init_t;
 
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l); 
