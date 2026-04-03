@@ -10,6 +10,7 @@ sudo ip link del name wfbbond
 
 */
 
+#include "wfb_netlink.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -36,8 +37,6 @@ sudo ip link del name wfbbond
 
 #include <netlink/route/link.h>
 #include <netlink/route/link/bonding.h>
-
-#include "wfb_netlink.h"
 
 /************************************************************************************************/
 #define DRIVER_NAME "rtl88XXau"

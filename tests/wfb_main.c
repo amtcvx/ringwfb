@@ -3,7 +3,7 @@ sudo apt-get install libnl-3-dev libnl-genl-3-dev libnl-route-3-dev
 
 gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -c wfb_main.c -o wfb_main.o
 
-cc wfb_netlink.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_main
+cc wfb_netlink.o wfb_sync.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_main
 
 */
 
@@ -15,14 +15,13 @@ cc wfb_netlink.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_main
 #include <sys/uio.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/timerfd.h>
+//#include <sys/timerfd.h>
 
+#include "wfb_main.h"
 #include "wfb_netlink.h"
-
+#include "wfb_sync.h"
 
 #define RELEASE "6.8.0-060800-generic"
-
-#define PERIOD_DELAY_S 1
 
 /*****************************************************************************/
 int main(int argc, char **argv) {
@@ -32,24 +31,15 @@ int main(int argc, char **argv) {
   if (strcmp(utsnamebuf.release, RELEASE)!=0) exit(-1);
 
   wfb_netlink_init_t n;
-
   if (false == wfb_netlink_init(&n)) { printf("NO WIFI\n"); exit(-2); }
   for (uint8_t i=0;i<n.nbraws;i++) printf("(%s)\n",n.rawdevs[i]->ifname);
 
+  wfb_sync_init_t s;
+  wfb_sync_init(&s,&n);
+
   uint8_t nbfds = (1 + n.nbraws);
   uint8_t fd[nbfds];
-
-  uint64_t exptime;
-  if (-1 == (fd[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
-  struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(fd[0], 0, &period, NULL);
-
-  for (uint8_t rawcpt=0; rawcpt < n.nbraws; rawcpt++) {
-    fd[rawcpt + 1] = n.rawdevs[rawcpt]->sockfd;
-    n.rawdevs[rawcpt]->freq = (n.nbraws - rawcpt - 1) * (n.rawdevs[rawcpt]->nbfreqs / n.nbraws);
-    wfb_netlink_setfreq(&n.sockidnl, n.rawdevs[rawcpt]->ifindex, n.rawdevs[rawcpt]->freqs[n.rawdevs[rawcpt]->freq]);
-  }
-
+  fd[0] = s.fd; for (uint8_t i=0; i<n.nbraws; i++) fd[i + 1] = n.rawdevs[i]->sockfd;
   struct pollfd readsets[nbfds];
   for (uint8_t nbfdscpt=0; nbfdscpt < nbfds; nbfdscpt++) { readsets[nbfdscpt].fd = fd[nbfdscpt]; readsets[nbfdscpt].events = POLLIN; }
 
@@ -61,7 +51,9 @@ int main(int argc, char **argv) {
       for (uint8_t cpt=0; cpt<nbfds; cpt++) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
-            len = read(fd[0], &exptime, sizeof(uint64_t));
+            len = read(s.fd, &s.exptime, sizeof(uint64_t));
+	    wfb_sync_periodic(&s,&n);
+
             len = sendmsg(n.bonds[0].sockfd, n.msg.msg_out, MSG_DONTWAIT);
 	    printf("bond (%ld)\n",len);
             for (uint8_t i=0;i<n.nbraws;i++) {
@@ -70,8 +62,7 @@ int main(int argc, char **argv) {
 	      rawpkt[i] = 0;
 	    }
           } else {
-            if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0)
-            rawpkt[cpt-1]+=len;
+            if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0) s.nbpkt[cpt-1]++;
           }
         }
       }

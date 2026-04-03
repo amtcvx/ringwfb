@@ -1,10 +1,11 @@
 #ifndef WFB_NETLINK_H
 #define WFB_NETLINK_H
 
+#include "wfb_main.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MAXRAWDEV 4
 #define MAXNBBONDS MAXRAWDEV / 2
 #define MAXNBFREQS 65
 
