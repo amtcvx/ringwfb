@@ -19,7 +19,7 @@ typedef struct {
   char drivername[30];
   char ifname[30];
   int ifindex;
-  uint8_t freq;
+  uint8_t cptfreq;
   uint8_t nbfreqs;
   uint32_t freqs[MAXNBFREQS];
   uint32_t chans[MAXNBFREQS];

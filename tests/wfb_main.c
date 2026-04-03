@@ -3,7 +3,7 @@ sudo apt-get install libnl-3-dev libnl-genl-3-dev libnl-route-3-dev
 
 gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -c wfb_main.c -o wfb_main.o
 
-cc wfb_netlink.o wfb_sync.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_main
+cc wfb_netlink.o wfb_sync.o wfb_log.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_main
 
 */
 
@@ -15,11 +15,11 @@ cc wfb_netlink.o wfb_sync.o wfb_main.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe
 #include <sys/uio.h>
 #include <stdio.h>
 #include <stdlib.h>
-//#include <sys/timerfd.h>
 
 #include "wfb_main.h"
 #include "wfb_netlink.h"
 #include "wfb_sync.h"
+#include "wfb_log.h"
 
 #define RELEASE "6.8.0-060800-generic"
 
@@ -33,6 +33,9 @@ int main(int argc, char **argv) {
   wfb_netlink_init_t n;
   if (false == wfb_netlink_init(&n)) { printf("NO WIFI\n"); exit(-2); }
   for (uint8_t i=0;i<n.nbraws;i++) printf("(%s)\n",n.rawdevs[i]->ifname);
+
+  wfb_log_init_t l;
+  wfb_log_init(&l);
 
   wfb_sync_init_t s;
   wfb_sync_init(&s,&n);
@@ -52,8 +55,8 @@ int main(int argc, char **argv) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(s.fd, &s.exptime, sizeof(uint64_t));
-	    wfb_sync_periodic(&s,&n);
-
+	    wfb_sync_periodic(&s,&n,&l);
+/*
             len = sendmsg(n.bonds[0].sockfd, n.msg.msg_out, MSG_DONTWAIT);
 	    printf("bond (%ld)\n",len);
             for (uint8_t i=0;i<n.nbraws;i++) {
@@ -61,6 +64,7 @@ int main(int argc, char **argv) {
               printf("[%d](%ld)  recv[%d)\n",i,len,rawpkt[i]);
 	      rawpkt[i] = 0;
 	    }
+*/
           } else {
             if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0) s.nbpkt[cpt-1]++;
           }
