@@ -39,10 +39,21 @@ sudo ip link del name wfbbond
 
 #include "wfb_netlink.h"
 
+/************************************************************************************************/
 #define DRIVER_NAME "rtl88XXau"
+
 #define BOND_NAME "wfbbond"
 
+/************************************************************************************************/
+typedef struct {
+  uint8_t nb;
+  uint8_t curr;
+  wfb_netlink_raw_t *devs;
+} elt_t;
+
 /*****************************************************************************/
+struct msghdr *setmsgout(void) {
+
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
 #define IEEE80211_RADIOTAP_MCS_HAVE_MCS   0x02
 #define IEEE80211_RADIOTAP_MCS_HAVE_GI    0x04
@@ -62,53 +73,54 @@ sudo ip link del name wfbbond
 #define MCS_INDEX  2
 
 
-uint8_t radiotaphd_tx[] = {
+  uint8_t radiotaphd_tx[] = {
         0x00, 0x00, // <-- radiotap version
         0x0d, 0x00, // <- radiotap header length
         0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
         0x08, 0x00,  // RADIOTAP_F_TX_NOACK
         MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
-};
-uint8_t ieeehd_tx[] = {
+  };
+  uint8_t ieeehd_tx[] = {
         0x08, 0x01,                         // Frame Control : Data frame from STA to DS
         0x00, 0x00,                         // Duration
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Receiver MAC
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Transmitter MAC
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
         0x10, 0x86                          // Sequence control
-};
-uint8_t llchd_tx[4];
+  };
+  uint8_t llchd_tx[4];
 
-const struct iovec iov_radiotaphd_tx = { .iov_base = radiotaphd_tx, .iov_len = sizeof(radiotaphd_tx)};
-const struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(ieeehd_tx)};
-const struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
+  struct iovec iov_radiotaphd_tx = { .iov_base = radiotaphd_tx, .iov_len = sizeof(radiotaphd_tx)};
+  struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(ieeehd_tx)};
+  struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
 
-uint8_t payloadbuf_tx[1400] = {-1};
-const struct iovec iovpay_tx = { .iov_base = payloadbuf_tx, .iov_len = sizeof(payloadbuf_tx) };
-struct iovec iovtab_tx[4] = { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iovpay_tx };
+  static uint8_t payloadbuf_tx[1400] = {-1};
 
-static struct msghdr msg_out = { .msg_iov = iovtab_tx, .msg_iovlen = 4 };
+  static struct iovec iovpay_tx; 
+  iovpay_tx.iov_base = payloadbuf_tx; iovpay_tx.iov_len = sizeof(payloadbuf_tx);
 
-/*****************************************************************************/
-#define RADIOTAPSIZE 35
+  static struct iovec iovtab_tx[4]; 
+  iovtab_tx[0] = iov_radiotaphd_tx; iovtab_tx[1] = iov_ieeehd_tx;
+  iovtab_tx[2] = iov_llchd_tx; iovtab_tx[3] = iovpay_tx;
 
-uint8_t radiotaphd_rx[RADIOTAPSIZE];
-uint8_t ieeehd_rx[24];
-uint8_t llchd_rx[4];
+  static struct msghdr msg_out;
+  msg_out.msg_iov = iovtab_tx; msg_out.msg_iovlen = 4;
 
-const struct iovec iov_radiotaphd_rx = { .iov_base = radiotaphd_rx, .iov_len = sizeof(radiotaphd_rx)};
-const struct iovec iov_ieeehd_rx =     { .iov_base = ieeehd_rx,     .iov_len = sizeof(ieeehd_rx)};
-const struct iovec iov_llchd_rx =      { .iov_base = llchd_rx,      .iov_len = sizeof(llchd_rx)};
-
-/************************************************************************************************/
-typedef struct {
-  uint8_t nb;
-  uint8_t curr;
-  wfb_netlink_raw_t *devs;
-} elt_t;
+  return(&msg_out);
+}
 
 /******************************************************************************/
 struct msghdr *setmsgin(void) {
+
+#define RADIOTAPSIZE 35
+
+  uint8_t radiotaphd_rx[RADIOTAPSIZE];
+  uint8_t ieeehd_rx[24];
+  uint8_t llchd_rx[4];
+
+  struct iovec iov_radiotaphd_rx = { .iov_base = radiotaphd_rx, .iov_len = sizeof(radiotaphd_rx)};
+  struct iovec iov_ieeehd_rx =     { .iov_base = ieeehd_rx,     .iov_len = sizeof(ieeehd_rx)};
+  struct iovec iov_llchd_rx =      { .iov_base = llchd_rx,      .iov_len = sizeof(llchd_rx)};
 
   static uint8_t payloadbuf_rx[2][1400] = { {-1} };
 
@@ -120,7 +132,7 @@ struct msghdr *setmsgin(void) {
     iovpay_rx[i].iov_base = payloadbuf_rx[i]; iovpay_rx[i].iov_len = sizeof(payloadbuf_rx[i]);
 
     iovtab_rx[i][0] = iov_radiotaphd_rx; iovtab_rx[i][1] = iov_ieeehd_rx; 
-    iovtab_rx[i][2] = iov_llchd_tx; iovtab_rx[i][3] = iovpay_rx[i];
+    iovtab_rx[i][2] = iov_llchd_rx; iovtab_rx[i][3] = iovpay_rx[i];
 
     msg_in[i].msg_iov = iovtab_rx[i]; msg_in[i].msg_iovlen = 4;
   }
@@ -467,7 +479,7 @@ bool wfb_netlink_init(wfb_netlink_init_t *n) {
         n->nbraws = nb;
 
         n->msg.msg_in = setmsgin();
-	n->msg.msg_out = &msg_out;
+	n->msg.msg_out = setmsgout();
 
         return(true);
       }
