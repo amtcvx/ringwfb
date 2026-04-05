@@ -56,26 +56,24 @@ int main(int argc, char **argv) {
           if (cpt == 0) {
             len = read(s.fd, &s.exptime, sizeof(uint64_t));
 	    wfb_sync_periodic(&s,&n,&l);
-/*
-            len = sendmsg(n.bonds[0].sockfd, n.msg.msg_out, MSG_DONTWAIT);
-	    printf("bond (%ld)\n",len);
-            for (uint8_t i=0;i<n.nbraws;i++) {
-              len = sendmsg(fd[i+1], n.msg.msg_out, MSG_DONTWAIT);
-              printf("[%d](%ld)  recv[%d)\n",i,len,rawpkt[i]);
-	      rawpkt[i] = 0;
-	    }
-*/
           } else {
+            ((wfb_netlink_payhd_t *)(n.msg.msg_in[cpt-1].msg_iov[3].iov_base))->droneid = 0;
             if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0) wfb_sync_async(cpt-1, &s, &n, &l);
           }
         }
       }
+
       for (uint8_t cpt=1; cpt<nbfds; cpt++) {
         if (s.len[cpt-1] > 0) {
           len = sendmsg(fd[cpt], &n.msg.msg_out[cpt-1], MSG_DONTWAIT);
 
-          printf("SEND (%d)(%ld)(%d)\n",cpt,len,s.len[cpt-1]); fflush(stdout);
+          l.len += sprintf(l.buf + l.len,"SEND (%d)(%ld)(%d) (%d)\n",cpt,len,s.len[cpt-1],
+		  ((wfb_netlink_payhd_t *)&(n.msg.msg_out[cpt-1].msg_iov[3].iov_base))->backfreq);
 
+
+
+          //  len = sendmsg(n.bonds[0].sockfd, n.msg.msg_out, MSG_DONTWAIT);
+	  
 	  s.len[cpt-1] = 0;
 	}
       }

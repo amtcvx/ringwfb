@@ -26,55 +26,35 @@ void wfb_sync_async(uint8_t rawcpt, wfb_sync_init_t *s, wfb_netlink_init_t *n, w
 
   } else {
 
-    s->nbpkt[rawcpt]++;
+    if (s->fdmain == rawcpt) {
+      if (s->fdback >=0) { s->fdmain = s->fdback; s->fdback = -1; }
+      else s->cptfree[rawcpt] = 0;
+    } else {
+      if (s->fdback == rawcpt) s->fdback = -1;
+      s->cptfree[rawcpt] = 0;
+    }
   }
-
 }
 
 /******************************************************************************/
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
   for (uint8_t i=0; i<n->nbraws; i++) {
-
-    if (s->nbpkt[i] > 0) {
-
-      s->nbpkt[i] = 0; s->cptfree[i] = 0;
-
+    if (s->cptfree[i] == 0) {
       if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
-
       for (uint8_t j=0; j<n->nbraws; j++) {
-
         if ((i != j) && ((n->rawdevs[i]->cptfreq) == (n->rawdevs[j]->cptfreq))) {
-
           if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
 	}
       }
-
       wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
-
-    } else {
-
-      if (s->cptfree[i] < FREETIME_S) (s->cptfree[i])++;
-      else {
-
-        if (s->fdmain == -1) s->fdmain = i; else if (s->fdback == -1) s->fdback = i;
-      }
+    };
+    if (s->cptfree[i] == FREETIME_S) {
+      if (s->fdmain == -1) s->fdmain = i; else if (s->fdback == -1) s->fdback = i;
     }
+    if (s->cptfree[i] < FREETIME_S) s->cptfree[i]++;
   }
 
-/*
-      l->len += sprintf(l->buf + l->len, "freq free (%d)(%d)\n", 
-         n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
-*/
-/*
-  l->len += sprintf(l->buf + l->len, "freq (%d)(%d)  (%d)(%d)\n", 
-    n->rawdevs[0]->ifindex, n->rawdevs[0]->freqs[n->rawdevs[0]->cptfreq],
-    n->rawdevs[1]->ifindex, n->rawdevs[1]->freqs[n->rawdevs[1]->cptfreq]);
-
-  wfb_log_send(l);
-*/
-
-  
   if (s->fdmain >= 0) { 
     wfb_netlink_payhd_t *ptrmain = (wfb_netlink_payhd_t *)(n->msg.msg_out[s->fdmain].msg_iov[3].iov_base);
     ptrmain->backfreq = 0;
@@ -94,10 +74,10 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
     }
   }
 
+  l->len += sprintf(l->buf + l->len, "main(%d) back(%d) freq(%d)(%d)\n",
+    s->fdmain, s->fdback,n->rawdevs[0]->freqs[n->rawdevs[0]->cptfreq],n->rawdevs[1]->freqs[n->rawdevs[1]->cptfreq]);
 
-  printf("sync freq (%d)(%d) (%d)(%d)\n", 
-      n->rawdevs[0]->ifindex, n->rawdevs[0]->freqs[n->rawdevs[0]->cptfreq],
-      n->rawdevs[1]->ifindex, n->rawdevs[1]->freqs[n->rawdevs[1]->cptfreq]); fflush(stdout);
+  wfb_log_send(l);
 }
 
 /******************************************************************************/
@@ -113,10 +93,6 @@ void wfb_sync_init(wfb_sync_init_t *s, wfb_netlink_init_t *n) {
     n->rawdevs[i]->cptfreq = (n->nbraws - i - 1) * (n->rawdevs[i]->nbfreqs / n->nbraws);
     wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
 
-    s->cptfree[i]=0; s->nbpkt[i]=0; s->len[i]=0;
+    s->cptfree[i]=0; s->len[i]=0;
   }
-
-  printf("init freq (%d)(%d) (%d)(%d)\n", 
-      n->rawdevs[0]->ifindex, n->rawdevs[0]->freqs[n->rawdevs[0]->cptfreq],
-      n->rawdevs[1]->ifindex, n->rawdevs[1]->freqs[n->rawdevs[1]->cptfreq]); fflush(stdout);
 }
