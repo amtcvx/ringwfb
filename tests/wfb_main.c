@@ -47,7 +47,6 @@ int main(int argc, char **argv) {
   for (uint8_t nbfdscpt=0; nbfdscpt < nbfds; nbfdscpt++) { readsets[nbfdscpt].fd = fd[nbfdscpt]; readsets[nbfdscpt].events = POLLIN; }
 
   ssize_t len = 0;
-  uint32_t rawpkt[n.nbraws]; 
 
   for(;;) {
     if (0 != poll(readsets, nbfds, -1)) {
@@ -67,10 +66,8 @@ int main(int argc, char **argv) {
         if (s.len[cpt-1] > 0) {
           len = sendmsg(fd[cpt], &n.msg.msg_out[cpt-1], MSG_DONTWAIT);
 
-          l.len += sprintf(l.buf + l.len,"SEND (%d)(%ld)(%d) (%d)\n",cpt,len,s.len[cpt-1],
-		  ((wfb_netlink_payhd_t *)&(n.msg.msg_out[cpt-1].msg_iov[3].iov_base))->backfreq);
-
-
+          l.len += sprintf(l.buf + l.len,"SEND (%d)(%ld)(%d) (%d)\n",cpt-1,len,s.len[cpt-1],
+		  ((wfb_netlink_payhd_t *)(n.msg.msg_out[cpt-1].msg_iov[3].iov_base))->backfreq);
 
           //  len = sendmsg(n.bonds[0].sockfd, n.msg.msg_out, MSG_DONTWAIT);
 	  
