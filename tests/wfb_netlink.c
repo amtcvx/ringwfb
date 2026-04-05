@@ -90,10 +90,11 @@ struct msghdr *setmsgout(void) {
   };
   uint8_t llchd[4];
 
-  static struct rx_t {
+  static struct msghdr msg[MAXRAWDEV];
+
+  static struct tx_t {
     wfb_netlink_payhd_t payhd;
     uint8_t paybuf[PAY_MTU]; 
-    struct msghdr msg;
     struct iovec iov[5];
   } tx[MAXRAWDEV];
 
@@ -104,10 +105,10 @@ struct msghdr *setmsgout(void) {
     tx[i].iov[3].iov_base = &tx[i].payhd;  tx[i].iov[3].iov_len = sizeof(tx[i].payhd);
     tx[i].iov[4].iov_base = &tx[i].paybuf; tx[i].iov[4].iov_len = sizeof(tx[i].paybuf);
 
-    tx[i].msg.msg_iov = tx[i].iov; tx[i].msg.msg_iovlen = 5;
+    msg[i].msg_iov = tx[i].iov; msg[i].msg_iovlen = 5;
   }
 
-  return(&tx[0].msg);
+  return(msg);
 }
 
 /******************************************************************************/
@@ -115,13 +116,14 @@ struct msghdr *setmsgin(void) {
 
 #define RADIOTAPSIZE 35
 
+  static struct msghdr msg[MAXRAWDEV];
+
   static struct rx_t { 
     uint8_t radiotaphd[RADIOTAPSIZE];
     uint8_t ieeehd[24];
     uint8_t llchd[4];
     wfb_netlink_payhd_t payhd;
     uint8_t paybuf[PAY_MTU]; 
-    struct msghdr msg;
     struct iovec iov[5];
   } rx[MAXRAWDEV];
 
@@ -132,10 +134,10 @@ struct msghdr *setmsgin(void) {
     rx[i].iov[3].iov_base = &rx[i].payhd;      rx[i].iov[3].iov_len = sizeof(rx[i].payhd);
     rx[i].iov[4].iov_base = &rx[i].paybuf;     rx[i].iov[4].iov_len = sizeof(rx[i].paybuf);
 
-    rx[i].msg.msg_iov = rx[i].iov; rx[i].msg.msg_iovlen = 5;
+    msg[i].msg_iov = rx[i].iov; msg[i].msg_iovlen = 5;
   }
 
-  return(&rx[0].msg);
+  return(msg);
 }
 
 /******************************************************************************/

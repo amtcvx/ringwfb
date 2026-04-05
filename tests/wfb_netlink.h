@@ -13,6 +13,7 @@ typedef struct {
   uint8_t droneid;
   uint64_t seq;
   uint16_t msglen;
+  uint32_t backfreq;
 } __attribute__((packed)) wfb_netlink_payhd_t;
 
 

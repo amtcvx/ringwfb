@@ -66,12 +66,18 @@ int main(int argc, char **argv) {
 	    }
 */
           } else {
-            if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0) {
-	      s.nbpkt[cpt-1]++;
-	      if (((wfb_netlink_payhd_t *)(n.msg.msg_in[cpt-1].msg_iov[3].iov_base))->droneid == 1) printf("BINGO\n"); 
-	    }
+            if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0) wfb_sync_async(cpt-1, &s, &n, &l);
           }
         }
+      }
+      for (uint8_t cpt=1; cpt<nbfds; cpt++) {
+        if (s.len[cpt-1] > 0) {
+          len = sendmsg(fd[cpt], &n.msg.msg_out[cpt-1], MSG_DONTWAIT);
+
+          printf("SEND (%d)(%ld)(%d)\n",cpt,len,s.len[cpt-1]); fflush(stdout);
+
+	  s.len[cpt-1] = 0;
+	}
       }
     }
   }
