@@ -6,13 +6,13 @@ ROLEFLAG += -DDRONEID=0
 #ROLEFLAG += -DDRONEID=2
 #ROLEFLAG += -DDRONEID=3
 
-TARGET   = wfb
+TARGET   = wfb_main
 
 CFLAGS ?= -Ofast -g
-CFLAGS += -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration
+CFLAGS += -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3
 CFLAGS += $(ROLEFLAG)
 
-LFLAGS  = -g
+LFLAGS  = -g -lnl-route-3 -lnl-genl-3 -lnl-3
 
 SRCDIR   = src
 OBJDIR   = obj
