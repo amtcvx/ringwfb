@@ -31,9 +31,6 @@ void wfb_sync_async(uint8_t rawcpt, wfb_sync_init_t *s, wfb_netlink_init_t *n, w
 /******************************************************************************/
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
-  l->len += sprintf(l->buf + l->len, "main(%d) back(%d) cptfree[0](%d)[1](%d)\n",
-    s->fdmain, s->fdback,s->cptfree[0],s->cptfree[1]);
-
   if (s->fdmain >= 0) {
     if (s->cptfree[s->fdmain] == 0) {
       if (s->fdback >=0) {
