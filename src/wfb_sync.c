@@ -21,7 +21,9 @@ void wfb_sync_async(uint8_t rawcpt, wfb_sync_init_t *s, wfb_netlink_init_t *n, w
   wfb_netlink_payhd_t *ptr = (wfb_netlink_payhd_t *)(n->msg.msg_in[rawcpt].msg_iov[3].iov_base);
 
   if ((*(4 + ((uint8_t *)(n->msg.msg_in[rawcpt].msg_iov[2].iov_base))) == 0x66)
-    && (ptr->droneid > 0 ) && (ptr->droneid <= DRONEIDMAX)) { 
+    && (ptr->droneid > 0 ) && (ptr->droneid <= MAXDRONE)) { 
+
+#if DRONEID == 0
 
     printf("BINGO\n"); fflush(stdout);
 
@@ -31,6 +33,7 @@ void wfb_sync_async(uint8_t rawcpt, wfb_sync_init_t *s, wfb_netlink_init_t *n, w
 /******************************************************************************/
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
+#if DRONEID > 0
   if (s->fdmain >= 0) {
     if (s->cptfree[s->fdmain] == 0) {
       if (s->fdback >=0) {
@@ -39,6 +42,7 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
       }
     }
   }
+#endif // DRONEID > 0
 
   for (uint8_t i=0; i<n->nbraws; i++) {
     if ((s->cptfree[i] == 0) && (i != s->fdmain)) {
@@ -59,6 +63,7 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
     if (s->cptfree[i] < FREETIME_S) s->cptfree[i]++;
   }
 
+#if DRONEID > 0
   if (s->fdmain >= 0) { 
     wfb_netlink_payhd_t *ptrmain = (wfb_netlink_payhd_t *)(n->msg.msg_out[s->fdmain].msg_iov[3].iov_base);
     ptrmain->backfreq = 0;
@@ -78,6 +83,7 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
       n->msg.msg_out[s->fdback].msg_iov[4].iov_len = 1;
     }
   }
+#endif // DRONEID > 0
 
   l->len += sprintf(l->buf + l->len, "main(%d) back(%d) freq(%d)(%d)\n",
     s->fdmain, s->fdback,n->rawdevs[0]->freqs[n->rawdevs[0]->cptfreq],n->rawdevs[1]->freqs[n->rawdevs[1]->cptfreq]);
