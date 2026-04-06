@@ -20,27 +20,31 @@ void wfb_sync_async(uint8_t rawcpt, wfb_sync_init_t *s, wfb_netlink_init_t *n, w
 
   wfb_netlink_payhd_t *ptr = (wfb_netlink_payhd_t *)(n->msg.msg_in[rawcpt].msg_iov[3].iov_base);
 
-  if ((ptr->droneid > 0 ) && (ptr->droneid <= DRONEIDMAX)) { 
+  if ((*(4 + ((uint8_t *)(n->msg.msg_in[rawcpt].msg_iov[2].iov_base))) == 0x66)
+    && (ptr->droneid > 0 ) && (ptr->droneid <= DRONEIDMAX)) { 
 
     printf("BINGO\n"); fflush(stdout);
 
-  } else {
-
-    if (s->fdmain == rawcpt) {
-      if (s->fdback >=0) { s->fdmain = s->fdback; s->fdback = -1; }
-      else s->cptfree[rawcpt] = 0;
-    } else {
-      if (s->fdback == rawcpt) s->fdback = -1;
-      s->cptfree[rawcpt] = 0;
-    }
-  }
+  } else { s->cptfree[rawcpt] = 0; }
 }
 
 /******************************************************************************/
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
+  l->len += sprintf(l->buf + l->len, "main(%d) back(%d) cptfree[0](%d)[1](%d)\n",
+    s->fdmain, s->fdback,s->cptfree[0],s->cptfree[1]);
+
+  if (s->fdmain >= 0) {
+    if (s->cptfree[s->fdmain] == 0) {
+      if (s->fdback >=0) {
+        if (s->cptfree[s->fdback] != 0) s->fdmain = s->fdback;
+        s->fdback = -1;
+      }
+    }
+  }
+
   for (uint8_t i=0; i<n->nbraws; i++) {
-    if (s->cptfree[i] == 0) {
+    if ((s->cptfree[i] == 0) && (i != s->fdmain)) {
       if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
       for (uint8_t j=0; j<n->nbraws; j++) {
         if ((i != j) && ((n->rawdevs[i]->cptfreq) == (n->rawdevs[j]->cptfreq))) {
@@ -49,9 +53,12 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
       }
       wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
     };
-    if (s->cptfree[i] == FREETIME_S) {
-      if (s->fdmain == -1) s->fdmain = i; else if (s->fdback == -1) s->fdback = i;
-    }
+    if ((s->cptfree[i] == FREETIME_S) && (s->fdmain == -1)) s->fdmain = i;
+  }
+
+  for (uint8_t i=0; i<n->nbraws; i++) {
+    if ((s->fdmain >= 0) && (i != s->fdmain) && (s->cptfree[i] == FREETIME_S) && (s->fdback == -1)) s->fdback = i;
+
     if (s->cptfree[i] < FREETIME_S) s->cptfree[i]++;
   }
 
@@ -67,7 +74,7 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
       ptrmain->backfreq = (n->rawdevs[s->fdback]->freqs[n->rawdevs[s->fdback]->cptfreq]);
 
       wfb_netlink_payhd_t *ptrback = (wfb_netlink_payhd_t *)(n->msg.msg_out[s->fdback].msg_iov[3].iov_base);
-      ptrback->backfreq = n->rawdevs[s->fdmain]->freqs[n->rawdevs[s->fdmain]->cptfreq];
+      ptrback->backfreq = -(n->rawdevs[s->fdmain]->freqs[n->rawdevs[s->fdmain]->cptfreq]);
 
       ptrback->msglen = 1;
       s->len[s->fdback] = 1;
