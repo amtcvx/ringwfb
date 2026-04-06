@@ -64,8 +64,9 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
     n->msg.msg_out[s->fdmain].msg_iov[4].iov_len = 1;
 
     if (s->fdback >= 0) {
+      ptrmain->backfreq = (n->rawdevs[s->fdback]->freqs[n->rawdevs[s->fdback]->cptfreq]);
+
       wfb_netlink_payhd_t *ptrback = (wfb_netlink_payhd_t *)(n->msg.msg_out[s->fdback].msg_iov[3].iov_base);
-      ptrmain->backfreq = n->rawdevs[s->fdback]->freqs[n->rawdevs[s->fdback]->cptfreq];
       ptrback->backfreq = n->rawdevs[s->fdmain]->freqs[n->rawdevs[s->fdmain]->cptfreq];
 
       ptrback->msglen = 1;
