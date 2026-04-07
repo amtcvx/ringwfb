@@ -10,6 +10,8 @@
 typedef struct {
   uint64_t exptime;
   uint8_t cptfree[MAXRAWDEV];
+  uint8_t cptack[MAXRAWDEV];
+  int32_t backfreq[MAXRAWDEV];
   uint16_t len[MAXRAWDEV];
   uint8_t fd;
   int8_t fdmain;
