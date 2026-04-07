@@ -1,5 +1,6 @@
 #!/bin/bash
 PROJ=$PWD
+sudo apt-get install rfkill
 DKMS=false
 if uname -r | grep -cs "6.8.0-060800-generic"> /dev/null 2>&1; then DKMS=true; fi
 if uname -r | grep -cs "5.10.110-15-rockchip"> /dev/null 2>&1; then DKMS=true; fi
