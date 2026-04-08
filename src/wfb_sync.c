@@ -80,14 +80,19 @@ void periodic_master(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *
   if (s->fdmain >= 0) {
     if (s->cptfree[s->fdmain] == 0) {
       if (s->fdback >=0) {
-        if (s->cptfree[s->fdback] != 0) { s->fdmain = s->fdback; s->fdback = -1; 
-		                          l->len += sprintf(l->buf + l->len, "switch\n"); } 
+        if (s->cptfree[s->fdback] != 0) { 
+	  s->fdmain = s->fdback; s->fdback = -1; 
+	  l->len += sprintf(l->buf + l->len, "switch\n"); 
+	}
       }
     }
   }
 
   for (uint8_t i=0; i<n->nbraws; i++) {
     if ((s->cptfree[i] == 0) && (i != s->fdmain)) {
+
+      if (i == s->fdback) s->fdback = -1;
+
       if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
       for (uint8_t j=0; j<n->nbraws; j++) {
         if ((i != j) && ((n->rawdevs[i]->cptfreq) == (n->rawdevs[j]->cptfreq))) {
