@@ -14,7 +14,7 @@
 /******************************************************************************/
 void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
-  printf("slave\n");fflush(stdout);
+  l->len += sprintf(l->buf + l->len, "slave\n");
 
   for (uint8_t i=0; i<n->nbraws; i++) {
     int8_t up = -1;
@@ -32,25 +32,30 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
     } else {
       if (s->cptack[i] == 0) {
 
+        l->len += sprintf(l->buf + l->len, "ping (%d)(%d)\n",i,s->backfreq[i]);
+
         if (s->backfreq[i] == 0) { s->fdmain = i; s->fdback = -1; }
         else {
 
           uint8_t j=0;
-          for (j=0; j < n->rawdevs[j]->nbfreqs; j++) {
+          for (j=0; j < n->rawdevs[i]->nbfreqs; j++) {
             if (n->rawdevs[i]->freqs[j] == abs(s->backfreq[i])) break;
           }
-          if (n->rawdevs[i]->freqs[j] == s->backfreq[i]) {
+          if (n->rawdevs[i]->freqs[j] == abs(s->backfreq[i])) {
 
             uint8_t k=0;
-            if (s->backfreq[i] > 0) { s->fdmain = i; for (k=0; k<n->nbraws; k++) if (k != i) s->fdback = k; }
-            else if (s->backfreq[i] < 0) { s->fdback = i; for (k=0; k<n->nbraws; k++) if (k != i) s->fdmain = k; up = k; }
+            if (s->backfreq[i] > 0) { s->fdmain = i; for (k=0; k<n->nbraws; k++) { if (k != i) { s->fdback = k; up = k; } } }
+            else { s->fdback = i; for (k=0; k<n->nbraws; k++) if (k != i) s->fdmain = k; up = -1; }
 
-            (n->rawdevs[up]->cptfreq) = j;
+            if ((up >= 0) && (abs(s->backfreq[i]) == n->rawdevs[up]->freqs[n->rawdevs[up]->cptfreq])) up = -1;
+	    else {
+              (n->rawdevs[up]->cptfreq) = j;
+	      l->len += sprintf(l->buf + l->len, "main(%d) back(%d) up(%d)\n",s->fdmain,s->fdback,up);
+	    }
 	  }
         }
       }
       s->cptack[i]++;
-
     }
     if (up >= 0) wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[up]->ifindex, n->rawdevs[up]->freqs[n->rawdevs[up]->cptfreq]);
   }
