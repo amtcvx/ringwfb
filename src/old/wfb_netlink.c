@@ -1,5 +1,13 @@
 /*
+sudo apt-get install libnl-3-dev libnl-genl-3-dev libnl-route-3-dev
+
 gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c wfb_netlink.c -o wfb_netlink.o
+
+sudo ip address show wfbbond
+sudo ip link show master wfbbond 
+
+sudo ip link del name wfbbond
+
 */
 
 #include "wfb_netlink.h"
@@ -44,7 +52,7 @@ typedef struct {
   wfb_netlink_raw_t *devs;
 } elt_t;
 
-/******************************************************************************/
+/*****************************************************************************/
 struct msghdr *setmsgout(void) {
 
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
@@ -65,14 +73,14 @@ struct msghdr *setmsgout(void) {
 
 #define MCS_INDEX  2
 
-  static uint8_t radiotaphd[] = {
+  uint8_t radiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
         0x0d, 0x00, // <- radiotap header length
         0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
         0x08, 0x00,  // RADIOTAP_F_TX_NOACK
         MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
   };
-  static uint8_t ieeehd[] = {
+  uint8_t ieeehd[] = {
         0x08, 0x01,                         // Frame Control : Data frame from STA to DS
         0x00, 0x00,                         // Duration
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Receiver MAC
@@ -80,13 +88,13 @@ struct msghdr *setmsgout(void) {
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
         0x10, 0x86                          // Sequence control
   };
-  static uint8_t llchd[4];
+  uint8_t llchd[4];
 
   static struct msghdr msg[MAXRAWDEV];
 
   static struct tx_t {
     wfb_netlink_payhd_t payhd;
-    uint8_t paybuf[PAY_MTU];
+    uint8_t paybuf[PAY_MTU]; 
     struct iovec iov[5];
   } tx[MAXRAWDEV];
 
@@ -110,12 +118,12 @@ struct msghdr *setmsgin(void) {
 
   static struct msghdr msg[MAXRAWDEV];
 
-  static struct rx_t {
+  static struct rx_t { 
     uint8_t radiotaphd[RADIOTAPSIZE];
     uint8_t ieeehd[24];
     uint8_t llchd[4];
     wfb_netlink_payhd_t payhd;
-    uint8_t paybuf[PAY_MTU];
+    uint8_t paybuf[PAY_MTU]; 
     struct iovec iov[5];
   } rx[MAXRAWDEV];
 
@@ -130,30 +138,6 @@ struct msghdr *setmsgin(void) {
   }
 
   return(msg);
-}
-
-/******************************************************************************/
-uint8_t getwifi(elt_t *elt) {
-
-  char *netpath = "/sys/class/net";
-  char path[1024],buf[1024],*ptr;
-  ssize_t lenlink;
-  uint8_t i=0;
-
-  DIR *d1;
-  struct dirent *dir1;
-  d1 = opendir(netpath);
-  while ((dir1 = readdir(d1)) != NULL) {
-    sprintf(path,"%s/%s/device/driver",netpath,dir1->d_name);
-    if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
-      buf[lenlink] = '\0';
-      ptr = strrchr( buf, '/' );
-      if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(elt->devs[i++].ifname,dir1->d_name);
-    }
-  }
-
-  elt->nb = i;
-  return(i);
 }
 
 /******************************************************************************/
@@ -204,6 +188,30 @@ int getsinglewifi_callback(struct nl_msg *msg, void *arg) {
   }
 
   return NL_SKIP;
+}
+
+/******************************************************************************/
+uint8_t getwifi(elt_t *elt) {
+
+  char *netpath = "/sys/class/net";
+  char path[1024],buf[1024],*ptr;
+  ssize_t lenlink;
+  uint8_t i=0;
+
+  DIR *d1;
+  struct dirent *dir1;
+  d1 = opendir(netpath);
+  while ((dir1 = readdir(d1)) != NULL) {
+    sprintf(path,"%s/%s/device/driver",netpath,dir1->d_name);
+    if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
+      buf[lenlink] = '\0';
+      ptr = strrchr( buf, '/' );
+      if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(elt->devs[i++].ifname,dir1->d_name);
+    }
+  }
+
+  elt->nb = i;
+  return(i);
 }
 
 /******************************************************************************/
@@ -272,6 +280,45 @@ bool reload(char *ifname) {
     ret = true;
   }
   return(ret);
+}
+
+/******************************************************************************/
+void setbond(struct rtnl_link *ltap[2], char *name, struct nl_sock *sockrt, wfb_netlink_bond_t *bonds) {
+
+  struct rtnl_link *old;
+  struct nl_cache *cache;
+  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
+  if (!(old = rtnl_link_alloc ())) exit(-1);
+  if ((old = rtnl_link_get_by_name(cache, name))) {
+    if (rtnl_link_delete(sockrt, old) < 0) exit(-1);
+  }
+
+  struct rtnl_link *opts; 
+  if (!(opts = rtnl_link_alloc ())) exit(-1);
+  if ((rtnl_link_bond_add(sockrt, name, opts)) < 0) exit(-1); 
+
+  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
+  if (!(bonds->link = rtnl_link_alloc ())) exit(-1);
+  if (!(bonds->link = rtnl_link_get_by_name(cache, name))) exit(-1);
+
+  if ((rtnl_link_bond_enslave(sockrt, bonds->link, ltap[0])) < 0) exit(-1);
+  if ((rtnl_link_bond_enslave(sockrt, bonds->link, ltap[1])) < 0) exit(-1);
+
+  struct rtnl_link *change;
+  if (!(rtnl_link_get_flags (bonds->link) & IFF_UP)) {
+    change = rtnl_link_alloc ();
+    rtnl_link_set_flags (change, IFF_UP);
+    rtnl_link_change(sockrt, bonds->link, change, 0);
+  }
+
+  uint16_t protocol = htons(ETH_P_ALL);
+  if (-1 == (bonds->sockfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+  struct sockaddr_ll sll;
+  memset( &sll, 0, sizeof( sll ) );
+  sll.sll_family   = AF_PACKET;
+  sll.sll_ifindex  = rtnl_link_get_ifindex(bonds->link);
+  sll.sll_protocol = protocol;
+  if (-1 == bind(bonds->sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
 }
 
 /******************************************************************************/
@@ -366,8 +413,8 @@ uint8_t setraw(elt_t *elt, wfb_netlink_raw_t *arr[]) {
     drain(elt->devs[i].sockfd);
 
     const int32_t sock_qdisc_bypass = 1;
-    if (-1 == setsockopt(elt->devs[i].sockfd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass,
-                         sizeof(sock_qdisc_bypass))) continue;
+    if (-1 == setsockopt(elt->devs[i].sockfd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, 
+			 sizeof(sock_qdisc_bypass))) continue;
 
     arr[cpt] = &(elt->devs[i]);
     cpt++;
@@ -376,57 +423,19 @@ uint8_t setraw(elt_t *elt, wfb_netlink_raw_t *arr[]) {
 }
 
 /******************************************************************************/
-void setbond(struct rtnl_link *ltap[2], char *name, struct nl_sock *sockrt, wfb_netlink_bond_t *bonds) {
-
-  struct rtnl_link *old;
-  struct nl_cache *cache;
-  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
-  if (!(old = rtnl_link_alloc ())) exit(-1);
-  if ((old = rtnl_link_get_by_name(cache, name))) {
-    if (rtnl_link_delete(sockrt, old) < 0) exit(-1);
-  }
-
-  struct rtnl_link *opts;
-  if (!(opts = rtnl_link_alloc ())) exit(-1);
-  if ((rtnl_link_bond_add(sockrt, name, opts)) < 0) exit(-1);
-
-  if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
-  if (!(bonds->link = rtnl_link_alloc ())) exit(-1);
-  if (!(bonds->link = rtnl_link_get_by_name(cache, name))) exit(-1);
-
-  if ((rtnl_link_bond_enslave(sockrt, bonds->link, ltap[0])) < 0) exit(-1);
-  if ((rtnl_link_bond_enslave(sockrt, bonds->link, ltap[1])) < 0) exit(-1);
+void setup(elt_t *elt, struct nl_sock *sockrt) {
 
   struct rtnl_link *change;
-  if (!(rtnl_link_get_flags (bonds->link) & IFF_UP)) {
-    change = rtnl_link_alloc ();
-    rtnl_link_set_flags (change, IFF_UP);
-    rtnl_link_change(sockrt, bonds->link, change, 0);
-  }
-
-  uint16_t protocol = htons(ETH_P_ALL);
-  if (-1 == (bonds->sockfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
-  struct sockaddr_ll sll;
-  memset( &sll, 0, sizeof( sll ) );
-  sll.sll_family   = AF_PACKET;
-  sll.sll_ifindex  = rtnl_link_get_ifindex(bonds->link);
-  sll.sll_protocol = protocol;
-  if (-1 == bind(bonds->sockfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1);
-}
-
-/******************************************************************************/
-void setup(elt_t *elt, struct nl_sock *sockrt) {
-  struct nl_cache *cache;
-  struct rtnl_link *link, *change;
   for(uint8_t i=0;i<elt->nb;i++) {
-    if (rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache) < 0) exit(-1);
-    if (!(link = rtnl_link_get(cache, elt->devs[i].ifindex))) exit(-1);
-    if (!(change = rtnl_link_alloc ())) exit(-1);
-    rtnl_link_set_flags (change, IFF_UP);
-    rtnl_link_change(sockrt, link, change, 0);
+    if (!(rtnl_link_get_flags (elt->devs[i].ltap) & IFF_UP)) {
+      change = rtnl_link_alloc ();
+      rtnl_link_set_flags (change, IFF_UP);
+      rtnl_link_change(sockrt, elt->devs[i].ltap, change, 0);
+    }
   }
 }
 
+/*****************************************************************************/
 /*****************************************************************************/
 bool wfb_netlink_setfreq(wfb_netlink_socknl_t *psock, int ifindex, uint32_t freq) {
 
@@ -451,31 +460,30 @@ bool wfb_netlink_init(wfb_netlink_init_t *n) {
   if (genl_connect(n->sockidnl.socknl)) return(false);
   if ((n->sockidnl.sockid = genl_ctrl_resolve(n->sockidnl.socknl, "nl80211")) < 0) return(false);
 
-  if (!(n->sockidnl.sockrt = nl_socket_alloc())) return(false);
-  if (nl_connect(n->sockidnl.sockrt, NETLINK_ROUTE)) return(false);
+  struct nl_sock *sockrt;
+  if (!(sockrt = nl_socket_alloc())) return(false);
+  if (nl_connect(sockrt, NETLINK_ROUTE)) return(false);
 
   static wfb_netlink_raw_t all[MAXRAWDEV];
   elt_t elt; memset(&elt, 0, sizeof(elt_t)); elt.devs = all;
 
   uint8_t nb;
   if ((nb = getwifi(&elt)) > 0) {
-    if ((nb = setwifi(&elt, &n->sockidnl, n->sockidnl.sockrt)) > 0) {
+    if ((nb = setwifi(&elt, &n->sockidnl, sockrt)) > 0) {
       if ((nb = setraw(&elt, n->rawdevs)) > 0) {
         if (nb > 1) {
           struct rtnl_link *ltap[2]; ltap[0] = elt.devs[0].ltap; ltap[1] = elt.devs[1].ltap;
-          setbond(ltap, BOND_NAME, n->sockidnl.sockrt, &n->bonds[0]);
+  	  setbond(ltap, BOND_NAME, sockrt, &n->bonds[0]);
         }
-        setup(&elt, n->sockidnl.sockrt);
-
+        setup(&elt, sockrt);
         n->nbraws = nb;
 
-        (n->msg.msgout) = setmsgout();
-        (n->msg.msgin) = setmsgin();
+        n->msg.msg_in = setmsgin();
+	n->msg.msg_out = setmsgout();
+
         return(true);
       }
     }
   }
-
   return(false);
 }
-

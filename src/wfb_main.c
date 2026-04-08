@@ -33,6 +33,7 @@ int main(int argc, char **argv) {
   wfb_netlink_init_t n;
   if (false == wfb_netlink_init(&n)) { printf("NO WIFI\n"); exit(-2); }
   for (uint8_t i=0;i<n.nbraws;i++) printf("(%s)\n",n.rawdevs[i]->ifname);
+  if (n.nbraws < 2)  { printf("NOT ENOUGHT WIFI\n"); exit(-2); }
 
   wfb_log_init_t l;
   wfb_log_init(&l);
@@ -56,19 +57,19 @@ int main(int argc, char **argv) {
             len = read(s.fd, &s.exptime, sizeof(uint64_t));
 	    wfb_sync_periodic(&s,&n,&l);
           } else {
-            ((wfb_netlink_payhd_t *)(n.msg.msg_in[cpt-1].msg_iov[3].iov_base))->droneid = 0;
-            if ((len = recvmsg(fd[cpt], &n.msg.msg_in[cpt-1], MSG_DONTWAIT)) > 0) wfb_sync_async(cpt-1, &s, &n, &l);
+            ((wfb_netlink_payhd_t *)(n.msg.msgin[cpt-1].msg_iov[3].iov_base))->droneid = 0;
+            if ((len = recvmsg(fd[cpt], &n.msg.msgin[cpt-1], MSG_DONTWAIT)) > 0) wfb_sync_async(cpt-1, &s, &n, &l);
           }
         }
       }
 
       for (uint8_t cpt=1; cpt<nbfds; cpt++) {
         if (s.len[cpt-1] > 0) {
-          ((wfb_netlink_payhd_t *)(n.msg.msg_in[cpt-1].msg_iov[3].iov_base))->droneid = DRONEID;
-          len = sendmsg(fd[cpt], &n.msg.msg_out[cpt-1], MSG_DONTWAIT);
+          ((wfb_netlink_payhd_t *)(n.msg.msgin[cpt-1].msg_iov[3].iov_base))->droneid = DRONEID;
+          len = sendmsg(fd[cpt], &n.msg.msgout[cpt-1], MSG_DONTWAIT);
 
           l.len += sprintf(l.buf + l.len,"SEND (%d)(%ld)(%d) (%d)\n",cpt-1,len,s.len[cpt-1],
-		  ((wfb_netlink_payhd_t *)(n.msg.msg_out[cpt-1].msg_iov[3].iov_base))->backfreq);
+		  ((wfb_netlink_payhd_t *)(n.msg.msgout[cpt-1].msg_iov[3].iov_base))->backfreq);
 
           //  len = sendmsg(n.bonds[0].sockfd, n.msg.msg_out, MSG_DONTWAIT);
 	  
