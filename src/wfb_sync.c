@@ -75,13 +75,13 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
 /******************************************************************************/
 void periodic_master(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
-  printf("master\n");fflush(stdout);
+  l->len += sprintf(l->buf + l->len, "master\n");
 
   if (s->fdmain >= 0) {
     if (s->cptfree[s->fdmain] == 0) {
       if (s->fdback >=0) {
-        if (s->cptfree[s->fdback] != 0) s->fdmain = s->fdback;
-        s->fdback = -1;
+        if (s->cptfree[s->fdback] != 0) { s->fdmain = s->fdback; s->fdback = -1; 
+		                          l->len += sprintf(l->buf + l->len, "switch\n"); } 
       }
     }
   }
@@ -103,6 +103,10 @@ void periodic_master(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *
     if ((s->fdmain >= 0) && (i != s->fdmain) && (s->cptfree[i] == FREETIME_S) && (s->fdback < 0)) s->fdback = i;
     if (s->cptfree[i] < FREETIME_S) s->cptfree[i]++;
   }
+
+  ((wfb_netlink_payhd_t *)(n->msg.msgout[0].msg_iov[2].iov_base))->backfreq = 1;
+  ((wfb_netlink_payhd_t *)(n->msg.msgout[1].msg_iov[2].iov_base))->backfreq = 2;
+  l->len += sprintf(l->buf + l->len, "back(](%d((%d)\n",(((wfb_netlink_payhd_t *)(n->msg.msgout[0].msg_iov[2].iov_base))->backfreq),(((wfb_netlink_payhd_t *)(n->msg.msgout[1].msg_iov[2].iov_base))->backfreq));
 
   if (s->fdmain >= 0) { 
     wfb_netlink_payhd_t *ptrmain = (wfb_netlink_payhd_t *)(n->msg.msgout[s->fdmain].msg_iov[2].iov_base);

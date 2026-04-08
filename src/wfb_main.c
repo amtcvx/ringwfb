@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
           len = sendmsg(fd[cpt], &n.msg.msgout[cpt-1], MSG_DONTWAIT);
 
           l.len += sprintf(l.buf + l.len,"SEND (%d)(%ld)(%d) (%d)\n",cpt-1,len,s.len[cpt-1],
-		  ((wfb_netlink_payhd_t *)(n.msg.msgout[cpt-1].msg_iov[3].iov_base))->backfreq);
+		  ((wfb_netlink_payhd_t *)(n.msg.msgout[cpt-1].msg_iov[2].iov_base))->backfreq);
 
           //  len = sendmsg(n.bonds[0].sockfd, n.msg.msg_out, MSG_DONTWAIT);
 	  
