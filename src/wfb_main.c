@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
 
       for (uint8_t cpt=1; cpt<nbfds; cpt++) {
         if (s.len[cpt-1] > 0) {
-          ((wfb_netlink_payhd_t *)(n.msg.msgin[cpt-1].msg_iov[3].iov_base))->droneid = DRONEID;
+          ((wfb_netlink_payhd_t *)(n.msg.msgout[cpt-1].msg_iov[3].iov_base))->droneid = DRONEID;
           len = sendmsg(fd[cpt], &n.msg.msgout[cpt-1], MSG_DONTWAIT);
 
           l.len += sprintf(l.buf + l.len,"SEND (%d)(%ld)(%d) (%d)\n",cpt-1,len,s.len[cpt-1],
