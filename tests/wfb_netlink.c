@@ -416,26 +416,31 @@ void setbond(struct rtnl_link *ltap[2], char *name, struct nl_sock *sockrt, wfb_
 
 /******************************************************************************/
 void setup(elt_t *elt, struct nl_sock *sockrt) {
-/*
-  struct rtnl_link *change;
-  for(uint8_t i=0;i<elt->nb;i++) {
-    if (!(rtnl_link_get_flags (elt->devs[i].ltap) & IFF_UP)) {
-      change = rtnl_link_alloc ();
-      rtnl_link_set_flags (change, IFF_UP);
-      rtnl_link_change(sockrt, elt->devs[i].ltap, change, 0);
-    }
-  }
-*/
   struct nl_cache *cache;
-  struct rtnl_link *change, *link;
+  struct rtnl_link *link, *change;
   for(uint8_t i=0;i<elt->nb;i++) {
     if (rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache) < 0) exit(-1);
-    if (!(link = rtnl_link_get(cache,elt->devs[i].ifindex))) exit(-1);
+    if (!(link = rtnl_link_get(cache, elt->devs[i].ifindex))) exit(-1);
     if (!(change = rtnl_link_alloc ())) exit(-1);
     rtnl_link_set_flags (change, IFF_UP);
     rtnl_link_change(sockrt, link, change, 0);
   }
+}
 
+/*****************************************************************************/
+bool wfb_netlink_setfreq(wfb_netlink_socknl_t *psock, int ifindex, uint32_t freq) {
+
+  bool ret=true;
+  struct nl_msg *msg=nlmsg_alloc();
+  genlmsg_put(msg,0,0,psock->sockid,0,0,NL80211_CMD_SET_CHANNEL,0);
+  NLA_PUT_U32(msg,NL80211_ATTR_IFINDEX,ifindex);
+  NLA_PUT_U32(msg,NL80211_ATTR_WIPHY_FREQ,freq);
+  if (nl_send_auto(psock->socknl, msg) < 0) ret=false;
+  nlmsg_free(msg);
+  return(ret);
+  nla_put_failure:
+    nlmsg_free(msg);
+    return(false);
 }
 
 /******************************************************************************/
@@ -446,22 +451,21 @@ bool wfb_netlink_init(wfb_netlink_init_t *n) {
   if (genl_connect(n->sockidnl.socknl)) return(false);
   if ((n->sockidnl.sockid = genl_ctrl_resolve(n->sockidnl.socknl, "nl80211")) < 0) return(false);
 
-  struct nl_sock *sockrt;
-  if (!(sockrt = nl_socket_alloc())) return(false);
-  if (nl_connect(sockrt, NETLINK_ROUTE)) return(false);
+  if (!(n->sockidnl.sockrt = nl_socket_alloc())) return(false);
+  if (nl_connect(n->sockidnl.sockrt, NETLINK_ROUTE)) return(false);
 
   static wfb_netlink_raw_t all[MAXRAWDEV];
   elt_t elt; memset(&elt, 0, sizeof(elt_t)); elt.devs = all;
 
   uint8_t nb;
   if ((nb = getwifi(&elt)) > 0) {
-    if ((nb = setwifi(&elt, &n->sockidnl, sockrt)) > 0) {
+    if ((nb = setwifi(&elt, &n->sockidnl, n->sockidnl.sockrt)) > 0) {
       if ((nb = setraw(&elt, n->rawdevs)) > 0) {
         if (nb > 1) {
           struct rtnl_link *ltap[2]; ltap[0] = elt.devs[0].ltap; ltap[1] = elt.devs[1].ltap;
-          setbond(ltap, BOND_NAME, sockrt, &n->bonds[0]);
+          setbond(ltap, BOND_NAME, n->sockidnl.sockrt, &n->bonds[0]);
         }
-//        setup(&elt, sockrt);
+        setup(&elt, n->sockidnl.sockrt);
 
         n->nbraws = nb;
 

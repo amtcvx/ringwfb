@@ -33,6 +33,7 @@ typedef struct {
 typedef struct {
   uint8_t sockid;
   struct nl_sock *socknl;
+  struct nl_sock *sockrt;
 } wfb_netlink_socknl_t;
 
 typedef struct {
@@ -53,6 +54,7 @@ typedef struct {
   wfb_netlink_msg_t msg;
 } wfb_netlink_init_t;
 
-bool wfb_netlink_init(wfb_netlink_init_t *n);
+bool wfb_netlink_setfreq(wfb_netlink_socknl_t *psock, int ifindex, uint32_t freq);
+bool wfb_netlink_init(wfb_netlink_init_t *n); 
 
 #endif //  WFB_NETLINK_H
