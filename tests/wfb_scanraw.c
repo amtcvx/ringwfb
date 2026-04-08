@@ -27,8 +27,6 @@ int main(int argc, char **argv) {
   wfb_netlink_init_t n;
   if (false == wfb_netlink_init(&n)) { printf("NO WIFI\n"); exit(-1); }
 
-  printf("argc(%d) argv(0)(%d)\n",argc,atoi(argv[1]));
-
   n.rawdevs[0]->cptfreq = 0;
   if (argc == 2) {
     uint8_t i = 0;
@@ -57,16 +55,11 @@ int main(int argc, char **argv) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
-            printf("[%d] (%d) ",n.rawdevs[0]->freqs[n.rawdevs[0]->cptfreq],rawnb);
-            if (argc == 2) {
-              if (rawnb > 0) {
-                printf("BINGO\n");fflush(stdout);
-              }
-            } else {
+            printf("[%d] (%d)\n",n.rawdevs[0]->freqs[n.rawdevs[0]->cptfreq],rawnb);
+            if (argc != 2) {
               if (n.rawdevs[0]->cptfreq < (n.rawdevs[0]->nbfreqs - 1)) n.rawdevs[0]->cptfreq++; else n.rawdevs[0]->cptfreq = 0;
               wfb_netlink_setfreq(&n.sockidnl, n.rawdevs[0]->ifindex, n.rawdevs[0]->freqs[n.rawdevs[0]->cptfreq]);
             }
-            printf("\n");
             rawnb = 0;
           } else {
             rawlen = recvmsg(fd[1], &n.msg.msgout[0], MSG_DONTWAIT);
