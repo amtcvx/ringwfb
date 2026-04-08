@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
               rawlen = recvmsg(fd[1], &n.msg.msgin[0], MSG_DONTWAIT);
               rawnb++;
 
-              wfb_netlink_payhd_t *ptr = (wfb_netlink_payhd_t *)(n.msg.msgin[cpt-1].msg_iov[2].iov_base);
+              wfb_netlink_payhd_t *ptr = (wfb_netlink_payhd_t *)(n.msg.msgin[cpt-1].msg_iov[3].iov_base);
 
               if ((*(4 + ((uint8_t *)(n.msg.msgin[cpt-1].msg_iov[1].iov_base))) == 0x66)
                 && (ptr->droneid > 0 ) && (ptr->droneid <= MAXDRONE)) {
