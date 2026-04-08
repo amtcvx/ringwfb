@@ -19,6 +19,8 @@ sudo ./exe_wfb_scanraw 2484
 
 #define PERIOD_DELAY_S 1
 
+#define MAXDRONE 10
+
 /*****************************************************************************/
 int main(int argc, char **argv) {
 
@@ -59,11 +61,19 @@ int main(int argc, char **argv) {
             if (argc != 2) {
               if (n.rawdevs[0]->cptfreq < (n.rawdevs[0]->nbfreqs - 1)) n.rawdevs[0]->cptfreq++; else n.rawdevs[0]->cptfreq = 0;
               wfb_netlink_setfreq(&n.sockidnl, n.rawdevs[0]->ifindex, n.rawdevs[0]->freqs[n.rawdevs[0]->cptfreq]);
-            }
+	    }
             rawnb = 0;
           } else {
-            rawlen = recvmsg(fd[1], &n.msg.msgout[0], MSG_DONTWAIT);
-            rawnb++;
+            if (argc == 2) {
+              rawlen = recvmsg(fd[1], &n.msg.msgin[0], MSG_DONTWAIT);
+              rawnb++;
+
+              wfb_netlink_payhd_t *ptr = (wfb_netlink_payhd_t *)(n.msg.msgin[cpt-1].msg_iov[2].iov_base);
+
+              if ((*(4 + ((uint8_t *)(n.msg.msgin[cpt-1].msg_iov[1].iov_base))) == 0x66)
+                && (ptr->droneid > 0 ) && (ptr->droneid <= MAXDRONE)) {
+	      }
+	    }
           }
 	}
       }
