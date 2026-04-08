@@ -14,14 +14,66 @@ sudo ./exe_wfb_scanraw 2484
 #include <stdio.h>
 #include <unistd.h>
 
+#include <poll.h>
+#include <sys/timerfd.h>
+
+#define PERIOD_DELAY_S 1
+
 /*****************************************************************************/
 int main(int argc, char **argv) {
 
-  if ((argc < 2)||(argc > 3))  exit(-1);
+  if (argc > 2)  exit(-1);
 
   wfb_netlink_init_t n;
-  if (false == wfb_netlink_init(&n)) { printf("NO WIFI\n"); exit(-2); }
-  uint32_t freq = atoi(argv[1]);
-  wfb_netlink_setfreq(&n.sockidnl, n.rawdevs[0]->ifindex, freq);
+  if (false == wfb_netlink_init(&n)) { printf("NO WIFI\n"); exit(-1); }
 
+  printf("argc(%d) argv(0)(%d)\n",argc,atoi(argv[1]));
+
+  n.rawdevs[0]->cptfreq = 0;
+  if (argc == 2) {
+    uint8_t i = 0;
+    for (i=0;i<n.rawdevs[0]->nbfreqs; i++) if (n.rawdevs[0]->freqs[i] == atoi(argv[1])) break;
+    if (n.rawdevs[0]->freqs[i] == atoi(argv[1])) n.rawdevs[0]->cptfreq = i; else exit(-1);
+    wfb_netlink_setfreq(&n.sockidnl, n.rawdevs[0]->ifindex, n.rawdevs[0]->freqs[n.rawdevs[0]->cptfreq]);
+  }
+
+  uint8_t fd[2];
+
+  uint64_t exptime;
+  if (-1 == (fd[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
+  struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
+  timerfd_settime(fd[0], 0, &period, NULL);
+
+  fd[1] = n.rawdevs[0]->sockfd;
+
+  struct pollfd readsets[2] = { { .fd = fd[0], .events = POLLIN }, { .fd = fd[1], .events = POLLIN }};
+
+  ssize_t rawlen = 0, len = 0;
+  uint8_t rawnb = 0;
+
+  for(;;) {
+    if (0 != poll(readsets, 2, -1)) {
+      for (uint8_t cpt=0; cpt<2; cpt++) {
+        if (readsets[cpt].revents == POLLIN) {
+          if (cpt == 0) {
+            len = read(fd[0], &exptime, sizeof(uint64_t));
+            printf("[%d] (%d) ",n.rawdevs[0]->freqs[n.rawdevs[0]->cptfreq],rawnb);
+            if (argc == 2) {
+              if (rawnb > 0) {
+                printf("BINGO\n");fflush(stdout);
+              }
+            } else {
+              if (n.rawdevs[0]->cptfreq < (n.rawdevs[0]->nbfreqs - 1)) n.rawdevs[0]->cptfreq++; else n.rawdevs[0]->cptfreq = 0;
+              wfb_netlink_setfreq(&n.sockidnl, n.rawdevs[0]->ifindex, n.rawdevs[0]->freqs[n.rawdevs[0]->cptfreq]);
+            }
+            printf("\n");
+            rawnb = 0;
+          } else {
+            rawlen = recvmsg(fd[1], &n.msg.msgout[0], MSG_DONTWAIT);
+            rawnb++;
+          }
+	}
+      }
+    }
+  }
 }
