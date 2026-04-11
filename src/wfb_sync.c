@@ -75,11 +75,12 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
   l->len += sprintf(l->buf + l->len, "slave\n");
 
   for (uint8_t i = 0; i < n->nbraws; i++) {
-    for (uint8_t j = 0; j <= MAXDRONE; j++) {
-      if (s->com[i].link[j].cptack == 0) break; 
+    uint8_t j;
+    for (j = 0; j <= MAXDRONE; j++) {
+      if (s->com[i].link[j].cptack == 0) break;
     }
-  }
-
+    if (s->com[i].link[j].cptack == 0) {
+/*
 
 		      [i]	       int8_t up = -1;
     if (s->cptack[i] >= ACKTIME_S) { 
@@ -95,7 +96,7 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
 
     } else {
       if (s->cptack[i] == 0) {
-
+*/
         l->len += sprintf(l->buf + l->len, "ping (%d)(%d)\n",i,s->backfreq[i]);
 
         if (s->backfreq[i] == 0) { s->fdmain = i; s->fdback = -1; }
