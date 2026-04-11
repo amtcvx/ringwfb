@@ -12,12 +12,76 @@
 #define DRONEIDMAX 10
 
 /******************************************************************************/
+void periodic_master(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
+
+  l->len += sprintf(l->buf + l->len, "master\n");
+
+  if (s->fdmain >= 0) {
+    if (s->com[s->fdmain].cptfree == 0) {
+      if (s->fdback >=0) {
+        if (s->com[s->fdback].cptfree != 0) { 
+	  s->fdmain = s->fdback; s->fdback = -1; 
+	  l->len += sprintf(l->buf + l->len, "switch\n"); 
+	}
+      }
+    }
+  }
+
+  for (uint8_t i=0; i<n->nbraws; i++) {
+    if ((s->com[i].cptfree == 0) && (i != s->fdmain)) {
+
+      if (i == s->fdback) s->fdback = -1;
+
+      if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
+      for (uint8_t j=0; j<n->nbraws; j++) {
+        if ((i != j) && ((n->rawdevs[i]->cptfreq) == (n->rawdevs[j]->cptfreq))) {
+          if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
+	}
+      }
+      wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
+    };
+    if ((s->com[i].cptfree == FREETIME_S) && (s->fdmain < 0)) s->fdmain = i;
+  }
+
+  for (uint8_t i=0; i<n->nbraws; i++) {
+    if ((s->fdmain >= 0) && (i != s->fdmain) && (s->com[i].cptfree == FREETIME_S) && (s->fdback < 0)) s->fdback = i;
+    if (s->com[i].cptfree < FREETIME_S) s->com[i].cptfree++;
+  }
+
+  if (s->fdmain >= 0) { 
+    wfb_netlink_payhd_t *ptrmain = (wfb_netlink_payhd_t *)(n->msg.msgout[s->fdmain].msg_iov[3].iov_base);
+    ptrmain->backfreq = 0;
+
+    ptrmain->msglen = 1;
+    s->len[s->fdmain] = 1;
+    n->msg.msgout[s->fdmain].msg_iov[4].iov_len = 1;
+
+    if (s->fdback >= 0) {
+      ptrmain->backfreq = (n->rawdevs[s->fdback]->freqs[n->rawdevs[s->fdback]->cptfreq]);
+
+      wfb_netlink_payhd_t *ptrback = (wfb_netlink_payhd_t *)(n->msg.msgout[s->fdback].msg_iov[3].iov_base);
+      ptrback->backfreq = -(n->rawdevs[s->fdmain]->freqs[n->rawdevs[s->fdmain]->cptfreq]);
+
+      ptrback->msglen = 1;
+      s->len[s->fdback] = 1;
+      n->msg.msgout[s->fdback].msg_iov[4].iov_len = 1;
+    }
+  }
+}
+
+/******************************************************************************/
 void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
   l->len += sprintf(l->buf + l->len, "slave\n");
 
-  for (uint8_t i=0; i<n->nbraws; i++) {
-    int8_t up = -1;
+  for (uint8_t i = 0; i < n->nbraws; i++) {
+    for (uint8_t j = 0; j <= MAXDRONE; j++) {
+      if (s->com[i].link[j].cptack == 0) break; 
+    }
+  }
+
+
+		      [i]	       int8_t up = -1;
     if (s->cptack[i] >= ACKTIME_S) { 
       s->cptack[i] = 1;
 
@@ -59,7 +123,7 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
     }
     if (up >= 0) wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[up]->ifindex, n->rawdevs[up]->freqs[n->rawdevs[up]->cptfreq]);
   }
-
+/*
   if (s->fdmain >= 0) { 
     wfb_netlink_payhd_t *ptrmain = (wfb_netlink_payhd_t *)(n->msg.msgout[s->fdmain].msg_iov[3].iov_base);
 
@@ -75,66 +139,8 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
       n->msg.msgout[s->fdback].msg_iov[4].iov_len = 1;
     }
   }
+*/
 }
-
-/******************************************************************************/
-void periodic_master(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
-
-  l->len += sprintf(l->buf + l->len, "master\n");
-
-  if (s->fdmain >= 0) {
-    if (s->cptfree[s->fdmain] == 0) {
-      if (s->fdback >=0) {
-        if (s->cptfree[s->fdback] != 0) { 
-	  s->fdmain = s->fdback; s->fdback = -1; 
-	  l->len += sprintf(l->buf + l->len, "switch\n"); 
-	}
-      }
-    }
-  }
-
-  for (uint8_t i=0; i<n->nbraws; i++) {
-    if ((s->cptfree[i] == 0) && (i != s->fdmain)) {
-
-      if (i == s->fdback) s->fdback = -1;
-
-      if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
-      for (uint8_t j=0; j<n->nbraws; j++) {
-        if ((i != j) && ((n->rawdevs[i]->cptfreq) == (n->rawdevs[j]->cptfreq))) {
-          if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
-	}
-      }
-      wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
-    };
-    if ((s->cptfree[i] == FREETIME_S) && (s->fdmain < 0)) s->fdmain = i;
-  }
-
-  for (uint8_t i=0; i<n->nbraws; i++) {
-    if ((s->fdmain >= 0) && (i != s->fdmain) && (s->cptfree[i] == FREETIME_S) && (s->fdback < 0)) s->fdback = i;
-    if (s->cptfree[i] < FREETIME_S) s->cptfree[i]++;
-  }
-
-  if (s->fdmain >= 0) { 
-    wfb_netlink_payhd_t *ptrmain = (wfb_netlink_payhd_t *)(n->msg.msgout[s->fdmain].msg_iov[3].iov_base);
-    ptrmain->backfreq = 0;
-
-    ptrmain->msglen = 1;
-    s->len[s->fdmain] = 1;
-    n->msg.msgout[s->fdmain].msg_iov[4].iov_len = 1;
-
-    if (s->fdback >= 0) {
-      ptrmain->backfreq = (n->rawdevs[s->fdback]->freqs[n->rawdevs[s->fdback]->cptfreq]);
-
-      wfb_netlink_payhd_t *ptrback = (wfb_netlink_payhd_t *)(n->msg.msgout[s->fdback].msg_iov[3].iov_base);
-      ptrback->backfreq = -(n->rawdevs[s->fdmain]->freqs[n->rawdevs[s->fdmain]->cptfreq]);
-
-      ptrback->msglen = 1;
-      s->len[s->fdback] = 1;
-      n->msg.msgout[s->fdback].msg_iov[4].iov_len = 1;
-    }
-  }
-}
-
 /******************************************************************************/
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
@@ -156,12 +162,14 @@ void wfb_sync_async(uint8_t rawcpt, wfb_sync_init_t *s, wfb_netlink_init_t *n, w
   wfb_netlink_payhd_t *ptr = (wfb_netlink_payhd_t *)(n->msg.msgin[rawcpt].msg_iov[3].iov_base);
 
   if ((*(4 + ((uint8_t *)(n->msg.msgin[rawcpt].msg_iov[1].iov_base))) == 0x66)
-    && (ptr->droneid > 0 ) && (ptr->droneid <= MAXDRONE)) { 
+    && (ptr->droneid >= 0 ) && (ptr->droneid <= MAXDRONE)) { 
 
-    s->cptack[rawcpt] = 0;
-    s->backfreq[rawcpt] = ((wfb_netlink_payhd_t *)(n->msg.msgin[rawcpt].msg_iov[3].iov_base))->backfreq;
+    s->com[rawcpt].link[ptr->droneid].cptack = 0;
 
-  } else { s->cptfree[rawcpt] = 0; }
+    s->com[rawcpt].link[ptr->droneid].backfreq = 
+      ((wfb_netlink_payhd_t *)(n->msg.msgin[rawcpt].msg_iov[3].iov_base))->backfreq;
+
+  } else { s->com[rawcpt].cptfree = 0; }
 }
 
 /******************************************************************************/
@@ -177,6 +185,10 @@ void wfb_sync_init(wfb_sync_init_t *s, wfb_netlink_init_t *n) {
     n->rawdevs[i]->cptfreq = (n->nbraws - i - 1) * (n->rawdevs[i]->nbfreqs / n->nbraws);
     wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
 
-    s->cptfree[i]=1; s->cptack[i]=1; s->len[i]=0;
+    s->len[i] = 0;
+
+    s->com[i].cptfree = 1;
+
+    for (uint8_t j=0; j<MAXDRONE; j++) s->com[i].link[j].cptack = 1;
   }
 }
