@@ -12,6 +12,7 @@
 #define DRONEIDMAX 10
 
 /******************************************************************************/
+/*
 void periodic_master(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
   l->len += sprintf(l->buf + l->len, "master\n");
@@ -68,8 +69,9 @@ void periodic_master(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *
     }
   }
 }
-
+*/
 /******************************************************************************/
+/*
 void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
   l->len += sprintf(l->buf + l->len, "slave\n");
@@ -80,7 +82,7 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
       if (s->com[i].link[j].cptack == 0) break;
     }
     if (s->com[i].link[j].cptack == 0) {
-/*
+
 
 		      [i]	       int8_t up = -1;
     if (s->cptack[i] >= ACKTIME_S) { 
@@ -96,7 +98,7 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
 
     } else {
       if (s->cptack[i] == 0) {
-*/
+
         l->len += sprintf(l->buf + l->len, "ping (%d)(%d)\n",i,s->backfreq[i]);
 
         if (s->backfreq[i] == 0) { s->fdmain = i; s->fdback = -1; }
@@ -124,7 +126,7 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
     }
     if (up >= 0) wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[up]->ifindex, n->rawdevs[up]->freqs[n->rawdevs[up]->cptfreq]);
   }
-/*
+
   if (s->fdmain >= 0) { 
     wfb_netlink_payhd_t *ptrmain = (wfb_netlink_payhd_t *)(n->msg.msgout[s->fdmain].msg_iov[3].iov_base);
 
@@ -140,9 +142,9 @@ void periodic_slave(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l
       n->msg.msgout[s->fdback].msg_iov[4].iov_len = 1;
     }
   }
-*/
+
 }
-/******************************************************************************/
+
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
 #if DRONEID > 0
@@ -153,6 +155,41 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
 
   l->len += sprintf(l->buf + l->len, "main(%d) back(%d) freq(%d)(%d)\n",
     s->fdmain, s->fdback,n->rawdevs[0]->freqs[n->rawdevs[0]->cptfreq],n->rawdevs[1]->freqs[n->rawdevs[1]->cptfreq]);
+  wfb_log_send(l);
+}
+*/
+
+/******************************************************************************/
+void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
+
+  for (uint8_t i = 0; i < n->nbraws; i++) {
+    if (s->com[i].cptfree == 0) {
+      for (uint8_t j = 0; j < MAXDRONE; j++) {
+        if (i != s->fd[j].main) {
+	}
+      }
+    }
+  }
+
+  for (uint8_t i = 0; i < n->nbraws; i++) {
+    if (s->com[i].cptfree == 0) {
+      if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
+      for (uint8_t j=0; j<n->nbraws; j++) {
+        if ((i != j) && ((n->rawdevs[i]->cptfreq) == (n->rawdevs[j]->cptfreq))) {
+          if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
+	}
+      }
+      wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
+    }
+  }
+
+  for (uint8_t i = 0; i < n->nbraws; i++) {
+    if (s->com[i].cptfree < FREETIME_S) s->com[i].cptfree++;
+  }
+
+  l->len += sprintf(l->buf + l->len, "main(%d)(%d) back(%d)(%d) freq(%d)(%d)\n",
+    s->fd[0].main, s->fd[1].main, s->fd[0].back, s->fd[1].back,
+    n->rawdevs[0]->freqs[n->rawdevs[0]->cptfreq],n->rawdevs[1]->freqs[n->rawdevs[1]->cptfreq]);
 
   wfb_log_send(l);
 }
@@ -176,20 +213,20 @@ void wfb_sync_async(uint8_t rawcpt, wfb_sync_init_t *s, wfb_netlink_init_t *n, w
 /******************************************************************************/
 void wfb_sync_init(wfb_sync_init_t *s, wfb_netlink_init_t *n) {
 
-  if (-1 == (s->fd = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
+  if (-1 == (s->time.fd = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(s->fd, 0, &period, NULL);
+  timerfd_settime(s->time.fd, 0, &period, NULL);
 
-  s->fdmain = -1; s->fdback = -1;
-
-  for (uint8_t i=0; i<n->nbraws; i++) {
+  for (uint8_t i = 0; i < n->nbraws; i++) {
     n->rawdevs[i]->cptfreq = (n->nbraws - i - 1) * (n->rawdevs[i]->nbfreqs / n->nbraws);
     wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
 
-    s->len[i] = 0;
+    s->fd[i].main = -1; s->fd[i].back = -1;
 
     s->com[i].cptfree = 1;
 
-    for (uint8_t j=0; j<MAXDRONE; j++) s->com[i].link[j].cptack = 1;
+    s->len[i] = 0;
+
+    for (uint8_t j = 0; j < MAXDRONE; j++) s->com[i].link[j].cptack = 1;
   }
 }
