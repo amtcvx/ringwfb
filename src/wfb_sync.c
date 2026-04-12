@@ -162,8 +162,12 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
 /******************************************************************************/
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
+  bool upfreq[n->nbraws];
+
   for (uint8_t i = 0; i < n->nbraws; i++) {
-    if (s->com[i].cptfree == 0) {
+    upfreq[i] = false;
+
+    if (s->com[i].cptfree != 0) {
       for (uint8_t j = 0; j < MAXDRONE; j++) {
         if (i != s->fd[j].main) {
 	}
@@ -172,7 +176,7 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
   }
 
   for (uint8_t i = 0; i < n->nbraws; i++) {
-    if (s->com[i].cptfree == 0) {
+    if (upfreq[i]) {
       if ((++(n->rawdevs[i]->cptfreq)) >= (n->rawdevs[i]->nbfreqs)) n->rawdevs[i]->cptfreq = 0;
       for (uint8_t j=0; j<n->nbraws; j++) {
         if ((i != j) && ((n->rawdevs[i]->cptfreq) == (n->rawdevs[j]->cptfreq))) {
@@ -185,6 +189,9 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
 
   for (uint8_t i = 0; i < n->nbraws; i++) {
     if (s->com[i].cptfree < FREETIME_S) s->com[i].cptfree++;
+    for (uint8_t j = 0; j < MAXDRONE; j++) {
+      if (s->com[i].link[j].cptack < ACKTIME_S) s->com[i].link[j].cptack++;
+    }
   }
 
   l->len += sprintf(l->buf + l->len, "main(%d)(%d) back(%d)(%d) freq(%d)(%d)\n",
@@ -225,7 +232,7 @@ void wfb_sync_init(wfb_sync_init_t *s, wfb_netlink_init_t *n) {
 
     s->com[i].cptfree = 1;
 
-    s->len[i] = 0;
+    s->com[i].len = 0;
 
     for (uint8_t j = 0; j < MAXDRONE; j++) s->com[i].link[j].cptack = 1;
   }
