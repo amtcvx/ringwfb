@@ -165,14 +165,9 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
   bool upfreq[n->nbraws];
 
   for (uint8_t i = 0; i < n->nbraws; i++) {
-    upfreq[i] = false;
-
-    if (s->com[i].cptfree != 0) {
-      for (uint8_t j = 0; j < MAXDRONE; j++) {
-        if (i != s->fd[j].main) {
-	}
-      }
-    }
+    upfreq[i] = false; 
+    if (s->com[i].cptfree == 0) upfreq[i] = true;
+    if (s->com[i].cptfree == FREETIME_S) s->fd[DRONEID].main = i;
   }
 
   for (uint8_t i = 0; i < n->nbraws; i++) {
