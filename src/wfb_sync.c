@@ -166,8 +166,22 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
 
   for (uint8_t i = 0; i < n->nbraws; i++) {
     upfreq[i] = false; 
-    if (s->com[i].cptfree == 0) upfreq[i] = true;
-    if (s->com[i].cptfree == FREETIME_S) s->fd[DRONEID].main = i;
+    if (s->com[i].cptfree == FREETIME_S) {
+      if (s->fd[DRONEID].main < 0) s->fd[DRONEID].main = i;
+      else if ((s->fd[DRONEID].back < 0) && (s->fd[DRONEID].main != i)) s->fd[DRONEID].back = i;
+    }
+  }
+
+  for (uint8_t i = 0; i < n->nbraws; i++) {
+    if ((s->com[i].cptfree == 0) && (s->fd[DRONEID].back == i)) { s->fd[DRONEID].back = -1; upfreq[i] = true; }
+  }
+
+  for (uint8_t i = 0; i < n->nbraws; i++) {
+    if ((s->com[i].cptfree == 0) && (s->fd[DRONEID].main == i) && (s->fd[DRONEID].back > 0))  {
+      s->fd[DRONEID].main = s->fd[DRONEID].back;
+      s->fd[DRONEID].back = -1;
+      upfreq[i] = true;
+    }
   }
 
   for (uint8_t i = 0; i < n->nbraws; i++) {

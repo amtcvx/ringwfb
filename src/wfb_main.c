@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
             len = read(fd[0], &s.time.exptime, sizeof(uint64_t));
 	    wfb_sync_periodic(&s,&n,&l);
           } else {
-            ((wfb_netlink_payhd_t *)(n.msg.msgin[cpt-1].msg_iov[3].iov_base))->droneid = 0;
+            ((wfb_netlink_payhd_t *)(n.msg.msgin[cpt-1].msg_iov[3].iov_base))->droneid = DRONEID;
             if ((len = recvmsg(fd[cpt], &n.msg.msgin[cpt-1], MSG_DONTWAIT)) > 0) wfb_sync_async(cpt-1, &s, &n, &l);
           }
         }
