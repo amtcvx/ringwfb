@@ -463,7 +463,7 @@ bool wfb_netlink_init(wfb_netlink_init_t *n) {
       if ((nb = setraw(&elt, n->rawdevs)) > 0) {
         if (nb > 1) {
           struct rtnl_link *ltap[2]; ltap[0] = elt.devs[0].ltap; ltap[1] = elt.devs[1].ltap;
-          setbond(ltap, BOND_NAME, n->sockidnl.sockrt, &n->bonds[0]);
+//          setbond(ltap, BOND_NAME, n->sockidnl.sockrt, &n->bonds[0]);
         }
         setup(&elt, n->sockidnl.sockrt);
 

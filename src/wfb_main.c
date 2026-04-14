@@ -68,7 +68,9 @@ int main(int argc, char **argv) {
 
       for (uint8_t cpt = 1; cpt < nbfds; cpt++) {
         if (s.com[cpt-1].len > 0) {
+
           ((wfb_netlink_payhd_t *)(n.msg.msgout[cpt-1].msg_iov[3].iov_base))->droneid = 3;//DRONEID;
+										  
           len = sendmsg(fd[cpt], &n.msg.msgout[cpt-1], MSG_DONTWAIT);
 
           l.len += sprintf(l.buf + l.len,"SEND (%d)(%ld)(%d) (%d)\n",cpt-1,len,s.com[cpt-1].len,
@@ -76,9 +78,12 @@ int main(int argc, char **argv) {
 
           //  len = sendmsg(n.bonds[0].sockfd, n.msg.msg_out, MSG_DONTWAIT);
 	  
+          //memset((uint8_t *)(n.msg.msgout[cpt-1].msg_iov[1].iov_base), 0 , n.msg.msgout[cpt-1].msg_iov[1].iov_len);
+          //memset((uint8_t *)(n.msg.msgout[cpt-1].msg_iov[3].iov_base), 0 , n.msg.msgout[cpt-1].msg_iov[3].iov_len);
+
 	  s.com[cpt-1].len = 0;
 	}
       }
-    }
+    } // poll
   }
 }
