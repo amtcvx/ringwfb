@@ -73,33 +73,37 @@ void publish(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t *l) {
 
   bool upfreq[n->nbraws];
-  for (uint8_t i = 0; i < n->nbraws; i++) upfreq[i] = false;
 
-  if (s->fd[DRONEID].back >= 0) {
-    upfreq[s->fd[DRONEID].back] = true;
-    for (uint8_t i=0; i<MAXDRONE; i++) {
-      if (s->com[s->fd[DRONEID].back].link[i].cptack == 0) {
-        l->len += sprintf(l->buf + l->len, "ACK (%d)\n",i);
-	upfreq[s->fd[DRONEID].back ] = false;
+  l->len += sprintf(l->buf + l->len, "cptfree(%d)(%d)\n", s->com[0].cptfree,s->com[1].cptfree);
+
+  if (s->fd[DRONEID].main < 0) {
+    for (uint8_t i = 0; i < n->nbraws; i++) {
+      if (s->com[i].cptfree == 0) upfreq[i] = true; else upfreq[i] = false;
+      if ((s->com[i].cptfree == FREETIME_S) && (s->fd[DRONEID].main < 0)) s->fd[DRONEID].main = i;
+    }
+    if (s->fd[DRONEID].main >= 0) {
+      for (uint8_t i = 0; i < n->nbraws; i++) {
+        if (s->fd[DRONEID].main != i) {
+          s->fd[DRONEID].back = i;
+	  n->rawdevs[i]->cptfreq = (n->nbraws - i - 1) * (n->rawdevs[i]->nbfreqs / n->nbraws);
+	  upfreq[i] = true;
+        }
+      }
+    }
+  } else {
+    for (uint8_t i = 0; i < n->nbraws; i++) {
+      upfreq[i] = false;
+      if (s->fd[DRONEID].back == i) { s->com[i].sync = !s->com[i].sync; if (s->com[i].sync) upfreq[i] = true; }
+      for (uint8_t j=0; j < MAXDRONE; j++) {
+        if (s->com[i].link[j].cptack == 0) {
+          l->len += sprintf(l->buf + l->len, "ACK (%d)\n",i);
+          if (s->fd[DRONEID].back == i) upfreq[i] = false;
+        }
       }
     }
   } 
 
-  for (uint8_t i = 0; i < n->nbraws; i++) {
-    if (s->fd[DRONEID].main < 0) {
-       if (s->com[i].cptfree == FREETIME_S) {
-	 s->fd[DRONEID].main = i; 
-         for (uint8_t j = 0; j < n->nbraws; j++) {
-	   if (i != j) { 
-	     s->fd[DRONEID].back = j;
-	     n->rawdevs[j]->cptfreq = (n->nbraws - j - 1) * (n->rawdevs[j]->nbfreqs / n->nbraws);
-	     upfreq[j] = true;
-	   }
-	 }
-      }
 //     else if ((s->fd[DRONEID].back < 0) && (s->fd[DRONEID].main != i)) s->fd[DRONEID].back = i;
-    }
-  }
 /*
   for (uint8_t i = 0; i < n->nbraws; i++) {
     if ((s->com[i].cptfree == 0) && (s->fd[DRONEID].main == i) && (s->fd[DRONEID].back > 0))  {
@@ -116,11 +120,6 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
     }
   }
 */
-  for (uint8_t i = 0; i < n->nbraws; i++) {
-    if (s->com[i].cptfree == 0) {
-      if ((s->fd[DRONEID].main != i) && (s->fd[DRONEID].back != i)) upfreq[i] = true;
-    }
-  }
 
   for (uint8_t i = 0; i < n->nbraws; i++) {
     if (upfreq[i]) {
@@ -141,7 +140,7 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
     }
   }
 
-  publish(s,n,l);
+//  publish(s,n,l);
 
   l->len += sprintf(l->buf + l->len, "main(%d)(%d) back(%d)(%d) freq(%d)(%d)\n",
     s->fd[0].main, s->fd[1].main, s->fd[0].back, s->fd[1].back,
@@ -182,6 +181,8 @@ void wfb_sync_init(wfb_sync_init_t *s, wfb_netlink_init_t *n) {
     s->com[i].cptfree = 1;
 
     s->com[i].len = 0;
+
+    s->com[i].sync = true; 
 
     for (uint8_t j = 0; j < MAXDRONE; j++) s->com[i].link[j].cptack = 1;
   }

@@ -13,6 +13,7 @@ typedef struct {
 } wfb_sync_link_t;
 
 typedef struct {
+  bool sync;
   uint8_t cptfree;
   uint16_t len;
   wfb_sync_link_t link[MAXDRONE];
