@@ -65,14 +65,14 @@ struct msghdr *setmsgout(void) {
 
 #define MCS_INDEX  2
 
-  static uint8_t radiotaphd[] = {
+  static uint8_t txradiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
         0x0d, 0x00, // <- radiotap header length
         0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
         0x08, 0x00,  // RADIOTAP_F_TX_NOACK
         MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
   };
-  static uint8_t ieeehd[] = {
+  static uint8_t txieeehd[] = {
         0x08, 0x01,                         // Frame Control : Data frame from STA to DS
         0x00, 0x00,                         // Duration
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Receiver MAC
@@ -80,27 +80,27 @@ struct msghdr *setmsgout(void) {
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
         0x10, 0x86                          // Sequence control
   };
-  static uint8_t llchd[4];
+  static uint8_t txllchd[4];
 
-  static struct msghdr msg[MAXRAWDEV];
+  static struct msghdr txmsg[MAXRAWDEV];
 
   static struct tx_t {
-    wfb_netlink_payhd_t payhd;
-    uint8_t paybuf[PAY_MTU];
-    struct iovec iov[5];
+    wfb_netlink_payhd_t txpayhd;
+    uint8_t txpaybuf[PAY_MTU];
+    struct iovec txiov[5];
   } tx[MAXRAWDEV];
 
-  for(uint8_t i=0; i<MAXRAWDEV; i++) {
-    tx[i].iov[0].iov_base = &radiotaphd;   tx[i].iov[0].iov_len = sizeof(radiotaphd);
-    tx[i].iov[1].iov_base = &ieeehd;       tx[i].iov[1].iov_len = sizeof(ieeehd);
-    tx[i].iov[2].iov_base = &llchd;        tx[i].iov[2].iov_len = sizeof(llchd);
-    tx[i].iov[3].iov_base = &tx[i].payhd;  tx[i].iov[3].iov_len = sizeof(tx[i].payhd);
-    tx[i].iov[4].iov_base = &tx[i].paybuf; tx[i].iov[4].iov_len = sizeof(tx[i].paybuf);
+  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
+    tx[i].txiov[0].iov_base = &txradiotaphd;   tx[i].txiov[0].iov_len = sizeof(txradiotaphd);
+    tx[i].txiov[1].iov_base = &txieeehd;       tx[i].txiov[1].iov_len = sizeof(txieeehd);
+    tx[i].txiov[2].iov_base = &txllchd;        tx[i].txiov[2].iov_len = sizeof(txllchd);
+    tx[i].txiov[3].iov_base = &tx[i].txpayhd;  tx[i].txiov[3].iov_len = sizeof(tx[i].txpayhd);
+    tx[i].txiov[4].iov_base = &tx[i].txpaybuf; tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
 
-    msg[i].msg_iov = tx[i].iov; msg[i].msg_iovlen = 5;
+    txmsg[i].msg_iov = tx[i].txiov; txmsg[i].msg_iovlen = 5;
   }
 
-  return(msg);
+  return(txmsg);
 }
 
 /******************************************************************************/
@@ -108,28 +108,28 @@ struct msghdr *setmsgin(void) {
 
 #define RADIOTAPSIZE 35
 
-  static struct msghdr msg[MAXRAWDEV];
+  static struct msghdr rxmsg[MAXRAWDEV];
 
   static struct rx_t {
-    uint8_t radiotaphd[RADIOTAPSIZE];
-    uint8_t ieeehd[24];
-    uint8_t llchd[4];
-    wfb_netlink_payhd_t payhd;
-    uint8_t paybuf[PAY_MTU];
-    struct iovec iov[5];
+    uint8_t rxradiotaphd[RADIOTAPSIZE];
+    uint8_t rxieeehd[24];
+    uint8_t rxllchd[4];
+    wfb_netlink_payhd_t rxpayhd;
+    uint8_t rxpaybuf[PAY_MTU];
+    struct iovec rxiov[5];
   } rx[MAXRAWDEV];
 
-  for(uint8_t i=0; i<MAXRAWDEV; i++) {
-    rx[i].iov[0].iov_base = &rx[i].radiotaphd; rx[i].iov[0].iov_len = sizeof(rx[i].radiotaphd);
-    rx[i].iov[1].iov_base = &rx[i].ieeehd;     rx[i].iov[1].iov_len = sizeof(rx[i].ieeehd);
-    rx[i].iov[2].iov_base = &rx[i].llchd;      rx[i].iov[2].iov_len = sizeof(rx[i].llchd);
-    rx[i].iov[3].iov_base = &rx[i].payhd;      rx[i].iov[3].iov_len = sizeof(rx[i].payhd);
-    rx[i].iov[4].iov_base = &rx[i].paybuf;     rx[i].iov[4].iov_len = sizeof(rx[i].paybuf);
+  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
+    rx[i].rxiov[0].iov_base = &rx[i].rxradiotaphd; rx[i].rxiov[0].iov_len = sizeof(rx[i].rxradiotaphd);
+    rx[i].rxiov[1].iov_base = &rx[i].rxieeehd;     rx[i].rxiov[1].iov_len = sizeof(rx[i].rxieeehd);
+    rx[i].rxiov[2].iov_base = &rx[i].rxllchd;      rx[i].rxiov[2].iov_len = sizeof(rx[i].rxllchd);
+    rx[i].rxiov[3].iov_base = &rx[i].rxpayhd;      rx[i].rxiov[3].iov_len = sizeof(rx[i].rxpayhd);
+    rx[i].rxiov[4].iov_base = &rx[i].rxpaybuf;     rx[i].rxiov[4].iov_len = sizeof(rx[i].rxpaybuf);
 
-    msg[i].msg_iov = rx[i].iov; msg[i].msg_iovlen = 5;
+    rxmsg[i].msg_iov = rx[i].rxiov; rxmsg[i].msg_iovlen = 5;
   }
 
-  return(msg);
+  return(rxmsg);
 }
 
 /******************************************************************************/

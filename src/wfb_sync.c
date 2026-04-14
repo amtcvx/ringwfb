@@ -76,14 +76,11 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
   for (uint8_t i = 0; i < n->nbraws; i++) upfreq[i] = false;
 
   if (s->fd[DRONEID].back >= 0) {
-    if (s->com[s->fd[DRONEID].back].cptfree == ACKTIME_S) {
-/*
-	 s->fd[DRONEID].main = i; 
-      for (uint8_t i=0; i<MAXDRONE; i++) {
+    upfreq[s->fd[DRONEID].back] = true;
+    for (uint8_t i=0; i<MAXDRONE; i++) {
       if (s->com[s->fd[DRONEID].back].link[i].cptack == 0) {
         l->len += sprintf(l->buf + l->len, "ACK (%d)\n",i);
-      }
-*/
+	upfreq[s->fd[DRONEID].back ] = false;
       }
     }
   } 
