@@ -140,7 +140,7 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
     }
   }
 
-//  publish(s,n,l);
+  publish(s,n,l);
 
   l->len += sprintf(l->buf + l->len, "main(%d)(%d) back(%d)(%d) freq(%d)(%d)\n",
     s->fd[0].main, s->fd[1].main, s->fd[0].back, s->fd[1].back,
@@ -156,6 +156,8 @@ void wfb_sync_async(uint8_t rawcpt, wfb_sync_init_t *s, wfb_netlink_init_t *n, w
 
   if ((*(4 + ((uint8_t *)(n->msg.msgin[rawcpt].msg_iov[1].iov_base))) == 0x66)
     && (ptr->droneid >= 0 ) && (ptr->droneid <= MAXDRONE)) { 
+
+    l->len += sprintf(l->buf + l->len, "recvmsg (%d)(%d)\n", rawcpt,ptr->droneid);
 
     s->com[rawcpt].link[ptr->droneid].cptack = 0;
 

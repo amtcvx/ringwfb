@@ -478,4 +478,3 @@ bool wfb_netlink_init(wfb_netlink_init_t *n) {
 
   return(false);
 }
-
