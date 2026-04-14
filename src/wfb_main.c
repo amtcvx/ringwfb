@@ -47,6 +47,7 @@ int main(int argc, char **argv) {
   uint8_t fd[nbfds];
   fd[0] = s.time.fd; for (uint8_t i = 0; i < n.nbraws; i++) fd[i + 1] = n.rawdevs[i]->sockfd;
   struct pollfd readsets[nbfds];
+  memset(readsets, 0, sizeof(readsets));
   for (uint8_t nbfdscpt=0; nbfdscpt < nbfds; nbfdscpt++) { readsets[nbfdscpt].fd = fd[nbfdscpt]; readsets[nbfdscpt].events = POLLIN; }
 
   ssize_t len = 0;
@@ -54,7 +55,7 @@ int main(int argc, char **argv) {
   for(;;) {
     if (0 != poll(readsets, nbfds, -1)) {
       for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
-        if (readsets[cpt].revents == POLLIN) {
+        if (readsets[cpt].revents & POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &s.time.exptime, sizeof(uint64_t));
 	    wfb_sync_periodic(&s,&n,&l);
