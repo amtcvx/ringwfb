@@ -74,7 +74,8 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
 
   bool upfreq[n->nbraws];
 
-  l->len += sprintf(l->buf + l->len, "cptfree(%d)(%d)\n", s->com[0].cptfree,s->com[1].cptfree);
+//  l->len += sprintf(l->buf + l->len, "cptfree(%d)(%d)\n", s->com[0].cptfree,s->com[1].cptfree);
+  l->len += sprintf(l->buf + l->len, "cptfree(%d)\n", s->com[0].cptfree);
 
   if (s->fd[DRONEID].main < 0) {
     for (uint8_t i = 0; i < n->nbraws; i++) {
@@ -82,6 +83,7 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
       if ((s->com[i].cptfree == FREETIME_S) && (s->fd[DRONEID].main < 0)) s->fd[DRONEID].main = i;
     }
     if (s->fd[DRONEID].main >= 0) {
+/*
       for (uint8_t i = 0; i < n->nbraws; i++) {
         if (s->fd[DRONEID].main != i) {
           s->fd[DRONEID].back = i;
@@ -89,11 +91,12 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
 	  upfreq[i] = true;
         }
       }
+*/
     }
   } else {
     for (uint8_t i = 0; i < n->nbraws; i++) {
       upfreq[i] = false;
-      if (s->fd[DRONEID].back == i) { s->com[i].sync = !s->com[i].sync; if (s->com[i].sync) upfreq[i] = true; }
+//      if (s->fd[DRONEID].back == i) { s->com[i].sync = !s->com[i].sync; if (s->com[i].sync) upfreq[i] = true; }
       for (uint8_t j=0; j < MAXDRONE; j++) {
         if (s->com[i].link[j].cptack == 0) {
           l->len += sprintf(l->buf + l->len, "ACK (%d)\n",i);
@@ -142,10 +145,16 @@ void wfb_sync_periodic(wfb_sync_init_t *s, wfb_netlink_init_t *n, wfb_log_init_t
 
   publish(s,n,l);
 
+  l->len += sprintf(l->buf + l->len, "DRONEID(%d) main(%d) freq(%d)\n",
+    DRONEID,
+    s->fd[DRONEID].main,
+    n->rawdevs[0]->freqs[n->rawdevs[0]->cptfreq]);
+
+/*
   l->len += sprintf(l->buf + l->len, "main(%d)(%d) back(%d)(%d) freq(%d)(%d)\n",
     s->fd[0].main, s->fd[1].main, s->fd[0].back, s->fd[1].back,
     n->rawdevs[0]->freqs[n->rawdevs[0]->cptfreq],n->rawdevs[1]->freqs[n->rawdevs[1]->cptfreq]);
-
+*/
   wfb_log_send(l);
 }
 
@@ -174,11 +183,11 @@ void wfb_sync_init(wfb_sync_init_t *s, wfb_netlink_init_t *n) {
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
   timerfd_settime(s->time.fd, 0, &period, NULL);
 
+  for (uint8_t j = 0; j < MAXDRONE; j++) { s->fd[j].main = -1; s->fd[j].back = -1; }
+
   for (uint8_t i = 0; i < n->nbraws; i++) {
     n->rawdevs[i]->cptfreq = (n->nbraws - i - 1) * (n->rawdevs[i]->nbfreqs / n->nbraws);
     wfb_netlink_setfreq(&n->sockidnl, n->rawdevs[i]->ifindex, n->rawdevs[i]->freqs[n->rawdevs[i]->cptfreq]);
-
-    s->fd[i].main = -1; s->fd[i].back = -1;
 
     s->com[i].cptfree = 1;
 

@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
 
   wfb_netlink_init_t n;
   if (false == wfb_netlink_init(&n)) { printf("NO WIFI\n"); exit(-2); }
-  if (n.nbraws < 2)  { printf("NOT ENOUGHT WIFI\n"); exit(-2); }
+//  if (n.nbraws < 2)  { printf("NOT ENOUGHT WIFI\n"); exit(-2); }
 
   wfb_log_init_t l;
   wfb_log_init(&l);
@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
   fd[0] = s.time.fd; for (uint8_t i = 0; i < n.nbraws; i++) fd[i + 1] = n.rawdevs[i]->sockfd;
   struct pollfd readsets[nbfds];
   memset(readsets, 0, sizeof(readsets));
-  for (uint8_t nbfdscpt=0; nbfdscpt < nbfds; nbfdscpt++) { readsets[nbfdscpt].fd = fd[nbfdscpt]; readsets[nbfdscpt].events = POLLIN; }
+  for (uint8_t nbfdscpt = 0; nbfdscpt < nbfds; nbfdscpt++) { readsets[nbfdscpt].fd = fd[nbfdscpt]; readsets[nbfdscpt].events = POLLIN; }
 
   ssize_t len = 0;
 
