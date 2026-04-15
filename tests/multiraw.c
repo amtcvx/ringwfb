@@ -303,9 +303,10 @@ int main(int argc, char **argv) {
 
   ssize_t rawlen = 0, len = 0;
 
-  uint8_t sync_ack[nbraws];
-  bool sync_bool[nbraws];
-  for (uint8_t i = 0; i < nbraws; i++) { sync_ack[i] = 1; sync_bool[i] = false; }
+  bool sync_bool = false, send_first = false;
+  int8_t sync_first = -1, sync_scan = -1;
+  uint8_t sync_cpt[nbraws], sync_ack[nbraws];
+  for (uint8_t i = 0; i < nbraws; i++) { sync_cpt[i] = 1; sync_ack[i] = 1; }
 
   for (uint8_t i = 0; i < nbraws; i++) {
     rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
@@ -320,29 +321,47 @@ int main(int argc, char **argv) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 
-	    printf("(%d)(%d)  (%d)(%d)\n",sync_ack[0], sync_ack[1], rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]);
+	    printf("(%d)(%d)  (%d)(%d)\n",sync_first, sync_scan,
+	      rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
 
-	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] == 5) sync_bool[i] = true; }
-	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs ); }
-	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] < 5) sync_ack[i]++; }
+	    for (uint8_t i = 0; i < nbraws; i++) { 
+	      if (i != sync_first) {
+	        if (sync_cpt[i] == 5) { 
+		  if (sync_first < 0) { 
+		    sync_first = i; for (uint8_t j = 0; j < nbraws; j++) if (i != j) 
+		    { sync_scan = j;  rawdevs[j].cptfreq = (nbraws - j -1) * (rawdevs[j].nbfreqs / nbraws);
+                      setfreq(sockid, socknl, index[j], rawdevs[j].freqs[rawdevs[j].cptfreq]);
+	            }
+		  }
+		}
+	        if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs );
+	        if (sync_cpt[i] < 5) sync_cpt[i]++;
+	      }
+	    }
+	    if (sync_scan >= 0) { 
+              send_first = true;
 
+              sync_bool =! sync_bool;
+              if ((sync_bool) && (sync_ack[sync_scan] > 0))  {
+	        upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs );
+	      }
+	    }
 	  } else {
             if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
 	      if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) == 0x66) {
                 printf("recvmsg (%d)(%ld)\n",cpt,rawlen); fflush(stdout);
+	        sync_ack[cpt - 1] = 0;
 	      } else {
-                sync_ack[cpt - 1] = 0;
+                sync_cpt[cpt - 1] = 0;
 	      }
 	    }
 	  }
 	}
       }
-      for (uint8_t i = 0; i < nbraws; i++) { 
-        if (sync_bool[i]) { 
-          ssize_t rawlen = sendmsg(fd[1 + i], &msg_tx, MSG_DONTWAIT);
-          printf("sendmsg (%d)(%ld)\n",i,rawlen); fflush(stdout);
-	  sync_bool[i] = false;
-	}
+      if (send_first) {
+        ssize_t rawlen = sendmsg(fd[1 + sync_first], &msg_tx, MSG_DONTWAIT);
+        printf("sendmsg (%d)(%ld)\n",sync_first,rawlen); fflush(stdout);
+	send_first = false;
       }
     } // poll
   }
