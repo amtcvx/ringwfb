@@ -99,7 +99,7 @@ struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(
 
 /*****************************************************************************/
 typedef struct {
-  uint8_t cptfreqs;
+  uint8_t cptfreq;
   uint8_t nbfreqs;
   uint32_t freqs[NBFREQS];
   uint32_t chans[NBFREQS];
@@ -168,6 +168,18 @@ bool setfreq(uint8_t sockid, struct nl_sock *socknl, int ifindex, uint32_t freq)
   nla_put_failure:
     nlmsg_free(nlmsg);
     return(false);
+}
+
+/*****************************************************************************/
+void upfreq(uint8_t sockid, struct nl_sock *socknl, uint8_t raw, uint32_t ifindex, uint8_t nbraws, rawdev_t *rawdevs ) {
+
+  if ((++(rawdevs[raw].cptfreq)) >= (rawdevs[raw].nbfreqs)) rawdevs[raw].cptfreq = 0;
+  for (uint8_t j = 0; j < nbraws; j++) {
+    if ((raw != j) && ((rawdevs[raw].cptfreq) == (rawdevs[j].cptfreq))) {
+      if ((++(rawdevs[raw].cptfreq)) >= (rawdevs[raw].nbfreqs)) rawdevs[raw].cptfreq = 0;
+    }
+  }
+  setfreq(sockid, socknl, ifindex, rawdevs[raw].freqs[rawdevs[raw].cptfreq]);
 }
 
 /*****************************************************************************/
@@ -257,9 +269,9 @@ int main(int argc, char **argv) {
     setsock( argv[i + 1], &fd[i + 1], &index[i]);
   }
 
-  rawdev_t rawdev[nbraws];
+  rawdev_t rawdevs[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
-    setraw(sockid, socknl, sockrt, index[i], &rawdev[i]);
+    setraw(sockid, socknl, sockrt, index[i], &rawdevs[i]);
   }
 
   uint64_t exptime;
@@ -268,9 +280,9 @@ int main(int argc, char **argv) {
   timerfd_settime(fd[0], 0, &period, NULL);
 
   uint8_t dumbuf_tx[1400] = {-1};
-  struct iovec iovdum_tx = { .iov_base = dumbuf_tx, .iov_len = sizeof(dumbuf_tx) };
+  struct iovec iovdum_tx =    { .iov_base = dumbuf_tx, .iov_len = sizeof(dumbuf_tx) };
   struct iovec iovtab_tx[4] = { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iovdum_tx };
-  struct msghdr msg_tx = { .msg_iov = iovtab_tx, .msg_iovlen = 4 };
+  struct msghdr msg_tx =      { .msg_iov = iovtab_tx, .msg_iovlen = 4 };
 
 #define RADIOTAPSIZE 35
   uint8_t radiotaphd_rx[RADIOTAPSIZE];
@@ -289,17 +301,27 @@ int main(int argc, char **argv) {
 
   struct pollfd readsets[2] = { { .fd = fd[0], .events = POLLIN }, { .fd = fd[1], .events = POLLIN }};
 
+  uint8_t sync_ack[nbraws];
+  bool sync_bool[nbraws];
+  for (uint8_t i = 0; i < nbraws; i++) { sync_ack[i] = 1; sync_ack[i] = true; }
+
   for(;;) {
     if (0 != poll(readsets, 2, -1)) {
       for (uint8_t cpt=0; cpt<2; cpt++) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
+
+	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs ); }
+	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] < 5) sync_ack[i]++; }
+
 	    tosend = true;
 	  } else {
             if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
 	      if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) == 0x66) {
                 printf("recvmsg (%d)(%ld)\n",cpt,rawlen); fflush(stdout);
+	      } else {
+                sync_ack[cpt - 1] = 0;
 	      }
 	    }
 	  }
