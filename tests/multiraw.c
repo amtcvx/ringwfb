@@ -272,6 +272,18 @@ int main(int argc, char **argv) {
   struct iovec iovtab_tx[4] = { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iovdum_tx };
   struct msghdr msg_tx = { .msg_iov = iovtab_tx, .msg_iovlen = 4 };
 
+#define RADIOTAPSIZE 35
+  uint8_t radiotaphd_rx[RADIOTAPSIZE];
+  uint8_t ieeehd_rx[24];
+  uint8_t llchd_rx[4];
+  uint8_t dumbuf_rx[1400] = {-1};
+  struct iovec iov_radiotaphd_rx = { .iov_base = radiotaphd_rx, .iov_len = sizeof(radiotaphd_rx)};
+  struct iovec iov_ieeehd_rx =     { .iov_base = ieeehd_rx,     .iov_len = sizeof(ieeehd_rx)};
+  struct iovec iov_llchd_rx =      { .iov_base = llchd_rx,      .iov_len = sizeof(llchd_rx)};
+  struct iovec iovdum_rx =         { .iov_base = dumbuf_rx,     .iov_len = sizeof(dumbuf_rx) };
+  struct iovec iovtab_rx[4] =      { iov_radiotaphd_rx, iov_ieeehd_rx, iov_llchd_rx, iovdum_rx };
+  struct msghdr msg_rx =           { .msg_iov = iovtab_rx, .msg_iovlen = 4 };
+
   ssize_t rawlen = 0, len = 0;
   bool tosend = false;
 
@@ -285,12 +297,17 @@ int main(int argc, char **argv) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 	    tosend = true;
 	  } else {
-            rawlen = recvmsg(fd[cpt], &msg, MSG_DONTWAIT);
+            if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
+	      if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) == 0x66) {
+                printf("recvmsg (%d)(%ld)\n",cpt,rawlen); fflush(stdout);
+	      }
+	    }
 	  }
 	}
       }
       if (tosend) {
         ssize_t rawlen = sendmsg(fd[1], &msg_tx, MSG_DONTWAIT);
+        printf("sendmsg (%d)(%ld)\n",1,rawlen); fflush(stdout);
 	tosend = false;
       }
     } // poll
