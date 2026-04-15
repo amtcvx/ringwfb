@@ -183,7 +183,7 @@ void upfreq(uint8_t sockid, struct nl_sock *socknl, uint8_t raw, uint32_t ifinde
 }
 
 /*****************************************************************************/
-void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, uint32_t ifindex, rawdev_t *rawdev ) {
+void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, uint32_t ifindex, rawdev_t *prawdev ) {
 
   struct nl_msg *nlmsg;
 
@@ -209,7 +209,7 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, uin
   struct nl_cb *cb;
   if (!(cb = nl_cb_alloc(NL_CB_DEFAULT))) exit(-1);
   nl_cb_set(cb, NL_CB_FINISH, NL_CB_CUSTOM, finish_callback, &msg_received);
-  nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, getsinglewifi_callback, rawdev);
+  nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, getsinglewifi_callback, prawdev);
 
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg, NL_AUTO_PORT, NL_AUTO_SEQ, sockid, 0, NLM_F_DUMP, NL80211_CMD_GET_WIPHY, 0);
@@ -280,6 +280,7 @@ int main(int argc, char **argv) {
 
   rawdev_t rawdevs[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
+    memset(&rawdevs[i],0,sizeof(rawdevs[i]));
     setraw(sockid, socknl, sockrt, index[i], &rawdevs[i]);
   }
 
@@ -307,7 +308,7 @@ int main(int argc, char **argv) {
   for (uint8_t i = 0; i < nbraws; i++) { sync_ack[i] = 1; sync_bool[i] = false; }
 
   for (uint8_t i = 0; i < nbraws; i++) {
-    rawdevs[i].cptfreq = (nbraws - i) * (rawdevs[i].nbfreqs / nbraws);
+    rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
     setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
   }
 
