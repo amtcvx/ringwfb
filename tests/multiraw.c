@@ -6,8 +6,8 @@ cc multiraw.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw
 
 sudo rfkill unblock ...
 
-export DEVICE1=wlx3c7c3fa9bdca
-export DEVICE2=wlx3c7c3fa9c1e4
+export DEVICE1=wlx3c7c3fa9bdc6
+export DEVICE2=wlxfc349725a319
 
 sudo ip link set $DEVICE1 down
 sudo iw dev $DEVICE1 set type monitor
@@ -264,20 +264,24 @@ int main(int argc, char **argv) {
   uint8_t nbfds = 1 + nbraws;
   uint8_t fd[nbfds];
 
+  uint64_t exptime;
+  if (-1 == (fd[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
+  struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
+  timerfd_settime(fd[0], 0, &period, NULL);
+
+  struct pollfd readsets[nbfds];
+  readsets[0].fd = fd[0]; readsets[0].events = POLLIN;
+
   uint32_t index[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
     setsock( argv[i + 1], &fd[i + 1], &index[i]);
+    readsets[i + 1].fd = fd[i + 1]; readsets[i + 1].events = POLLIN;
   }
 
   rawdev_t rawdevs[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
     setraw(sockid, socknl, sockrt, index[i], &rawdevs[i]);
   }
-
-  uint64_t exptime;
-  if (-1 == (fd[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
-  struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(fd[0], 0, &period, NULL);
 
   uint8_t dumbuf_tx[1400] = {-1};
   struct iovec iovdum_tx =    { .iov_base = dumbuf_tx, .iov_len = sizeof(dumbuf_tx) };
@@ -297,32 +301,30 @@ int main(int argc, char **argv) {
   struct msghdr msg_rx =           { .msg_iov = iovtab_rx, .msg_iovlen = 4 };
 
   ssize_t rawlen = 0, len = 0;
-  bool tosend = false;
-
-  struct pollfd readsets[2] = { { .fd = fd[0], .events = POLLIN }, { .fd = fd[1], .events = POLLIN }};
 
   uint8_t sync_ack[nbraws];
   bool sync_bool[nbraws];
-  for (uint8_t i = 0; i < nbraws; i++) { sync_ack[i] = 1; sync_ack[i] = true; }
+  for (uint8_t i = 0; i < nbraws; i++) { sync_ack[i] = 1; sync_bool[i] = false; }
 
   for (uint8_t i = 0; i < nbraws; i++) {
-    rawdevs[i].cptfreq = (nbraws - i - 1) * (rawdevs[i].nbfreqs / nbraws);
+    rawdevs[i].cptfreq = (nbraws - i) * (rawdevs[i].nbfreqs / nbraws);
     setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
   }
 
+
   for(;;) {
-    if (0 != poll(readsets, 2, -1)) {
-      for (uint8_t cpt=0; cpt<2; cpt++) {
+    if (0 != poll(readsets, nbfds, -1)) {
+      for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 
 	    printf("(%d)(%d)  (%d)(%d)\n",sync_ack[0], sync_ack[1], rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]);
 
+	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] == 5) sync_bool[i] = true; }
 	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs ); }
 	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] < 5) sync_ack[i]++; }
 
-	    tosend = true;
 	  } else {
             if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
 	      if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) == 0x66) {
@@ -334,10 +336,12 @@ int main(int argc, char **argv) {
 	  }
 	}
       }
-      if (tosend) {
-        ssize_t rawlen = sendmsg(fd[1], &msg_tx, MSG_DONTWAIT);
-        printf("sendmsg (%d)(%ld)\n",1,rawlen); fflush(stdout);
-	tosend = false;
+      for (uint8_t i = 0; i < nbraws; i++) { 
+        if (sync_bool[i]) { 
+          ssize_t rawlen = sendmsg(fd[1 + i], &msg_tx, MSG_DONTWAIT);
+          printf("sendmsg (%d)(%ld)\n",i,rawlen); fflush(stdout);
+	  sync_bool[i] = false;
+	}
       }
     } // poll
   }
