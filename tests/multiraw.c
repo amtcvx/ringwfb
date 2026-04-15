@@ -303,7 +303,7 @@ int main(int argc, char **argv) {
 
   ssize_t rawlen = 0, len = 0;
 
-  bool sync_bool = false, send_first = false;
+  bool send_first = false;
   int8_t sync_first = -1, sync_scan = -1;
   uint8_t sync_cpt[nbraws], sync_ack[nbraws];
   for (uint8_t i = 0; i < nbraws; i++) { sync_cpt[i] = 1; sync_ack[i] = 1; }
@@ -321,7 +321,7 @@ int main(int argc, char **argv) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 
-	    printf("(%d)(%d)  (%d)(%d)\n",sync_first, sync_scan,
+	    printf("(%d)(%d) (%d)(%d)  (%d)(%d)\n",sync_first, sync_scan, sync_ack[0], sync_ack[1],
 	      rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
 
 	    for (uint8_t i = 0; i < nbraws; i++) { 
@@ -341,9 +341,10 @@ int main(int argc, char **argv) {
 	    if (sync_scan >= 0) { 
               send_first = true;
 
-              sync_bool =! sync_bool;
-              if ((sync_bool) && (sync_ack[sync_scan] > 0))  {
+	      if (sync_ack[sync_scan] < 3) sync_ack[sync_scan]++;
+              if (sync_ack[sync_scan] == 3)  {
 	        upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs );
+		sync_ack[sync_scan] = 1;
 	      }
 	    }
 	  } else {
