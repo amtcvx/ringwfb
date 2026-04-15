@@ -317,7 +317,7 @@ int main(int argc, char **argv) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 
-	    printf("(%d)(%d)\n",rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]);
+	    printf("(%d)(%d)  (%d)(%d)\n",sync_ack[0], sync_ack[1], rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]);
 
 	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs ); }
 	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] < 5) sync_ack[i]++; }
