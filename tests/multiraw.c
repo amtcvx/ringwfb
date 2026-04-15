@@ -305,12 +305,19 @@ int main(int argc, char **argv) {
   bool sync_bool[nbraws];
   for (uint8_t i = 0; i < nbraws; i++) { sync_ack[i] = 1; sync_ack[i] = true; }
 
+  for (uint8_t i = 0; i < nbraws; i++) {
+    rawdevs[i].cptfreq = (nbraws - i - 1) * (rawdevs[i].nbfreqs / nbraws);
+    setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
+  }
+
   for(;;) {
     if (0 != poll(readsets, 2, -1)) {
       for (uint8_t cpt=0; cpt<2; cpt++) {
         if (readsets[cpt].revents == POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
+
+	    printf("(%d)(%d)\n",rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]);
 
 	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs ); }
 	    for (uint8_t i = 0; i < nbraws; i++) { if (sync_ack[i] < 5) sync_ack[i]++; }
