@@ -4,11 +4,7 @@ gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing
 
 cc multiraw_1.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw_1
 
-
-export DEVICE1=wlx3c7c3fa9bdc6
-export DEVICE2=wlxfc349725a319
-
-sudo ./exe_multiraw_1 $DEVICE1 $DEVICE2
+sudo ./exe_multiraw_1
 
 */
 
@@ -360,6 +356,11 @@ uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
     }
   }
 /*
+  MIGHT BE A BUG 
+(0)(1) cpt(0)(1) ack(1)(1)  freq (5540)(2442)
+sendmsg (0)(57)
+recvmsg (2)(83)
+
   for(uint8_t j=0; j < i; j++) reload(ifnames[j]);
   sleep(1.0);
 */
