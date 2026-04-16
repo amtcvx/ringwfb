@@ -52,6 +52,9 @@ sudo ./exe_multiraw $DEVICE1 $DEVICE2
 #include <errno.h>
 
 /************************************************************************************************/
+#define DRONEID 1
+
+/************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
 #define IEEE80211_RADIOTAP_MCS_HAVE_MCS   0x02
 #define IEEE80211_RADIOTAP_MCS_HAVE_GI    0x04
@@ -71,6 +74,14 @@ sudo ./exe_multiraw $DEVICE1 $DEVICE2
 #define MCS_INDEX  2
 
 /************************************************************************************************/
+typedef struct {
+  uint8_t droneid;
+  uint64_t seq;
+  uint16_t msglen;
+  int32_t backfreq;
+} __attribute__((packed)) payhd_t;
+
+/************************************************************************************************/
 
 uint8_t radiotaphd_tx[] = {
         0x00, 0x00, // <-- radiotap version
@@ -88,10 +99,12 @@ uint8_t ieeehd_tx[] = {
         0x10, 0x86                          // Sequence control
 };
 uint8_t llchd_tx[4];
+payhd_t payhd_tx;
 
 struct iovec iov_radiotaphd_tx = { .iov_base = radiotaphd_tx, .iov_len = sizeof(radiotaphd_tx)};
 struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(ieeehd_tx)};
 struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
+struct iovec iov_payhd_tx =      { .iov_base = &payhd_tx,     .iov_len = sizeof(payhd_tx)};
 
 /*****************************************************************************/
 #define NBFREQS 65
@@ -284,22 +297,24 @@ int main(int argc, char **argv) {
     setraw(sockid, socknl, sockrt, index[i], &rawdevs[i]);
   }
 
-  uint8_t dumbuf_tx[1400] = {-1};
-  struct iovec iovdum_tx =    { .iov_base = dumbuf_tx, .iov_len = sizeof(dumbuf_tx) };
-  struct iovec iovtab_tx[4] = { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iovdum_tx };
-  struct msghdr msg_tx =      { .msg_iov = iovtab_tx, .msg_iovlen = 4 };
+  uint8_t paybuf_tx[1400] = {-1};
+  struct iovec iov_paybuf_tx =  { .iov_base = paybuf_tx, .iov_len = sizeof(paybuf_tx) };
+  struct iovec iovtab_tx[5] =   { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iov_payhd_tx, iov_paybuf_tx };
+  struct msghdr msg_tx =        { .msg_iov = iovtab_tx, .msg_iovlen = 5 };
 
 #define RADIOTAPSIZE 35
   uint8_t radiotaphd_rx[RADIOTAPSIZE];
   uint8_t ieeehd_rx[24];
   uint8_t llchd_rx[4];
-  uint8_t dumbuf_rx[1400] = {-1};
+  payhd_t payhd_rx;
+  uint8_t paybuf_rx[1400] = {-1};
   struct iovec iov_radiotaphd_rx = { .iov_base = radiotaphd_rx, .iov_len = sizeof(radiotaphd_rx)};
   struct iovec iov_ieeehd_rx =     { .iov_base = ieeehd_rx,     .iov_len = sizeof(ieeehd_rx)};
   struct iovec iov_llchd_rx =      { .iov_base = llchd_rx,      .iov_len = sizeof(llchd_rx)};
-  struct iovec iovdum_rx =         { .iov_base = dumbuf_rx,     .iov_len = sizeof(dumbuf_rx) };
-  struct iovec iovtab_rx[4] =      { iov_radiotaphd_rx, iov_ieeehd_rx, iov_llchd_rx, iovdum_rx };
-  struct msghdr msg_rx =           { .msg_iov = iovtab_rx, .msg_iovlen = 4 };
+  struct iovec iov_payhd_rx =      { .iov_base = &payhd_rx,     .iov_len = sizeof(payhd_rx)};
+  struct iovec iov_paybuf_rx =     { .iov_base = paybuf_rx,     .iov_len = sizeof(paybuf_rx) };
+  struct iovec iovtab_rx[5] =      { iov_radiotaphd_rx, iov_ieeehd_rx, iov_llchd_rx, iov_payhd_rx, iov_paybuf_rx };
+  struct msghdr msg_rx =           { .msg_iov = iovtab_rx, .msg_iovlen = 5 };
 
   ssize_t rawlen = 0, len = 0;
 
@@ -348,6 +363,8 @@ int main(int argc, char **argv) {
 	      }
 	    }
 	  } else {
+            memset((uint8_t *)(msg_rx.msg_iov[1].iov_base), 0 , msg_rx.msg_iov[1].iov_len);
+            memset((uint8_t *)(msg_rx.msg_iov[3].iov_base), 0 , msg_rx.msg_iov[3].iov_len);
             if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
 	      if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) == 0x66) {
                 printf("recvmsg (%d)(%ld)\n",cpt,rawlen); fflush(stdout);
@@ -360,7 +377,11 @@ int main(int argc, char **argv) {
 	}
       }
       if (send_first) {
-        ssize_t rawlen = sendmsg(fd[1 + sync_first], &msg_tx, MSG_DONTWAIT);
+        ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = DRONEID;
+        ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->msglen = 1;
+        msg_tx.msg_iov[4].iov_len = 1;
+
+        rawlen = sendmsg(fd[1 + sync_first], &msg_tx, MSG_DONTWAIT);
         printf("sendmsg (%d)(%ld)\n",sync_first,rawlen); fflush(stdout);
 	send_first = false;
       }
