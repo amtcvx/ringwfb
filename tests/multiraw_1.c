@@ -47,6 +47,8 @@ sudo ./exe_multiraw_1 $DEVICE1 $DEVICE2
 /************************************************************************************************/
 #define DRONEID 1
 
+#define MAXRAWDEV 4
+
 #define DRIVER_NAME "rtl88XXau"
 
 /************************************************************************************************/
@@ -203,6 +205,41 @@ void upfreq(uint8_t sockid, struct nl_sock *socknl, uint8_t raw, uint32_t ifinde
   setfreq(sockid, socknl, ifindex, rawdevs[raw].freqs[rawdevs[raw].cptfreq]);
 }
 
+/*****************************************************************************/
+//sudo sh -c "echo -n '1-1:1.0' > /sys/bus/usb/drivers/rtw_8812au/bind"
+bool reload(char *ifname) {
+
+  bool ret = false;
+
+  char *ptr,*netpath = "/sys/class/net";
+  char *driverpath = "/sys/bus/usb/drivers/";
+  char path[1024],buf[1024];
+  ssize_t lenlink;
+  FILE *fd;
+
+  char dirpath[1024];
+  strcpy(dirpath,driverpath);
+  strcat(dirpath,DRIVER_NAME);
+  if (!(opendir(dirpath))) exit(-1);
+
+  sprintf(path,"%s/%s/device",netpath,ifname);
+  if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
+    buf[lenlink] = '\0';
+    ptr = strrchr( buf, '/' );
+    ptr++;
+    strcpy(path,dirpath);
+    strcat(path,"/unbind");
+    fd = fopen(path,"a");
+    fputs(ptr,fd);fflush(fd);
+    strcpy(path,dirpath);
+    strcat(path,"/bind");
+    fd = fopen(path,"a");
+    fputs(ptr,fd);fflush(fd);
+    ret = true;
+  }
+  return(ret);
+}
+
 /******************************************************************************/
 void unblock_rfkill(char *ifname) {
 
@@ -250,8 +287,6 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
   nl_send_auto(socknl, nlmsg);
   if (nl_send_auto(socknl, nlmsg) >= 0)  nl_recvmsgs_default(socknl);
   nlmsg_free(nlmsg);
-
-  unblock_rfkill(name);
 
   struct nl_cache *cache;
   struct rtnl_link *link, *change;
@@ -304,10 +339,37 @@ void  setsock(char *name, uint8_t *fd, uint32_t *index) {
   if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
 }
 
+
+/******************************************************************************/
+uint8_t getwifi(char *ifnames[MAXRAWDEV][50]) {
+
+  char *netpath = "/sys/class/net";
+  char path[1024],buf[1024],*ptr;
+  ssize_t lenlink;
+  uint8_t i=0;
+
+  DIR *d1;
+  struct dirent *dir1;
+  d1 = opendir(netpath);
+  while ((dir1 = readdir(d1)) != NULL) {
+    sprintf(path,"%s/%s/device/driver",netpath,dir1->d_name);
+    if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
+      buf[lenlink] = '\0';
+      ptr = strrchr( buf, '/' );
+      if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(ifnames[i++][0],dir1->d_name);
+    }
+  }
+  return(i);
+}
+
 /*****************************************************************************/
 int main(int argc, char **argv) {
 
   if (argc != 3) exit(-1);	
+
+  char ifnames[MAXRAWDEV][50];
+  uint8_t nbraws = getwifi(ifnames);
+  if (nbraws == 0) exit(-1);
 
   struct nl_sock *socknl;
   uint8_t sockid;
@@ -320,7 +382,6 @@ int main(int argc, char **argv) {
   if (!(sockrt = nl_socket_alloc())) exit(-1);
   if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
 
-  uint8_t nbraws = 2;
   uint8_t nbfds = 1 + nbraws;
   uint8_t fd[nbfds];
 
