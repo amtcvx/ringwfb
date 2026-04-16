@@ -341,7 +341,7 @@ void  setsock(char *name, uint8_t *fd, uint32_t *index) {
 
 
 /******************************************************************************/
-uint8_t getwifi(char *ifnames[MAXRAWDEV][50]) {
+uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
 
   char *netpath = "/sys/class/net";
   char path[1024],buf[1024],*ptr;
@@ -356,16 +356,20 @@ uint8_t getwifi(char *ifnames[MAXRAWDEV][50]) {
     if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
       buf[lenlink] = '\0';
       ptr = strrchr( buf, '/' );
-      if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(ifnames[i++][0],dir1->d_name);
+      if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(ifnames[i++],dir1->d_name);
     }
   }
+/*
+  for(uint8_t j=0; j < i; j++) reload(ifnames[j]);
+  sleep(1.0);
+*/
+  for(uint8_t j=0; j < i; j++) unblock_rfkill(ifnames[j]);
+
   return(i);
 }
 
 /*****************************************************************************/
 int main(int argc, char **argv) {
-
-  if (argc != 3) exit(-1);	
 
   char ifnames[MAXRAWDEV][50];
   uint8_t nbraws = getwifi(ifnames);
@@ -395,14 +399,14 @@ int main(int argc, char **argv) {
 
   uint32_t index[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
-    setsock( argv[i + 1], &fd[i + 1], &index[i]);
+    setsock( ifnames[i], &fd[i + 1], &index[i]);
     readsets[i + 1].fd = fd[i + 1]; readsets[i + 1].events = POLLIN;
   }
 
   rawdev_t rawdevs[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
     memset(&rawdevs[i],0,sizeof(rawdevs[i]));
-    setraw(sockid, socknl, sockrt, argv[i + 1], index[i], &rawdevs[i]);
+    setraw(sockid, socknl, sockrt, ifnames[i], index[i], &rawdevs[i]);
   }
 
   uint8_t paybuf_tx[1400] = {-1};
