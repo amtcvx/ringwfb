@@ -487,7 +487,7 @@ int main(int argc, char **argv) {
       }
     }
     if (send_first) {
-      ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = 3; //DRONEID;
+      ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->msglen = 1;
       msg_tx.msg_iov[4].iov_len = 1;
 
