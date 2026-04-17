@@ -2,7 +2,7 @@
 
 gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c multiraw.c -o multiraw.o
 
-cc multiraw_1.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw
+cc multiraw.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw
 
 sudo ./exe_multiraw
 
@@ -356,10 +356,9 @@ uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
       if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(ifnames[i++],dir1->d_name);
     }
   }
-
   for(uint8_t j=0; j < i; j++) reload(ifnames[j]);
-
   sleep(1.0);
+
   for(uint8_t j=0; j < i; j++) unblock_rfkill(ifnames[j]);
 
   return(i);
@@ -473,8 +472,14 @@ int main(int argc, char **argv) {
             memset((uint8_t *)(msg_rx.msg_iov[3].iov_base), 0 , msg_rx.msg_iov[3].iov_len);
             if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
 	      if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) == 0x66) {
-                printf("recvmsg (%d)(%ld)\n",cpt,rawlen); fflush(stdout);
+                payhd_t *ptrrx = (payhd_t *)(msg_rx.msg_iov[3].iov_base);
+                printf("recvmsg  droneid(%d) msglen(%d) raw(%d) rawlen(%ld) freq(%d)\n",
+		  ptrrx->droneid, ptrrx->msglen, cpt-1, rawlen, rawdevs[cpt-1].freqs[rawdevs[cpt-1].cptfreq]); fflush(stdout);
+
 	        sync_ack[cpt - 1] = 0;
+
+		exit(-1);
+
 	      } else {
                 sync_cpt[cpt - 1] = 0;
 	      }
@@ -483,12 +488,16 @@ int main(int argc, char **argv) {
 	}
       }
       if (send_first) {
-        ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = DRONEID;
+        ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = 3; //DRONEID;
         ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->msglen = 1;
         msg_tx.msg_iov[4].iov_len = 1;
 
         rawlen = sendmsg(fd[1 + sync_first], &msg_tx, MSG_DONTWAIT);
-        printf("sendmsg (%d)(%ld)\n",sync_first,rawlen); fflush(stdout);
+
+	payhd_t *ptrtx = (payhd_t *)(msg_tx.msg_iov[3].iov_base);
+        printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
+	  ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
+
 	send_first = false;
       }
     } // poll
