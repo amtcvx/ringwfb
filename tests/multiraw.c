@@ -391,6 +391,7 @@ int main(int argc, char **argv) {
   timerfd_settime(fd[0], 0, &period, NULL);
 
   struct pollfd readsets[nbfds];
+  memset(readsets, 0, sizeof(readsets));
   readsets[0].fd = fd[0]; readsets[0].events = POLLIN;
 
   uint32_t index[nbraws];
@@ -437,7 +438,7 @@ int main(int argc, char **argv) {
   for(;;) {
     if (0 != poll(readsets, nbfds, -1)) {
       for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
-        if (readsets[cpt].revents == POLLIN) {
+        if (readsets[cpt].revents & POLLIN) {
           if (cpt == 0) {
             len = read(fd[0], &exptime, sizeof(uint64_t));
 

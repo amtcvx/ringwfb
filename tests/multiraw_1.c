@@ -1,10 +1,10 @@
 /*
 
-gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c multiraw_1.c -o multiraw_1.o
+gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c multiraw.c -o multiraw.o
 
-cc multiraw_1.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw_1
+cc multiraw.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw
 
-sudo ./exe_multiraw_1
+sudo ./exe_multiraw
 
 */
 
@@ -20,15 +20,18 @@ sudo ./exe_multiraw_1
 
 #include <net/ethernet.h>
 #include <net/if.h>
-#include <sys/ioctl.h>
 #include <linux/if_packet.h>
 #include <linux/filter.h>
 
 #include <stdbool.h>
+
+#include <netlink/route/link.h>
 #include <netlink/netlink.h>
 #include <netlink/genl/genl.h>
 #include <netlink/genl/family.h>
 #include <netlink/genl/ctrl.h>
+
+
 #include <linux/nl80211.h>
 
 #include <netlink/route/link.h>
@@ -272,22 +275,27 @@ void unblock_rfkill(char *ifname) {
 }
 
 /*****************************************************************************/
-void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, char *name, uint32_t ifindex, rawdev_t *prawdev ) {
+void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, char *ifname, uint32_t *ifindex, rawdev_t *prawdev ) {
+
+  struct nl_cache *cache;
+  struct rtnl_link *ltap;
+
+  if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
+  if (!(ltap = rtnl_link_get_by_name(cache, ifname))) exit(-1);
+  *ifindex = rtnl_link_get_ifindex(ltap);
 
   struct nl_msg *nlmsg;
-
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);;
   genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
-  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, ifindex);
+  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, *ifindex);
   nla_put_u32(nlmsg, NL80211_ATTR_IFTYPE,NL80211_IFTYPE_MONITOR);
   nl_send_auto(socknl, nlmsg);
   if (nl_send_auto(socknl, nlmsg) >= 0)  nl_recvmsgs_default(socknl);
   nlmsg_free(nlmsg);
 
-  struct nl_cache *cache;
   struct rtnl_link *link, *change;
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
-  if (!(link = rtnl_link_get(cache,ifindex))) exit(-1);
+  if (!(link = rtnl_link_get(cache,*ifindex))) exit(-1);
   if (!(rtnl_link_get_flags (link) & IFF_UP)) {
     change = rtnl_link_alloc ();
     rtnl_link_set_flags (change, IFF_UP);
@@ -302,7 +310,7 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg, NL_AUTO_PORT, NL_AUTO_SEQ, sockid, 0, NLM_F_DUMP, NL80211_CMD_GET_WIPHY, 0);
-  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, ifindex);
+  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, *ifindex);
   nl_send_auto(socknl, nlmsg);
   msg_received = false;
   while (!msg_received) nl_recvmsgs(socknl, cb);
@@ -310,22 +318,15 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 }
 
 /*****************************************************************************/
-void  setsock(char *name, uint8_t *fd, uint32_t *index) {
+void  setsock(char *name, uint8_t *fd, uint32_t index) {
 
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
 
-  struct ifreq ifr;
-  memset(&ifr, 0, sizeof(struct ifreq));
-  strncpy( ifr.ifr_name, name, sizeof( ifr.ifr_name ) - 1 );
-  if (ioctl( *fd, SIOCGIFINDEX, &ifr ) < 0 ) exit(-1);
-
-  *index = ifr.ifr_ifindex;
-
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
-  sll.sll_ifindex  = *index;
+  sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
   if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // TO BE CHECK BIND must be AFTER wifi setting
 
@@ -355,15 +356,9 @@ uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
       if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(ifnames[i++],dir1->d_name);
     }
   }
-/*
-  MIGHT BE A BUG 
-(0)(1) cpt(0)(1) ack(1)(1)  freq (5540)(2442)
-sendmsg (0)(57)
-recvmsg (2)(83)
-
   for(uint8_t j=0; j < i; j++) reload(ifnames[j]);
   sleep(1.0);
-*/
+
   for(uint8_t j=0; j < i; j++) unblock_rfkill(ifnames[j]);
 
   return(i);
@@ -399,15 +394,12 @@ int main(int argc, char **argv) {
   readsets[0].fd = fd[0]; readsets[0].events = POLLIN;
 
   uint32_t index[nbraws];
-  for (uint8_t i = 0; i <  nbraws; i++) {
-    setsock( ifnames[i], &fd[i + 1], &index[i]);
-    readsets[i + 1].fd = fd[i + 1]; readsets[i + 1].events = POLLIN;
-  }
-
   rawdev_t rawdevs[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
     memset(&rawdevs[i],0,sizeof(rawdevs[i]));
-    setraw(sockid, socknl, sockrt, ifnames[i], index[i], &rawdevs[i]);
+    setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
+    setsock( ifnames[i], &fd[i + 1], index[i]);
+    readsets[i + 1].fd = fd[i + 1]; readsets[i + 1].events = POLLIN;
   }
 
   uint8_t paybuf_tx[1400] = {-1};
@@ -480,8 +472,14 @@ int main(int argc, char **argv) {
             memset((uint8_t *)(msg_rx.msg_iov[3].iov_base), 0 , msg_rx.msg_iov[3].iov_len);
             if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
 	      if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) == 0x66) {
-                printf("recvmsg (%d)(%ld)\n",cpt,rawlen); fflush(stdout);
+                payhd_t *ptrrx = (payhd_t *)(msg_rx.msg_iov[3].iov_base);
+                printf("recvmsg  droneid(%d) msglen(%d) raw(%d) rawlen(%ld) freq(%d)\n",
+		  ptrrx->droneid, ptrrx->msglen, cpt-1, rawlen, rawdevs[cpt-1].freqs[rawdevs[cpt-1].cptfreq]); fflush(stdout);
+
 	        sync_ack[cpt - 1] = 0;
+
+		exit(-1);
+
 	      } else {
                 sync_cpt[cpt - 1] = 0;
 	      }
@@ -490,12 +488,16 @@ int main(int argc, char **argv) {
 	}
       }
       if (send_first) {
-        ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = DRONEID;
+        ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = 3; //DRONEID;
         ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->msglen = 1;
         msg_tx.msg_iov[4].iov_len = 1;
 
         rawlen = sendmsg(fd[1 + sync_first], &msg_tx, MSG_DONTWAIT);
-        printf("sendmsg (%d)(%ld)\n",sync_first,rawlen); fflush(stdout);
+
+	payhd_t *ptrtx = (payhd_t *)(msg_tx.msg_iov[3].iov_base);
+        printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
+	  ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
+
 	send_first = false;
       }
     } // poll
