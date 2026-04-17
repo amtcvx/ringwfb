@@ -2,22 +2,9 @@
 
 gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c multiraw.c -o multiraw.o
 
-cc multiraw.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw
+cc multiraw_1.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw
 
-sudo rfkill unblock ...
-
-export DEVICE1=wlx3c7c3fa9bdc6
-export DEVICE2=wlxfc349725a319
-
-sudo ip link set $DEVICE1 down
-sudo iw dev $DEVICE1 set type monitor
-sudo ip link set $DEVICE1 up
-
-sudo ip link set $DEVICE2 down
-sudo iw dev $DEVICE2 set type monitor
-sudo ip link set $DEVICE2 up
-
-sudo ./exe_multiraw $DEVICE1 $DEVICE2
+sudo ./exe_multiraw
 
 */
 
@@ -33,19 +20,24 @@ sudo ./exe_multiraw $DEVICE1 $DEVICE2
 
 #include <net/ethernet.h>
 #include <net/if.h>
-#include <sys/ioctl.h>
 #include <linux/if_packet.h>
 #include <linux/filter.h>
 
 #include <stdbool.h>
+
+#include <netlink/route/link.h>
 #include <netlink/netlink.h>
 #include <netlink/genl/genl.h>
 #include <netlink/genl/family.h>
 #include <netlink/genl/ctrl.h>
+
+
 #include <linux/nl80211.h>
 
 #include <netlink/route/link.h>
 #include <net/if.h>
+
+#include <dirent.h>
 
 #include <sys/timerfd.h>
 
@@ -53,6 +45,10 @@ sudo ./exe_multiraw $DEVICE1 $DEVICE2
 
 /************************************************************************************************/
 #define DRONEID 1
+
+#define MAXRAWDEV 4
+
+#define DRIVER_NAME "rtl88XXau"
 
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
@@ -183,6 +179,19 @@ bool setfreq(uint8_t sockid, struct nl_sock *socknl, int ifindex, uint32_t freq)
     return(false);
 }
 
+/******************************************************************************/
+void drain(uint8_t fd) {
+
+  struct sock_filter zero_bytecode = BPF_STMT(BPF_RET | BPF_K, 0);
+  struct sock_fprog zero_program = { 1, &zero_bytecode};
+  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &zero_program, sizeof(zero_program));
+  char drain[1];
+  while (recv(fd, drain, sizeof(drain), MSG_DONTWAIT) >= 0) printf("----\n");
+  struct sock_filter full_bytecode = BPF_STMT(BPF_RET | BPF_K, (u_int)-1);
+  struct sock_fprog full_program = { 1, &full_bytecode};
+  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &full_program, sizeof(full_program));
+}   
+
 /*****************************************************************************/
 void upfreq(uint8_t sockid, struct nl_sock *socknl, uint8_t raw, uint32_t ifindex, uint8_t nbraws, rawdev_t *rawdevs ) {
 
@@ -196,22 +205,97 @@ void upfreq(uint8_t sockid, struct nl_sock *socknl, uint8_t raw, uint32_t ifinde
 }
 
 /*****************************************************************************/
-void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, uint32_t ifindex, rawdev_t *prawdev ) {
+//sudo sh -c "echo -n '1-1:1.0' > /sys/bus/usb/drivers/rtw_8812au/bind"
+bool reload(char *ifname) {
+
+  bool ret = false;
+
+  char *ptr,*netpath = "/sys/class/net";
+  char *driverpath = "/sys/bus/usb/drivers/";
+  char path[1024],buf[1024];
+  ssize_t lenlink;
+  FILE *fd;
+
+  char dirpath[1024];
+  strcpy(dirpath,driverpath);
+  strcat(dirpath,DRIVER_NAME);
+  if (!(opendir(dirpath))) exit(-1);
+
+  sprintf(path,"%s/%s/device",netpath,ifname);
+  if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
+    buf[lenlink] = '\0';
+    ptr = strrchr( buf, '/' );
+    ptr++;
+    strcpy(path,dirpath);
+    strcat(path,"/unbind");
+    fd = fopen(path,"a");
+    fputs(ptr,fd);fflush(fd);
+    strcpy(path,dirpath);
+    strcat(path,"/bind");
+    fd = fopen(path,"a");
+    fputs(ptr,fd);fflush(fd);
+    ret = true;
+  }
+  return(ret);
+}
+
+/******************************************************************************/
+void unblock_rfkill(char *ifname) {
+
+  char *ptr,*netpath = "/sys/class/net";
+  char path[1024],buf[1024],drivername[50];
+  ssize_t lenlink;
+  struct dirent *dir1;
+  DIR *d1;
+  FILE *fd;
+
+  sprintf(path,"%s/%s/device/driver",netpath,ifname);
+  if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
+    buf[lenlink] = '\0';
+    ptr = strrchr( buf, '/' );
+    strcpy(drivername, ++ptr);
+  }
+
+  if (strcmp(drivername, DRIVER_NAME) == 0) {
+
+    sprintf(path,"%s/%s/phy80211",netpath,ifname);
+    d1 = opendir(path);
+    while ((dir1 = readdir(d1)) != NULL)
+      if ((strncmp("rfkill",dir1->d_name,5)) == 0) break;
+    if ((strncmp("rfkill",dir1->d_name,6)) == 0) {
+      sprintf(path,"%s/%s/phy80211/%s/soft",netpath,ifname,dir1->d_name);
+      fd = fopen(path,"r+");
+      if (fgetc(fd)==49) {
+        fseek(fd, -1, SEEK_CUR);
+        fputc(48, fd);
+      };
+      fclose(fd);
+    }
+  }
+}
+
+/*****************************************************************************/
+void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, char *ifname, uint32_t *ifindex, rawdev_t *prawdev ) {
+
+  struct nl_cache *cache;
+  struct rtnl_link *ltap;
+
+  if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
+  if (!(ltap = rtnl_link_get_by_name(cache, ifname))) exit(-1);
+  *ifindex = rtnl_link_get_ifindex(ltap);
 
   struct nl_msg *nlmsg;
-
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);;
   genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
-  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, ifindex);
+  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, *ifindex);
   nla_put_u32(nlmsg, NL80211_ATTR_IFTYPE,NL80211_IFTYPE_MONITOR);
   nl_send_auto(socknl, nlmsg);
   if (nl_send_auto(socknl, nlmsg) >= 0)  nl_recvmsgs_default(socknl);
   nlmsg_free(nlmsg);
 
-  struct nl_cache *cache;
   struct rtnl_link *link, *change;
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
-  if (!(link = rtnl_link_get(cache,ifindex))) exit(-1);
+  if (!(link = rtnl_link_get(cache,*ifindex))) exit(-1);
   if (!(rtnl_link_get_flags (link) & IFF_UP)) {
     change = rtnl_link_alloc ();
     rtnl_link_set_flags (change, IFF_UP);
@@ -226,7 +310,7 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, uin
 
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg, NL_AUTO_PORT, NL_AUTO_SEQ, sockid, 0, NLM_F_DUMP, NL80211_CMD_GET_WIPHY, 0);
-  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, ifindex);
+  nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, *ifindex);
   nl_send_auto(socknl, nlmsg);
   msg_received = false;
   while (!msg_received) nl_recvmsgs(socknl, cb);
@@ -234,33 +318,59 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, uin
 }
 
 /*****************************************************************************/
-void  setsock(char *name, uint8_t *fd, uint32_t *index) {
+void  setsock(char *name, uint8_t *fd, uint32_t index) {
 
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
 
-  struct ifreq ifr;
-  memset(&ifr, 0, sizeof(struct ifreq));
-  strncpy( ifr.ifr_name, name, sizeof( ifr.ifr_name ) - 1 );
-  if (ioctl( *fd, SIOCGIFINDEX, &ifr ) < 0 ) exit(-1);
-
-  *index = ifr.ifr_ifindex;
-
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
-  sll.sll_ifindex  = *index;
+  sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
   if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // TO BE CHECK BIND must be AFTER wifi setting
 
-//  const int32_t sock_qdisc_bypass = 1;
-//  if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
+  drain(*fd);
+
+  const int32_t sock_qdisc_bypass = 1;
+  if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
+}
+
+
+/******************************************************************************/
+uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
+
+  char *netpath = "/sys/class/net";
+  char path[1024],buf[1024],*ptr;
+  ssize_t lenlink;
+  uint8_t i=0;
+
+  DIR *d1;
+  struct dirent *dir1;
+  d1 = opendir(netpath);
+  while ((dir1 = readdir(d1)) != NULL) {
+    sprintf(path,"%s/%s/device/driver",netpath,dir1->d_name);
+    if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
+      buf[lenlink] = '\0';
+      ptr = strrchr( buf, '/' );
+      if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(ifnames[i++],dir1->d_name);
+    }
+  }
+
+  for(uint8_t j=0; j < i; j++) reload(ifnames[j]);
+
+  sleep(1.0);
+  for(uint8_t j=0; j < i; j++) unblock_rfkill(ifnames[j]);
+
+  return(i);
 }
 
 /*****************************************************************************/
 int main(int argc, char **argv) {
 
-  if (argc != 3) exit(-1);	
+  char ifnames[MAXRAWDEV][50];
+  uint8_t nbraws = getwifi(ifnames);
+  if (nbraws == 0) exit(-1);
 
   struct nl_sock *socknl;
   uint8_t sockid;
@@ -273,7 +383,6 @@ int main(int argc, char **argv) {
   if (!(sockrt = nl_socket_alloc())) exit(-1);
   if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
 
-  uint8_t nbraws = 2;
   uint8_t nbfds = 1 + nbraws;
   uint8_t fd[nbfds];
 
@@ -286,15 +395,12 @@ int main(int argc, char **argv) {
   readsets[0].fd = fd[0]; readsets[0].events = POLLIN;
 
   uint32_t index[nbraws];
-  for (uint8_t i = 0; i <  nbraws; i++) {
-    setsock( argv[i + 1], &fd[i + 1], &index[i]);
-    readsets[i + 1].fd = fd[i + 1]; readsets[i + 1].events = POLLIN;
-  }
-
   rawdev_t rawdevs[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
     memset(&rawdevs[i],0,sizeof(rawdevs[i]));
-    setraw(sockid, socknl, sockrt, index[i], &rawdevs[i]);
+    setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
+    setsock( ifnames[i], &fd[i + 1], index[i]);
+    readsets[i + 1].fd = fd[i + 1]; readsets[i + 1].events = POLLIN;
   }
 
   uint8_t paybuf_tx[1400] = {-1};
