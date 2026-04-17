@@ -477,6 +477,7 @@ int main(int argc, char **argv) {
 
 	      sync_ack[cpt - 1] = 0;
 
+	      // after 7 sendmsg !
 	      exit(-1);
 
 	    } else {
