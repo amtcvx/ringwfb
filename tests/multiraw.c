@@ -434,73 +434,70 @@ int main(int argc, char **argv) {
     setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
   }
 
+  while (poll(readsets, nbfds, -1) != -1) {
+    for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
+      if (readsets[cpt].revents & POLLIN) {
+        if (cpt == 0) {
+          len = read(fd[0], &exptime, sizeof(uint64_t));
 
-  for(;;) {
-    if (0 != poll(readsets, nbfds, -1)) {
-      for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
-        if (readsets[cpt].revents & POLLIN) {
-          if (cpt == 0) {
-            len = read(fd[0], &exptime, sizeof(uint64_t));
+          printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
+	    rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
 
-	    printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
-	      rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
-
-	    for (uint8_t i = 0; i < nbraws; i++) { 
-	      if (i != sync_first) {
-	        if (sync_cpt[i] == 5) { 
-		  if (sync_first < 0) { 
-		    sync_first = i; for (uint8_t j = 0; j < nbraws; j++) if (i != j) 
-		    { sync_scan = j;  rawdevs[j].cptfreq = (nbraws - j -1) * (rawdevs[j].nbfreqs / nbraws);
-                      setfreq(sockid, socknl, index[j], rawdevs[j].freqs[rawdevs[j].cptfreq]);
-	            }
-		  }
+	  for (uint8_t i = 0; i < nbraws; i++) { 
+	    if (i != sync_first) {
+	      if (sync_cpt[i] == 5) { 
+	        if (sync_first < 0) { 
+	          sync_first = i; for (uint8_t j = 0; j < nbraws; j++) if (i != j) 
+		  { sync_scan = j;  rawdevs[j].cptfreq = (nbraws - j -1) * (rawdevs[j].nbfreqs / nbraws);
+                    setfreq(sockid, socknl, index[j], rawdevs[j].freqs[rawdevs[j].cptfreq]);
+	          }
 		}
-	        if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs );
-	        if (sync_cpt[i] < 5) sync_cpt[i]++;
 	      }
+	      if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs );
+	      if (sync_cpt[i] < 5) sync_cpt[i]++;
 	    }
-	    if (sync_scan >= 0) { 
-              send_first = true;
+	  }
+	  if (sync_scan >= 0) { 
+            send_first = true;
 
-	      if (sync_ack[sync_scan] < 3) sync_ack[sync_scan]++;
-              if (sync_ack[sync_scan] == 3)  {
-	        upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs );
-		sync_ack[sync_scan] = 1;
-	      }
+	    if (sync_ack[sync_scan] < 3) sync_ack[sync_scan]++;
+            if (sync_ack[sync_scan] == 3)  {
+	      upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs );
+	      sync_ack[sync_scan] = 1;
 	    }
-	  } else {
-            memset((uint8_t *)(msg_rx.msg_iov[1].iov_base), 0 , msg_rx.msg_iov[1].iov_len);
-            memset((uint8_t *)(msg_rx.msg_iov[3].iov_base), 0 , msg_rx.msg_iov[3].iov_len);
-            if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
-	      if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) == 0x66) {
-                payhd_t *ptrrx = (payhd_t *)(msg_rx.msg_iov[3].iov_base);
-                printf("recvmsg  droneid(%d) msglen(%d) raw(%d) rawlen(%ld) freq(%d)\n",
-		  ptrrx->droneid, ptrrx->msglen, cpt-1, rawlen, rawdevs[cpt-1].freqs[rawdevs[cpt-1].cptfreq]); fflush(stdout);
+	  }
+	} else {
+          memset((uint8_t *)(msg_rx.msg_iov[1].iov_base), 0 , msg_rx.msg_iov[1].iov_len);
+          memset((uint8_t *)(msg_rx.msg_iov[3].iov_base), 0 , msg_rx.msg_iov[3].iov_len);
+          if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
+	    if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) == 0x66) {
+              payhd_t *ptrrx = (payhd_t *)(msg_rx.msg_iov[3].iov_base);
+              printf("recvmsg  droneid(%d) msglen(%d) raw(%d) rawlen(%ld) freq(%d)\n",
+	        ptrrx->droneid, ptrrx->msglen, cpt-1, rawlen, rawdevs[cpt-1].freqs[rawdevs[cpt-1].cptfreq]); fflush(stdout);
 
-	        sync_ack[cpt - 1] = 0;
+	      sync_ack[cpt - 1] = 0;
 
-		exit(-1);
+	      exit(-1);
 
-	      } else {
-                sync_cpt[cpt - 1] = 0;
-	      }
+	    } else {
+              sync_cpt[cpt - 1] = 0;
 	    }
 	  }
 	}
       }
-      if (send_first) {
-        ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = 3; //DRONEID;
-        ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->msglen = 1;
-        msg_tx.msg_iov[4].iov_len = 1;
+    }
+    if (send_first) {
+      ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = 3; //DRONEID;
+      ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->msglen = 1;
+      msg_tx.msg_iov[4].iov_len = 1;
 
-        rawlen = sendmsg(fd[1 + sync_first], &msg_tx, MSG_DONTWAIT);
+      rawlen = sendmsg(fd[1 + sync_first], &msg_tx, MSG_DONTWAIT);
 
-	payhd_t *ptrtx = (payhd_t *)(msg_tx.msg_iov[3].iov_base);
-        printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
-	  ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
+      payhd_t *ptrtx = (payhd_t *)(msg_tx.msg_iov[3].iov_base);
+      printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
+        ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
 
-	send_first = false;
-      }
-    } // poll
-  }
+      send_first = false;
+    }
+  } // Poll
 }
