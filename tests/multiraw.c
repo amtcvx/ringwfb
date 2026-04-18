@@ -392,18 +392,11 @@ int main(int argc, char **argv) {
   if (!(sockrt = nl_socket_alloc())) exit(-1);
   if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
 
-//  uint8_t nbfds = 1 + nbraws;
   uint8_t nbfds = nbraws;
   uint8_t fds[nbfds];
-/*
-  uint64_t exptime;
-  if (-1 == (fd[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
-  struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(fd[0], 0, &period, NULL);
-*/
+
   struct pollfd readsets[nbfds];
   memset(readsets, 0, sizeof(readsets));
-//  readsets[0].fd = fd[0]; readsets[0].events = POLLIN;
 
   uint32_t index[nbraws];
   rawdev_t rawdevs[nbraws];
@@ -412,8 +405,6 @@ int main(int argc, char **argv) {
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
     setsock( ifnames[i], &fds[i], index[i]);
     readsets[i].fd = fds[i]; readsets[i].events = POLLIN;
-//    setsock( ifnames[i], &fd[i + 1], index[i]);
-//    readsets[i + 1].fd = fd[i + 1]; readsets[i + 1].events = POLLIN;
   }
 
   uint8_t paybuf_tx[1400] = {-1};
@@ -447,17 +438,20 @@ int main(int argc, char **argv) {
     setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
   }
 
+  uint64_t log_step = 1000;
   uint64_t log_ts = get_time_ms();
 
   while (1) {
     uint64_t cur_ts = get_time_ms();
-    uint64_t timeout = log_ts > cur_ts ? log_ts - cur_ts : 0;
+//    uint64_t timeout = log_ts > cur_ts ? log_ts - cur_ts : 0;
+   uint64_t timeout = log_step;
 
     int8_t ret = poll(readsets, nbfds, timeout);
 
     cur_ts = get_time_ms();
 
-    if (cur_ts >= log_ts) { 
+//    if (cur_ts >= log_ts) { 
+    if (ret == 0) { 
 
       printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
         rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
