@@ -50,6 +50,8 @@ sudo ./exe_multiraw
 
 #define DRIVER_NAME "rtl88XXau"
 
+#define PAY_MTU 1400
+
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
 #define IEEE80211_RADIOTAP_MCS_HAVE_MCS   0x02
@@ -413,18 +415,27 @@ int main(int argc, char **argv) {
   struct msghdr msg_tx =        { .msg_iov = iovtab_tx, .msg_iovlen = 5 };
 
 #define RADIOTAPSIZE 35
-  uint8_t radiotaphd_rx[RADIOTAPSIZE];
-  uint8_t ieeehd_rx[24];
-  uint8_t llchd_rx[4];
-  payhd_t payhd_rx;
-  uint8_t paybuf_rx[1400] = {-1};
-  struct iovec iov_radiotaphd_rx = { .iov_base = radiotaphd_rx, .iov_len = sizeof(radiotaphd_rx)};
-  struct iovec iov_ieeehd_rx =     { .iov_base = ieeehd_rx,     .iov_len = sizeof(ieeehd_rx)};
-  struct iovec iov_llchd_rx =      { .iov_base = llchd_rx,      .iov_len = sizeof(llchd_rx)};
-  struct iovec iov_payhd_rx =      { .iov_base = &payhd_rx,     .iov_len = sizeof(payhd_rx)};
-  struct iovec iov_paybuf_rx =     { .iov_base = paybuf_rx,     .iov_len = sizeof(paybuf_rx) };
-  struct iovec iovtab_rx[5] =      { iov_radiotaphd_rx, iov_ieeehd_rx, iov_llchd_rx, iov_payhd_rx, iov_paybuf_rx };
-  struct msghdr msg_rx =           { .msg_iov = iovtab_rx, .msg_iovlen = 5 };
+  static struct rx_t {
+    uint8_t rxradiotaphd[RADIOTAPSIZE];
+    uint8_t rxieeehd[24];
+    uint8_t rxllchd[4];
+    payhd_t rxpayhd;
+    uint8_t rxpaybuf[PAY_MTU];
+    struct iovec rxiov[5];
+  } rx[MAXRAWDEV + 1];
+
+  struct msghdr rxmsg[MAXRAWDEV + 1];
+
+  for(uint8_t i = 0; i < (MAXRAWDEV + 1); i++) {
+    rx[i].rxiov[0].iov_base = &rx[i].rxradiotaphd; rx[i].rxiov[0].iov_len = sizeof(rx[i].rxradiotaphd);
+    rx[i].rxiov[1].iov_base = &rx[i].rxieeehd;     rx[i].rxiov[1].iov_len = sizeof(rx[i].rxieeehd);
+    rx[i].rxiov[2].iov_base = &rx[i].rxllchd;      rx[i].rxiov[2].iov_len = sizeof(rx[i].rxllchd);
+    rx[i].rxiov[3].iov_base = &rx[i].rxpayhd;      rx[i].rxiov[3].iov_len = sizeof(rx[i].rxpayhd);
+    rx[i].rxiov[4].iov_base = &rx[i].rxpaybuf;     rx[i].rxiov[4].iov_len = sizeof(rx[i].rxpaybuf);
+
+    rxmsg[i].msg_iov = rx[i].rxiov; rxmsg[i].msg_iovlen = 5;
+  }
+
 
   ssize_t rawlen = 0, len = 0;
 
@@ -444,16 +455,17 @@ int main(int argc, char **argv) {
 
   while (1) {
 
-    printf("(%ld)\n",timeout);
+    printf("INIT(%ld)\n",timeout);
 
     uint64_t cur_ts = get_time_ms();
     int8_t ret = poll(readsets, nbfds, timeout);
 
     printf("[%d]\n",ret);
 
-    if ((ret == 0) || ((ret > 0) && (timeout != log_step))) { 
+    if (ret == 0) timeout = log_step;
 
-      timeout = log_step;
+    if ((ret == 0) || ((ret > 0) && (timeout == log_step))) { 
+
       log_ts = cur_ts;
 
       printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
@@ -492,29 +504,34 @@ int main(int argc, char **argv) {
       timeout = timeout - (cur_ts - log_ts);
       log_ts = cur_ts;
 
+      printf("FLOW(%ld)\n",timeout);
+
       for (uint8_t i = 0; i < nbfds; i++) { 
 
         if (readsets[i].revents & (POLLERR | POLLNVAL)) { printf("socket error: %s", strerror(errno)); fflush(stdout); }
 
         if (readsets[i].revents & POLLIN) {
 
-          memset((uint8_t *)(msg_rx.msg_iov[1].iov_base), 0 , msg_rx.msg_iov[1].iov_len);
-          memset((uint8_t *)(msg_rx.msg_iov[3].iov_base), 0 , msg_rx.msg_iov[3].iov_len);
+	  int32_t tmp = 0; uint8_t j=0; uint32_t rawlen = 0;
+          while (tmp >= 0) { 
+            memset((uint8_t *)(rxmsg[j].msg_iov[1].iov_base), 0 , rxmsg[j].msg_iov[1].iov_len);
+            memset((uint8_t *)(rxmsg[j].msg_iov[3].iov_base), 0 , rxmsg[j].msg_iov[3].iov_len);
+	    tmp = recvmsg(fds[i], &rxmsg[j], MSG_DONTWAIT); rawlen += tmp;
+            if ((tmp > 0) && (*(4 + ((uint8_t *)(rxmsg[j].msg_iov[1].iov_base))) == 0x66)) j++;
+	  }
 
-          if ((rawlen = recvmsg(fds[i], &msg_rx, MSG_DONTWAIT)) > 0) {
-            if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) != 0x66) sync_cpt[i] = 0;
-            else {
-              payhd_t *ptrrx = (payhd_t *)(msg_rx.msg_iov[3].iov_base);
-              if (ptrrx->droneid == DRONEID) { printf("This should no happened\n");fflush(stdout); exit(-1); }
-	      else {
-	        sync_ack[i] = 0;
-	      }
+	  if (j > 0) {
+            payhd_t *ptrrx = (payhd_t *)(rxmsg[j].msg_iov[3].iov_base);
+            if (ptrrx->droneid == DRONEID) { printf("This should no happened\n");fflush(stdout); exit(-1); }
+	    else {
+              printf("droneid (%d)\n",ptrrx->droneid == DRONEID); fflush(stdout);
+	      sync_ack[i] = 0;
             }
-          }
+          } else { printf("rawlen(%d)\n",rawlen);fflush(stdout); }
         }
       }
     }
-
+/*
     if (send_first) {
       ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->msglen = 1;
@@ -528,5 +545,6 @@ int main(int argc, char **argv) {
 
       send_first = false;
     }
+*/
   }
 }
