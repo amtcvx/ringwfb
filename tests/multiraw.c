@@ -507,9 +507,9 @@ int main(int argc, char **argv) {
 
             uint8_t raw = cpt - 1; 
 
-	    uint8_t stlog = rxrawlog[raw];
-
 	    rxrawlog[raw] = 0;
+
+	    uint8_t stlog = rxrawlog[raw];
 
 	    ssize_t tmp = 0; uint8_t pos;
             while (tmp >= 0) { 
