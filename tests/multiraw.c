@@ -433,8 +433,9 @@ int main(int argc, char **argv) {
     struct iovec rxiov[5];
   } rx[MAXRAWDEV][RXLOG];
 
-  uint8_t rxrawlog[MAXRAWDEV];
   struct msghdr rxmsg[MAXRAWDEV][RXLOG];
+
+  uint8_t rxrawlog[MAXRAWDEV];
 
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
     for(uint8_t j = 0; j < RXLOG; j++) {
@@ -502,13 +503,15 @@ int main(int argc, char **argv) {
 
           if (readsets[cpt].revents & POLLIN) {
 
+	    rawlen = 0;
+
             uint8_t raw = cpt - 1; 
 
 	    uint8_t stlog = rxrawlog[raw];
+
+	    rxrawlog[raw] = 0;
+
 	    ssize_t tmp = 0; uint8_t pos;
-
-	    rxrawlog[raw] = 0; rawlen = 0;
-
             while (tmp >= 0) { 
 	      pos = rxrawlog[raw];
               memset((uint8_t *)(rxmsg[raw][pos].msg_iov[1].iov_base), 0 , rxmsg[raw][pos].msg_iov[1].iov_len);
@@ -519,7 +522,7 @@ int main(int argc, char **argv) {
 
 	    for (pos = stlog; pos < rxrawlog[raw]; pos++) {
 
-              payhd_t *ptrrx = (payhd_t *)(rxmsg[pos][raw].msg_iov[3].iov_base);
+              payhd_t *ptrrx = (payhd_t *)(rxmsg[raw][pos].msg_iov[3].iov_base);
               if (ptrrx->droneid == DRONEID) { printf("This should no happened\n");fflush(stdout); exit(-1); }
 	      else {
                 printf("raw (%d)\n",raw); fflush(stdout);
@@ -548,6 +551,5 @@ int main(int argc, char **argv) {
 
       send_first = false;
     }
-
   }
 }
