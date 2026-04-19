@@ -423,7 +423,6 @@ int main(int argc, char **argv) {
 
 #define RXRADIOTAPSIZE 35
 #define RXLOG 8
-
   static struct rx_t {
     uint8_t rxradiotaphd[RXRADIOTAPSIZE];
     uint8_t rxieeehd[24];
@@ -431,9 +430,8 @@ int main(int argc, char **argv) {
     payhd_t rxpayhd;
     uint8_t rxpaybuf[PAY_MTU];
     struct iovec rxiov[5];
+    struct msghdr rxmsg;
   } rx[MAXRAWDEV][RXLOG];
-
-  struct msghdr rxmsg[MAXRAWDEV][RXLOG];
 
   uint8_t rxrawlog[MAXRAWDEV];
 
@@ -444,8 +442,7 @@ int main(int argc, char **argv) {
       rx[i][j].rxiov[2].iov_base = &rx[i][j].rxllchd;      rx[i][j].rxiov[2].iov_len = sizeof(rx[i][j].rxllchd);
       rx[i][j].rxiov[3].iov_base = &rx[i][j].rxpayhd;      rx[i][j].rxiov[3].iov_len = sizeof(rx[i][j].rxpayhd);
       rx[i][j].rxiov[4].iov_base = &rx[i][j].rxpaybuf;     rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
-
-      rxmsg[i][j].msg_iov = rx[i][j].rxiov; rxmsg[i][j].msg_iovlen = 5;
+      rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;             rx[i][j].rxmsg.msg_iovlen = 5;
     }
   }
 
@@ -503,26 +500,25 @@ int main(int argc, char **argv) {
 
           if (readsets[cpt].revents & POLLIN) {
 
-	    rawlen = 0;
-
             uint8_t raw = cpt - 1; 
 
 	    rxrawlog[raw] = 0;
 
 	    uint8_t stlog = rxrawlog[raw];
 
-	    ssize_t tmp = 0; uint8_t pos;
+	    rawlen = 0;
+	    int32_t tmp = 0; uint8_t pos;
+
             while (tmp >= 0) { 
 	      pos = rxrawlog[raw];
-              memset((uint8_t *)(rxmsg[raw][pos].msg_iov[1].iov_base), 0 , rxmsg[raw][pos].msg_iov[1].iov_len);
-              memset((uint8_t *)(rxmsg[raw][pos].msg_iov[3].iov_base), 0 , rxmsg[raw][pos].msg_iov[3].iov_len);
-	      tmp = recvmsg(fds[cpt], &rxmsg[raw][pos], MSG_DONTWAIT); rawlen += tmp;
-              if ((tmp > 0) && (*(4 + ((uint8_t *)(rxmsg[raw][pos].msg_iov[1].iov_base))) == 0x66)) (rxrawlog[raw]++);
+              memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[1].iov_len);
+              memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[3].iov_len);
+	      tmp = recvmsg(fds[cpt], &rx[raw][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
+              if ((tmp > 0) && (*(4 + ((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base))) == 0x66)) (rxrawlog[raw]++);
 	    }
 
 	    for (pos = stlog; pos < rxrawlog[raw]; pos++) {
-
-              payhd_t *ptrrx = (payhd_t *)(rxmsg[raw][pos].msg_iov[3].iov_base);
+              payhd_t *ptrrx = (payhd_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base);
               if (ptrrx->droneid == DRONEID) { printf("This should no happened\n");fflush(stdout); exit(-1); }
 	      else {
                 printf("raw (%d)\n",raw); fflush(stdout);
@@ -531,7 +527,6 @@ int main(int argc, char **argv) {
 	        sync_ack[raw] = 0;
               }
 	    }
-
 	    if (sync_ack[raw] != 0) sync_cpt[raw] = 0;
           }
         }
