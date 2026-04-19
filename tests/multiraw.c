@@ -44,7 +44,8 @@ sudo ./exe_multiraw
 #include <errno.h>
 
 /************************************************************************************************/
-#define DRONEID 1
+#define DRONEID 0
+//#define DRONEID 1
 
 #define MAXRAWDEV 4
 
@@ -519,10 +520,10 @@ int main(int argc, char **argv) {
               payhd_t *ptrrx = (payhd_t *)(rxmsg[pos][raw].msg_iov[3].iov_base);
               if (ptrrx->droneid == DRONEID) { printf("This should no happened\n");fflush(stdout); exit(-1); }
 	      else {
-                printf("raw (%d)\n",cpt-1); fflush(stdout);
+                printf("raw (%d)\n",raw); fflush(stdout);
                 printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
                 printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
-	        sync_ack[cpt] = 0;
+	        sync_ack[raw] = 0;
               }
 	    }
           }
