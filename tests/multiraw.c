@@ -502,7 +502,9 @@ int main(int argc, char **argv) {
 
           if (readsets[cpt].revents & POLLIN) {
 
-            uint8_t raw = cpt - 1; uint8_t stlog = rxrawlog[raw];
+            uint8_t raw = cpt - 1; 
+
+	    uint8_t stlog = rxrawlog[raw];
 	    ssize_t tmp = 0; uint8_t pos;
 
 	    rxrawlog[raw] = 0; rawlen = 0;
@@ -526,6 +528,8 @@ int main(int argc, char **argv) {
 	        sync_ack[raw] = 0;
               }
 	    }
+
+	    if (sync_ack[raw] != 0) sync_cpt[raw] = 0;
           }
         }
       }
