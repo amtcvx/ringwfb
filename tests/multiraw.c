@@ -420,28 +420,32 @@ int main(int argc, char **argv) {
   struct iovec iovtab_tx[5] =   { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iov_payhd_tx, iov_paybuf_tx };
   struct msghdr msg_tx =        { .msg_iov = iovtab_tx, .msg_iovlen = 5 };
 
-#define RADIOTAPSIZE 35
+#define RXRADIOTAPSIZE 35
+#define RXLOG 8
+
   static struct rx_t {
-    uint8_t rxradiotaphd[RADIOTAPSIZE];
+    uint8_t rxradiotaphd[RXRADIOTAPSIZE];
     uint8_t rxieeehd[24];
     uint8_t rxllchd[4];
     payhd_t rxpayhd;
     uint8_t rxpaybuf[PAY_MTU];
     struct iovec rxiov[5];
-  } rx[MAXRAWDEV + 1];
+  } rx[MAXRAWDEV][RXLOG];
 
-  struct msghdr rxmsg[MAXRAWDEV + 1];
+  uint8_t rxrawlog[MAXRAWDEV];
+  struct msghdr rxmsg[MAXRAWDEV][RXLOG];
 
-  for(uint8_t i = 0; i < (MAXRAWDEV + 1); i++) {
-    rx[i].rxiov[0].iov_base = &rx[i].rxradiotaphd; rx[i].rxiov[0].iov_len = sizeof(rx[i].rxradiotaphd);
-    rx[i].rxiov[1].iov_base = &rx[i].rxieeehd;     rx[i].rxiov[1].iov_len = sizeof(rx[i].rxieeehd);
-    rx[i].rxiov[2].iov_base = &rx[i].rxllchd;      rx[i].rxiov[2].iov_len = sizeof(rx[i].rxllchd);
-    rx[i].rxiov[3].iov_base = &rx[i].rxpayhd;      rx[i].rxiov[3].iov_len = sizeof(rx[i].rxpayhd);
-    rx[i].rxiov[4].iov_base = &rx[i].rxpaybuf;     rx[i].rxiov[4].iov_len = sizeof(rx[i].rxpaybuf);
+  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
+    for(uint8_t j = 0; j < RXLOG; j++) {
+      rx[i][j].rxiov[0].iov_base = &rx[i][j].rxradiotaphd; rx[i][j].rxiov[0].iov_len = sizeof(rx[i][j].rxradiotaphd);
+      rx[i][j].rxiov[1].iov_base = &rx[i][j].rxieeehd;     rx[i][j].rxiov[1].iov_len = sizeof(rx[i][j].rxieeehd);
+      rx[i][j].rxiov[2].iov_base = &rx[i][j].rxllchd;      rx[i][j].rxiov[2].iov_len = sizeof(rx[i][j].rxllchd);
+      rx[i][j].rxiov[3].iov_base = &rx[i][j].rxpayhd;      rx[i][j].rxiov[3].iov_len = sizeof(rx[i][j].rxpayhd);
+      rx[i][j].rxiov[4].iov_base = &rx[i][j].rxpaybuf;     rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
 
-    rxmsg[i].msg_iov = rx[i].rxiov; rxmsg[i].msg_iovlen = 5;
+      rxmsg[i][j].msg_iov = rx[i][j].rxiov; rxmsg[i][j].msg_iovlen = 5;
+    }
   }
-
 
   ssize_t len = 0, rawlen = 0;
 
@@ -455,12 +459,8 @@ int main(int argc, char **argv) {
     setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
   }
 
-  uint8_t rxmsgreg;
-
   while (poll(readsets, nbfds, -1) != -1) {
 
-    rxmsgreg = 0;
- 
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
       if (readsets[cpt].revents & POLLIN) {
         if (cpt == 0) {
@@ -501,16 +501,22 @@ int main(int argc, char **argv) {
 
           if (readsets[cpt].revents & POLLIN) {
 
-	    int32_t tmp = 0; rawlen = 0;
+            uint8_t raw = cpt - 1; uint8_t stlog = rxrawlog[raw];
+	    ssize_t tmp = 0; uint8_t pos;
+
+	    rxrawlog[raw] = 0; rawlen = 0;
+
             while (tmp >= 0) { 
-              memset((uint8_t *)(rxmsg[rxmsgreg].msg_iov[1].iov_base), 0 , rxmsg[rxmsgreg].msg_iov[1].iov_len);
-              memset((uint8_t *)(rxmsg[rxmsgreg].msg_iov[3].iov_base), 0 , rxmsg[rxmsgreg].msg_iov[3].iov_len);
-	      tmp = recvmsg(fds[cpt], &rxmsg[rxmsgreg], MSG_DONTWAIT); rawlen += tmp;
-              if ((tmp > 0) && (*(4 + ((uint8_t *)(rxmsg[rxmsgreg].msg_iov[1].iov_base))) == 0x66)) rxmsgreg++;
+	      pos = rxrawlog[raw];
+              memset((uint8_t *)(rxmsg[raw][pos].msg_iov[1].iov_base), 0 , rxmsg[raw][pos].msg_iov[1].iov_len);
+              memset((uint8_t *)(rxmsg[raw][pos].msg_iov[3].iov_base), 0 , rxmsg[raw][pos].msg_iov[3].iov_len);
+	      tmp = recvmsg(fds[cpt], &rxmsg[raw][pos], MSG_DONTWAIT); rawlen += tmp;
+              if ((tmp > 0) && (*(4 + ((uint8_t *)(rxmsg[raw][pos].msg_iov[1].iov_base))) == 0x66)) (rxrawlog[raw]++);
 	    }
 
-	    if (rxmsgreg > 0) {
-              payhd_t *ptrrx = (payhd_t *)(rxmsg[rxmsgreg].msg_iov[3].iov_base);
+	    for (pos = stlog; pos < rxrawlog[raw]; pos++) {
+
+              payhd_t *ptrrx = (payhd_t *)(rxmsg[pos][raw].msg_iov[3].iov_base);
               if (ptrrx->droneid == DRONEID) { printf("This should no happened\n");fflush(stdout); exit(-1); }
 	      else {
                 printf("raw (%d)\n",cpt-1); fflush(stdout);
@@ -518,7 +524,7 @@ int main(int argc, char **argv) {
                 printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
 	        sync_ack[cpt] = 0;
               }
-            } ;//else { printf("rawlen(%ld)\n",rawlen);fflush(stdout); }
+	    }
           }
         }
       }
