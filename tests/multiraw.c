@@ -296,8 +296,8 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 }
 
 /*****************************************************************************/
-void  setsock(char *name, uint8_t *fd, uint32_t index) {
-
+void  setsock(uint8_t *fd, uint32_t index) {
+/*
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
 
@@ -312,6 +312,48 @@ void  setsock(char *name, uint8_t *fd, uint32_t index) {
 
   const int32_t sock_qdisc_bypass = 1;
   if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
+*/
+/*
+https://hundeboll.net/receiving-udp-packets-in-promiscuous-mode.html
+*/
+
+  uint16_t protocol = htons(ETH_P_ALL);
+  if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+
+  struct packet_mreq mreq = {0};
+  int action;
+
+  mreq.mr_ifindex = index;
+  mreq.mr_type = PACKET_MR_PROMISC;
+
+//  action = PACKET_ADD_MEMBERSHIP;
+  action = PACKET_DROP_MEMBERSHIP;
+
+  if (-1 == setsockopt(*fd, SOL_PACKET, action, &mreq, sizeof(mreq))) exit(-1);
+
+/*
+  struct sock_fprog prog;
+  struct sock_filter filter[] = {
+            { BPF_LD + BPF_H + BPF_ABS,  0, 0,     12 },
+            { BPF_JMP + BPF_JEQ + BPF_K, 0, 1,  0x800 },
+            { BPF_LD + BPF_B + BPF_ABS,  0, 0,     23 },
+            { BPF_JMP + BPF_JEQ + BPF_K, 0, 1,   0x11 },
+            { BPF_RET + BPF_K,           0, 0, 0xffff },
+            { BPF_RET + BPF_K,           0, 0, 0x0000 },
+  };
+
+  prog.len = sizeof(filter)/sizeof(filter[0]);
+  prog.filter = filter;
+
+  if (-1 == setsockopt(*fd, SOL_SOCKET, SO_ATTACH_FILTER, &prog, sizeof(prog))) exit(-1);
+*/
+  struct sockaddr_ll sa = {0};
+
+  sa.sll_family = AF_PACKET;
+  sa.sll_ifindex = index;
+  sa.sll_protocol = htons(ETH_P_ALL);
+
+  if (-1 == bind(*fd, (struct sockaddr *)&sa, sizeof(sa))) exit(-1);
 }
 
 
@@ -387,7 +429,7 @@ int main(int argc, char **argv) {
   for (uint8_t i = 0; i <  nbraws; i++) {
     memset(&rawdevs[i],0,sizeof(rawdevs[i]));
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
-    setsock( ifnames[i], &fds[i + 1], index[i]);
+    setsock( &fds[i + 1], index[i]);
     readsets[i + 1].fd = fds[i + 1]; readsets[i + 1].events = POLLIN;
   }
 
