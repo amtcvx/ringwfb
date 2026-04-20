@@ -393,7 +393,7 @@ int main(int argc, char **argv) {
 
 #define RXRADIOTAPSIZE 35
 #define RXLOG 8
-  static struct rx_t {
+  struct rx_t {
     uint8_t rxradiotaphd[RXRADIOTAPSIZE];
     uint8_t rxieeehd[24];
     uint8_t rxllchd[4];
@@ -412,29 +412,31 @@ int main(int argc, char **argv) {
       rx[i][j].rxiov[2].iov_base = &rx[i][j].rxllchd;      rx[i][j].rxiov[2].iov_len = sizeof(rx[i][j].rxllchd);
       rx[i][j].rxiov[3].iov_base = &rx[i][j].rxpayhd;      rx[i][j].rxiov[3].iov_len = sizeof(rx[i][j].rxpayhd);
       rx[i][j].rxiov[4].iov_base = &rx[i][j].rxpaybuf;     rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
+
       rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;             rx[i][j].rxmsg.msg_iovlen = 5;
     }
   }
 
 
-  static struct tx_t {
-    uint8_t txradiotaphd[]; /* = {
+  uint8_t radiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
         0x0d, 0x00, // <- radiotap header length
         0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
         0x08, 0x00,  // RADIOTAP_F_TX_NOACK
         MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
-    };
-    */
-    uint8_t txieeehd[];/* = {
+  };
+  uint8_t ieeehd[] = {
         0x08, 0x01,                         // Frame Control : Data frame from STA to DS
         0x00, 0x00,                         // Duration
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Receiver MAC
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Transmitter MAC
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
         0x10, 0x86                          // Sequence control
-    };
-    */
+  };
+
+ struct tx_t {
+    uint8_t txradiotaphd[sizeof(radiotaphd)];
+    uint8_t txieeehd[sizeof(ieeehd)];
     uint8_t txllchd[4];
     payhd_t txpayhd;
     uint8_t txpaybuf[PAY_MTU];
@@ -443,12 +445,17 @@ int main(int argc, char **argv) {
   } tx[MAXRAWDEV];
 
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
+    
+    memcpy(&tx[i].txradiotaphd, &radiotaphd, sizeof(radiotaphd));
+    memcpy(&tx[i].txieeehd, &ieeehd, sizeof(ieeehd));
+
     tx[i].txiov[0].iov_base = &tx[i].txradiotaphd; tx[i].txiov[0].iov_len = sizeof(tx[i].txradiotaphd);
     tx[i].txiov[1].iov_base = &tx[i].txieeehd;     tx[i].txiov[1].iov_len = sizeof(tx[i].txieeehd);
     tx[i].txiov[2].iov_base = &tx[i].txllchd;      tx[i].txiov[2].iov_len = sizeof(tx[i].txllchd);
     tx[i].txiov[3].iov_base = &tx[i].txpayhd;      tx[i].txiov[3].iov_len = sizeof(tx[i].txpayhd);
     tx[i].txiov[4].iov_base = &tx[i].txpaybuf;     tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
-    tx[i].txmsg.msg_iov = tx[i].rxiov;             tx[i].txmsg.msg_iovlen = 5;
+
+    tx[i].txmsg.msg_iov = tx[i].txiov;             tx[i].txmsg.msg_iovlen = 5;
   }
 
   ssize_t len = 0, rawlen = 0;
