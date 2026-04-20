@@ -468,32 +468,28 @@ int main(int argc, char **argv) {
           printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
             rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
 
+          if (sync_scan >= 0) {
+            if (sync_ack[sync_scan] > 1) { upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs ); sync_ack[sync_scan] = 0; }
+            if (sync_ack[sync_scan] < 2) sync_ack[sync_scan]++;
+	  }
+
           for (uint8_t i = 0; i < nbraws; i++) {
-            if (i != sync_first) {
-              if (sync_ack[i] == 0) { sync_first = i; for (uint8_t j = 0; j < nbraws; j++) if (i != j) sync_scan = j; }
-
-	      if (sync_cpt[i] == 5) { 
-	        if (sync_first < 0) { 
-	          sync_first = i; for (uint8_t j = 0; j < nbraws; j++) if (i != j) 
-	          { sync_scan = j;  rawdevs[j].cptfreq = (nbraws - j -1) * (rawdevs[j].nbfreqs / nbraws);
-                    setfreq(sockid, socknl, index[j], rawdevs[j].freqs[rawdevs[j].cptfreq]);
-	          }
-	        }
-	      }
-	      if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs );
-	      if (sync_cpt[i] < 5) sync_cpt[i]++;
+            if (sync_first < 0) {
+	      if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs);
+	      if (sync_cpt[i] < 5)  sync_cpt[i]++;
+	      if (sync_cpt[i] == 5) sync_first = i;
 	    }
-          }
-      
-          if (sync_scan >= 0) { 
-            send_first = true;
+	  }
 
-            if (sync_ack[sync_scan] < 3) sync_ack[sync_scan]++;
-            if (sync_ack[sync_scan] == 3)  {
-              upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs );
-	      sync_ack[sync_scan] = 1;
+          if (sync_first >= 0) send_first = true;
+
+          if ((sync_scan < 0) && (sync_first >= 0)) {
+	    for(uint8_t i = 0; i < nbraws; i++) if (i != sync_first) {
+	      sync_scan = i;  rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
+              setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
 	    }
-          }
+	  }
+
         } else {
 
           if (readsets[cpt].revents & (POLLERR | POLLNVAL)) { printf("socket error: %s", strerror(errno)); fflush(stdout); }
@@ -501,6 +497,8 @@ int main(int argc, char **argv) {
           if (readsets[cpt].revents & POLLIN) {
 
             uint8_t raw = cpt - 1; 
+
+	    sync_cpt[raw] = 0;
 
 	    rxrawlog[raw] = 0;
 
@@ -519,15 +517,14 @@ int main(int argc, char **argv) {
 
 	    for (pos = stlog; pos < rxrawlog[raw]; pos++) {
               payhd_t *ptrrx = (payhd_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base);
-              if (ptrrx->droneid == DRONEID) { printf("This should no happened\n");fflush(stdout); exit(-1); }
+              if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); }
 	      else {
                 printf("raw (%d)\n",raw); fflush(stdout);
                 printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
                 printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
-	        sync_ack[raw] = 0;
+		sync_ack[raw] = 0;
               }
 	    }
-	    if (sync_ack[raw] != 0) sync_cpt[raw] = 0;
           }
         }
       }
