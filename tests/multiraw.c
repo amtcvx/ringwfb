@@ -319,6 +319,11 @@ https://hundeboll.net/receiving-udp-packets-in-promiscuous-mode.html
 
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+/*
+  int sndlenbuf = 2048;
+  if (-1 == setsockopt(*fd, SOL_PACKET, SO_SNDBUF, &sndlenbuf, sizeof(sndlenbuf))) exit(-1);
+  int recvlenbuf = 2048;
+  if (-1 == setsockopt(*fd, SOL_PACKET, SO_RCVBUF, &recvlenbuf, sizeof(recvlenbuf))) exit(-1);
 
   struct packet_mreq mreq = {0};
   int action;
@@ -331,16 +336,17 @@ https://hundeboll.net/receiving-udp-packets-in-promiscuous-mode.html
 
   if (-1 == setsockopt(*fd, SOL_PACKET, action, &mreq, sizeof(mreq))) exit(-1);
 
-/*
+//sudo tcpdump -dd not ether src 66:55:44:33:22:11
+
   struct sock_fprog prog;
   struct sock_filter filter[] = {
-            { BPF_LD + BPF_H + BPF_ABS,  0, 0,     12 },
-            { BPF_JMP + BPF_JEQ + BPF_K, 0, 1,  0x800 },
-            { BPF_LD + BPF_B + BPF_ABS,  0, 0,     23 },
-            { BPF_JMP + BPF_JEQ + BPF_K, 0, 1,   0x11 },
-            { BPF_RET + BPF_K,           0, 0, 0xffff },
-            { BPF_RET + BPF_K,           0, 0, 0x0000 },
-  };
+{ 0x20, 0, 0, 0x00000008 },
+{ 0x15, 0, 3, 0x44332211 },
+{ 0x28, 0, 0, 0x00000006 },
+{ 0x15, 0, 1, 0x00006655 },
+{ 0x6, 0, 0, 0x00000000 },
+{ 0x6, 0, 0, 0x00040000 },
+};
 
   prog.len = sizeof(filter)/sizeof(filter[0]);
   prog.filter = filter;
@@ -352,6 +358,9 @@ https://hundeboll.net/receiving-udp-packets-in-promiscuous-mode.html
   sa.sll_family = AF_PACKET;
   sa.sll_ifindex = index;
   sa.sll_protocol = htons(ETH_P_ALL);
+
+  //sa.sll_pkttype = PACKET_OTHERHOST|PACKET_BROADCAST|PACKET_MULTICAST|PACKET_HOST;
+  //sa.sll_pkttype = PACKET_OTHERHOST; // PACKET_OUTGOING;
 
   if (-1 == bind(*fd, (struct sockaddr *)&sa, sizeof(sa))) exit(-1);
 }
