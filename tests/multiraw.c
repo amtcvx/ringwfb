@@ -44,8 +44,8 @@ sudo ./exe_multiraw
 #include <errno.h>
 
 /************************************************************************************************/
-#define DRONEID 0
-//#define DRONEID 1
+//#define DRONEID 0
+#define DRONEID 1
 
 #define MAXRAWDEV 4
 
@@ -296,23 +296,21 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 }
 
 /*****************************************************************************/
-void  setsock(uint8_t *txfd, uint8_t *rxfd, uint32_t index) {
+void  setsock(uint8_t *fd, uint32_t index) {
 
-  // two dedicated sockets to avoid reading own sendings
   uint16_t protocol = htons(ETH_P_ALL);
-  if (-1 == (*txfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
-  if (-1 == (*rxfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+  if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
 
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
   sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
-  if (-1 == bind(*rxfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // must be AFTER wifi setting
-  drain(*rxfd);
+  if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // must be AFTER wifi setting
+  drain(*fd);
 
   const int32_t sock_qdisc_bypass = 1;
-  if (-1 == setsockopt(*rxfd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
+  if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
 }
 
 /******************************************************************************/
@@ -371,25 +369,29 @@ int main(int argc, char **argv) {
   if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
 
   uint8_t nbfds = 1 + nbraws;
-
-  uint8_t txfds[nbraws], rxfds[nbfds];
+  uint8_t fds[nbfds];
 
   uint64_t exptime;
-  if (-1 == (rxfds[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
+  if (-1 == (fds[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(rxfds[0], 0, &period, NULL);
+  timerfd_settime(fds[0], 0, &period, NULL);
 
   struct pollfd readsets[nbfds];
   memset(readsets, 0, sizeof(readsets));
-  readsets[0].fd = rxfds[0]; readsets[0].events = POLLIN;
+  readsets[0].fd = fds[0]; readsets[0].events = POLLIN;
 
+  uint8_t rxfds[nbraws]; // txfds[nbraws]
   uint32_t index[nbraws];
   rawdev_t rawdevs[nbraws];
+
   for (uint8_t i = 0; i <  nbraws; i++) {
     memset(&rawdevs[i],0,sizeof(rawdevs[i]));
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
-    setsock( &txfds[i], &rxfds[i + 1], index[i]);
-    readsets[i + 1].fd = rxfds[i + 1]; readsets[i + 1].events = POLLIN;
+
+//    setsock( &txfds[i], index[i]);
+    setsock( &rxfds[i], index[i]);
+ 
+    readsets[i + 1].fd = rxfds[i]; readsets[i + 1].events = POLLIN;
   }
 
 #define RXRADIOTAPSIZE 35
@@ -476,7 +478,7 @@ int main(int argc, char **argv) {
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
       if (readsets[cpt].revents & POLLIN) {
         if (cpt == 0) {
-          len = read(rxfds[0], &exptime, sizeof(uint64_t));
+          len = read(fds[0], &exptime, sizeof(uint64_t));
 
           printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
             rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
@@ -524,7 +526,7 @@ int main(int argc, char **argv) {
 	      pos = rxrawlog[raw];
               memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[1].iov_len);
               memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[3].iov_len);
-	      tmp = recvmsg(rxfds[cpt], &rx[raw][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
+	      tmp = recvmsg(rxfds[raw], &rx[raw][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
               if ((tmp > 0) && (*(4 + ((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base))) == 0x66)) (rxrawlog[raw]++);
 	    }
 
@@ -548,7 +550,8 @@ int main(int argc, char **argv) {
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
 
-      rawlen = sendmsg(txfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
+      //rawlen = sendmsg(txfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
+      rawlen = sendmsg(rxfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
 
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
