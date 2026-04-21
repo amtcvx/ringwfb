@@ -8,7 +8,7 @@ sudo ./exe_multiraw
 
 */
 
-#include<unistd.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -44,11 +44,14 @@ sudo ./exe_multiraw
 #include <errno.h>
 
 /************************************************************************************************/
-#define DRONEID 1
+#define DRONEID 0
+//#define DRONEID 1
 
 #define MAXRAWDEV 4
 
 #define DRIVER_NAME "rtl88XXau"
+
+#define PAY_MTU 1400
 
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
@@ -76,31 +79,6 @@ typedef struct {
   uint16_t msglen;
   int32_t backfreq;
 } __attribute__((packed)) payhd_t;
-
-/************************************************************************************************/
-
-uint8_t radiotaphd_tx[] = {
-        0x00, 0x00, // <-- radiotap version
-        0x0d, 0x00, // <- radiotap header length
-        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
-        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
-        MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
-};
-uint8_t ieeehd_tx[] = {
-        0x08, 0x01,                         // Frame Control : Data frame from STA to DS
-        0x00, 0x00,                         // Duration
-        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Receiver MAC
-        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Transmitter MAC
-        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
-        0x10, 0x86                          // Sequence control
-};
-uint8_t llchd_tx[4];
-payhd_t payhd_tx;
-
-struct iovec iov_radiotaphd_tx = { .iov_base = radiotaphd_tx, .iov_len = sizeof(radiotaphd_tx)};
-struct iovec iov_ieeehd_tx =     { .iov_base = ieeehd_tx,     .iov_len = sizeof(ieeehd_tx)};
-struct iovec iov_llchd_tx =      { .iov_base = llchd_tx,      .iov_len = sizeof(llchd_tx)};
-struct iovec iov_payhd_tx =      { .iov_base = &payhd_tx,     .iov_len = sizeof(payhd_tx)};
 
 /*****************************************************************************/
 #define NBFREQS 65
@@ -318,24 +296,24 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 }
 
 /*****************************************************************************/
-void  setsock(char *name, uint8_t *fd, uint32_t index) {
+void  setsock(uint8_t *txfd, uint8_t *rxfd, uint32_t index) {
 
+  // two dedicated sockets to avoid reading own sendings
   uint16_t protocol = htons(ETH_P_ALL);
-  if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+  if (-1 == (*txfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+  if (-1 == (*rxfd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
 
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
   sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
-  if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // TO BE CHECK BIND must be AFTER wifi setting
-
-  drain(*fd);
+  if (-1 == bind(*rxfd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // must be AFTER wifi setting
+  drain(*rxfd);
 
   const int32_t sock_qdisc_bypass = 1;
-  if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
+  if (-1 == setsockopt(*rxfd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
 }
-
 
 /******************************************************************************/
 uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
@@ -364,6 +342,16 @@ uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
   return(i);
 }
 
+
+/*****************************************************************************/
+uint64_t get_time_ms(void) {
+
+  struct timespec ts;
+  int rc = clock_gettime(CLOCK_MONOTONIC, &ts);
+  if (rc < 0) { printf("Error getting time: %s", strerror(errno)); fflush(stdout); }
+  return ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+}
+
 /*****************************************************************************/
 int main(int argc, char **argv) {
 
@@ -383,46 +371,95 @@ int main(int argc, char **argv) {
   if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
 
   uint8_t nbfds = 1 + nbraws;
-  uint8_t fd[nbfds];
+
+  uint8_t txfds[nbraws], rxfds[nbfds];
 
   uint64_t exptime;
-  if (-1 == (fd[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
+  if (-1 == (rxfds[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
   struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(fd[0], 0, &period, NULL);
+  timerfd_settime(rxfds[0], 0, &period, NULL);
 
   struct pollfd readsets[nbfds];
   memset(readsets, 0, sizeof(readsets));
-  readsets[0].fd = fd[0]; readsets[0].events = POLLIN;
+  readsets[0].fd = rxfds[0]; readsets[0].events = POLLIN;
 
   uint32_t index[nbraws];
   rawdev_t rawdevs[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
     memset(&rawdevs[i],0,sizeof(rawdevs[i]));
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
-    setsock( ifnames[i], &fd[i + 1], index[i]);
-    readsets[i + 1].fd = fd[i + 1]; readsets[i + 1].events = POLLIN;
+    setsock( &txfds[i], &rxfds[i + 1], index[i]);
+    readsets[i + 1].fd = rxfds[i + 1]; readsets[i + 1].events = POLLIN;
   }
 
-  uint8_t paybuf_tx[1400] = {-1};
-  struct iovec iov_paybuf_tx =  { .iov_base = paybuf_tx, .iov_len = sizeof(paybuf_tx) };
-  struct iovec iovtab_tx[5] =   { iov_radiotaphd_tx, iov_ieeehd_tx, iov_llchd_tx, iov_payhd_tx, iov_paybuf_tx };
-  struct msghdr msg_tx =        { .msg_iov = iovtab_tx, .msg_iovlen = 5 };
+#define RXRADIOTAPSIZE 35
+#define RXLOG 8
+  struct rx_t {
+    uint8_t rxradiotaphd[RXRADIOTAPSIZE];
+    uint8_t rxieeehd[24];
+    uint8_t rxllchd[4];
+    payhd_t rxpayhd;
+    uint8_t rxpaybuf[PAY_MTU];
+    struct iovec rxiov[5];
+    struct msghdr rxmsg;
+  } rx[MAXRAWDEV][RXLOG];
 
-#define RADIOTAPSIZE 35
-  uint8_t radiotaphd_rx[RADIOTAPSIZE];
-  uint8_t ieeehd_rx[24];
-  uint8_t llchd_rx[4];
-  payhd_t payhd_rx;
-  uint8_t paybuf_rx[1400] = {-1};
-  struct iovec iov_radiotaphd_rx = { .iov_base = radiotaphd_rx, .iov_len = sizeof(radiotaphd_rx)};
-  struct iovec iov_ieeehd_rx =     { .iov_base = ieeehd_rx,     .iov_len = sizeof(ieeehd_rx)};
-  struct iovec iov_llchd_rx =      { .iov_base = llchd_rx,      .iov_len = sizeof(llchd_rx)};
-  struct iovec iov_payhd_rx =      { .iov_base = &payhd_rx,     .iov_len = sizeof(payhd_rx)};
-  struct iovec iov_paybuf_rx =     { .iov_base = paybuf_rx,     .iov_len = sizeof(paybuf_rx) };
-  struct iovec iovtab_rx[5] =      { iov_radiotaphd_rx, iov_ieeehd_rx, iov_llchd_rx, iov_payhd_rx, iov_paybuf_rx };
-  struct msghdr msg_rx =           { .msg_iov = iovtab_rx, .msg_iovlen = 5 };
+  uint8_t rxrawlog[MAXRAWDEV];
 
-  ssize_t rawlen = 0, len = 0;
+  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
+    for(uint8_t j = 0; j < RXLOG; j++) {
+      rx[i][j].rxiov[0].iov_base = &rx[i][j].rxradiotaphd; rx[i][j].rxiov[0].iov_len = sizeof(rx[i][j].rxradiotaphd);
+      rx[i][j].rxiov[1].iov_base = &rx[i][j].rxieeehd;     rx[i][j].rxiov[1].iov_len = sizeof(rx[i][j].rxieeehd);
+      rx[i][j].rxiov[2].iov_base = &rx[i][j].rxllchd;      rx[i][j].rxiov[2].iov_len = sizeof(rx[i][j].rxllchd);
+      rx[i][j].rxiov[3].iov_base = &rx[i][j].rxpayhd;      rx[i][j].rxiov[3].iov_len = sizeof(rx[i][j].rxpayhd);
+      rx[i][j].rxiov[4].iov_base = &rx[i][j].rxpaybuf;     rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
+
+      rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;             rx[i][j].rxmsg.msg_iovlen = 5;
+    }
+  }
+
+
+  uint8_t radiotaphd[] = {
+        0x00, 0x00, // <-- radiotap version
+        0x0d, 0x00, // <- radiotap header length
+        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
+        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
+        MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
+  };
+  uint8_t ieeehd[] = {
+        0x08, 0x01,                         // Frame Control : Data frame from STA to DS
+        0x00, 0x00,                         // Duration
+        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Receiver MAC
+        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Transmitter MAC
+        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
+        0x10, 0x86                          // Sequence control
+  };
+
+ struct tx_t {
+    uint8_t txradiotaphd[sizeof(radiotaphd)];
+    uint8_t txieeehd[sizeof(ieeehd)];
+    uint8_t txllchd[4];
+    payhd_t txpayhd;
+    uint8_t txpaybuf[PAY_MTU];
+    struct iovec txiov[5];
+    struct msghdr txmsg;
+  } tx[MAXRAWDEV];
+
+  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
+    
+    memcpy(&tx[i].txradiotaphd, &radiotaphd, sizeof(radiotaphd));
+    memcpy(&tx[i].txieeehd, &ieeehd, sizeof(ieeehd));
+
+    tx[i].txiov[0].iov_base = &tx[i].txradiotaphd; tx[i].txiov[0].iov_len = sizeof(tx[i].txradiotaphd);
+    tx[i].txiov[1].iov_base = &tx[i].txieeehd;     tx[i].txiov[1].iov_len = sizeof(tx[i].txieeehd);
+    tx[i].txiov[2].iov_base = &tx[i].txllchd;      tx[i].txiov[2].iov_len = sizeof(tx[i].txllchd);
+    tx[i].txiov[3].iov_base = &tx[i].txpayhd;      tx[i].txiov[3].iov_len = sizeof(tx[i].txpayhd);
+    tx[i].txiov[4].iov_base = &tx[i].txpaybuf;     tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
+
+    tx[i].txmsg.msg_iov = tx[i].txiov;             tx[i].txmsg.msg_iovlen = 5;
+  }
+
+  ssize_t len = 0, rawlen = 0;
 
   bool send_first = false;
   int8_t sync_first = -1, sync_scan = -1;
@@ -435,69 +472,89 @@ int main(int argc, char **argv) {
   }
 
   while (poll(readsets, nbfds, -1) != -1) {
+
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
       if (readsets[cpt].revents & POLLIN) {
         if (cpt == 0) {
-          len = read(fd[0], &exptime, sizeof(uint64_t));
+          len = read(rxfds[0], &exptime, sizeof(uint64_t));
 
           printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
-	    rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
+            rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
 
-	  for (uint8_t i = 0; i < nbraws; i++) { 
-	    if (i != sync_first) {
-	      if (sync_ack[i] == 0) { sync_first = i; for (uint8_t j = 0; j < nbraws; j++) if (i != j) sync_scan = j; }
+          if (sync_scan >= 0) {
+            if (sync_ack[sync_scan] > 1) { upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs ); sync_ack[sync_scan] = 0; }
+            if (sync_ack[sync_scan] < 2) sync_ack[sync_scan]++;
+	  }
 
-
-	      if (sync_cpt[i] == 5) { 
-	        if (sync_first < 0) { 
-	          sync_first = i; for (uint8_t j = 0; j < nbraws; j++) if (i != j) 
-		  { sync_scan = j;  rawdevs[j].cptfreq = (nbraws - j -1) * (rawdevs[j].nbfreqs / nbraws);
-                    setfreq(sockid, socknl, index[j], rawdevs[j].freqs[rawdevs[j].cptfreq]);
-	          }
-		}
-	      }
-	      if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs );
-	      if (sync_cpt[i] < 5) sync_cpt[i]++;
+          for (uint8_t i = 0; i < nbraws; i++) {
+            if (sync_first < 0) {
+	      if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs);
+	      if (sync_cpt[i] < 5)  sync_cpt[i]++;
+	      if (sync_cpt[i] == 5) sync_first = i;
 	    }
 	  }
-	  if (sync_scan >= 0) { 
-            send_first = true;
 
-	    if (sync_ack[sync_scan] < 3) sync_ack[sync_scan]++;
-            if (sync_ack[sync_scan] == 3)  {
-	      upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs );
-	      sync_ack[sync_scan] = 1;
+          if (sync_first >= 0) send_first = true;
+
+          if ((sync_scan < 0) && (sync_first >= 0)) {
+	    for(uint8_t i = 0; i < nbraws; i++) if (i != sync_first) {
+	      sync_scan = i;  rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
+              setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
 	    }
 	  }
-	} else {
-          memset((uint8_t *)(msg_rx.msg_iov[1].iov_base), 0 , msg_rx.msg_iov[1].iov_len);
-          memset((uint8_t *)(msg_rx.msg_iov[3].iov_base), 0 , msg_rx.msg_iov[3].iov_len);
-          if ((rawlen = recvmsg(fd[cpt], &msg_rx, MSG_DONTWAIT)) > 0) {
-	    if (*(4 + ((uint8_t *)(msg_rx.msg_iov[1].iov_base))) != 0x66) sync_cpt[cpt - 1] = 0;
-            else {
-              payhd_t *ptrrx = (payhd_t *)(msg_rx.msg_iov[3].iov_base);
-              if (ptrrx->droneid == DRONEID) { printf("This should no happened\n");fflush(stdout); exit(-1); }
+
+        } else {
+
+          if (readsets[cpt].revents & (POLLERR | POLLNVAL)) { printf("socket error: %s", strerror(errno)); fflush(stdout); }
+
+          if (readsets[cpt].revents & POLLIN) {
+
+            uint8_t raw = cpt - 1; 
+
+	    sync_cpt[raw] = 0;
+
+	    rxrawlog[raw] = 0;
+
+	    uint8_t stlog = rxrawlog[raw];
+
+	    rawlen = 0;
+	    int32_t tmp = 0; uint8_t pos;
+
+            while (tmp >= 0) { 
+	      pos = rxrawlog[raw];
+              memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[1].iov_len);
+              memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[3].iov_len);
+	      tmp = recvmsg(rxfds[cpt], &rx[raw][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
+              if ((tmp > 0) && (*(4 + ((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base))) == 0x66)) (rxrawlog[raw]++);
+	    }
+
+	    for (pos = stlog; pos < rxrawlog[raw]; pos++) {
+              payhd_t *ptrrx = (payhd_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base);
+              if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); }
 	      else {
-
-	        sync_ack[cpt - 1] = 0;
-	      }
+                printf("raw (%d)\n",raw); fflush(stdout);
+                printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
+                printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
+		sync_ack[raw] = 0;
+              }
 	    }
-	  }
-	}
+          }
+        }
       }
     }
+
     if (send_first) {
-      ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->droneid = DRONEID;
-      ((payhd_t *)(msg_tx.msg_iov[3].iov_base))->msglen = 1;
-      msg_tx.msg_iov[4].iov_len = 1;
+      ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->droneid = DRONEID;
+      ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
+      tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
 
-      rawlen = sendmsg(fd[1 + sync_first], &msg_tx, MSG_DONTWAIT);
+      rawlen = sendmsg(txfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
 
-      payhd_t *ptrtx = (payhd_t *)(msg_tx.msg_iov[3].iov_base);
+      payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
-        ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
+      ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
 
       send_first = false;
     }
-  } // Poll
+  }
 }
