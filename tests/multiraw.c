@@ -39,7 +39,8 @@ sudo ./exe_multiraw
 
 #include <dirent.h>
 
-#include <sys/timerfd.h>
+//#include <sys/timerfd.h>
+#include <time.h>
 
 #include <errno.h>
 
@@ -368,17 +369,9 @@ int main(int argc, char **argv) {
   if (!(sockrt = nl_socket_alloc())) exit(-1);
   if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
 
-  uint8_t nbfds = 1 + nbraws;
-  uint8_t fds[nbfds];
-
-  uint64_t exptime;
-  if (-1 == (fds[0] = timerfd_create(CLOCK_MONOTONIC, 0))) exit(-1);
-  struct itimerspec period = { { PERIOD_DELAY_S, 0 }, { PERIOD_DELAY_S, 0 } };
-  timerfd_settime(fds[0], 0, &period, NULL);
-
+  uint8_t nbfds = nbraws;
   struct pollfd readsets[nbfds];
   memset(readsets, 0, sizeof(readsets));
-  readsets[0].fd = fds[0]; readsets[0].events = POLLIN;
 
   uint8_t rawfds[nbraws];
   uint32_t index[nbraws];
@@ -388,7 +381,7 @@ int main(int argc, char **argv) {
     memset(&rawdevs[i],0,sizeof(rawdevs[i]));
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
     setsock( &rawfds[i], index[i]);
-    readsets[i + 1].fd = rawfds[i]; readsets[i + 1].events = POLLIN;
+    readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
 
 #define RXRADIOTAPSIZE 35
@@ -458,7 +451,7 @@ int main(int argc, char **argv) {
     tx[i].txmsg.msg_iov = tx[i].txiov;             tx[i].txmsg.msg_iovlen = 5;
   }
 
-  ssize_t len = 0, rawlen = 0;
+  ssize_t rawlen = 0;
 
   bool send_first = false;
   int8_t sync_first = -1, sync_scan = -1;
@@ -470,79 +463,83 @@ int main(int argc, char **argv) {
     setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
   }
 
-  while (poll(readsets, nbfds, -1) != -1) {
+  struct timespec ts;  
+  uint64_t curms,  stoms, intms = 1000;
+  clock_gettime(CLOCK_MONOTONIC, &ts); stoms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
-    for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
+  while (true) {
+
+    clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+    poll(readsets, nbfds, stoms > curms ? stoms - curms : 0);
+    clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+
+    if (curms >= stoms) { // SYNCHRONOUS
+
+      stoms = curms + intms - ((curms - stoms) % intms);
+				    
+      printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
+        rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
+
+      if (sync_scan >= 0) {
+        if (sync_ack[sync_scan] > 1) { upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs ); sync_ack[sync_scan] = 0; }
+        if (sync_ack[sync_scan] < 2) sync_ack[sync_scan]++;
+      }
+
+      for (uint8_t i = 0; i < nbraws; i++) {
+        if (sync_first < 0) {
+          if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs);
+	  if (sync_cpt[i] < 5)  sync_cpt[i]++;
+	  if (sync_cpt[i] == 5) sync_first = i;
+        }
+      }
+
+      if (sync_first >= 0) send_first = true;
+
+      if ((sync_scan < 0) && (sync_first >= 0)) {
+        for(uint8_t i = 0; i < nbraws; i++) if (i != sync_first) {
+          sync_scan = i;  rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
+          setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
+	}
+      }
+    }
+
+    for (uint8_t cpt = 0; cpt < nbfds; cpt++) { // ASYNCHRONOUS RECV
 
       if (readsets[cpt].revents & (POLLERR | POLLNVAL)) { printf("socket error: %s", strerror(errno)); fflush(stdout); }
 
       if (readsets[cpt].revents & POLLIN) {
 
-        if (cpt == 0) {
+	sync_cpt[cpt] = 0;
 
-          len = read(fds[0], &exptime, sizeof(uint64_t));
+	rxrawlog[cpt] = 0;
 
-          printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
-            rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
+	uint8_t stlog = rxrawlog[cpt];
 
-          if (sync_scan >= 0) {
-            if (sync_ack[sync_scan] > 1) { upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs ); sync_ack[sync_scan] = 0; }
-            if (sync_ack[sync_scan] < 2) sync_ack[sync_scan]++;
+	rawlen = 0;
+	int32_t tmp = 0; uint8_t pos;
+
+        while (tmp >= 0) {
+	  pos = rxrawlog[cpt];
+          memset((uint8_t *)(rx[cpt][pos].rxmsg.msg_iov[1].iov_base), 0 , rx[cpt][pos].rxmsg.msg_iov[1].iov_len);
+          memset((uint8_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base), 0 , rx[cpt][pos].rxmsg.msg_iov[3].iov_len);
+	  tmp = recvmsg(rawfds[cpt], &rx[cpt][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
+          if ((tmp > 0) && (*(4 + ((uint8_t *)(rx[cpt][pos].rxmsg.msg_iov[1].iov_base))) == 0x66)) (rxrawlog[cpt]++);
+	}
+
+	for (pos = stlog; pos < rxrawlog[cpt]; pos++) {
+          payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
+          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); }
+	  else {
+            printf("raw (%d)\n",cpt); fflush(stdout);
+            printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
+            printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
+	    sync_ack[cpt] = 0;
 	  }
-
-          for (uint8_t i = 0; i < nbraws; i++) {
-            if (sync_first < 0) {
-	      if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs);
-	      if (sync_cpt[i] < 5)  sync_cpt[i]++;
-	      if (sync_cpt[i] == 5) sync_first = i;
-	    }
-	  }
-
-          if (sync_first >= 0) send_first = true;
-
-          if ((sync_scan < 0) && (sync_first >= 0)) {
-	    for(uint8_t i = 0; i < nbraws; i++) if (i != sync_first) {
-	      sync_scan = i;  rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
-              setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
-	    }
-	  }
-
-        } else {
-
-          uint8_t raw = cpt - 1; 
-
-	  sync_cpt[raw] = 0;
-
-	  rxrawlog[raw] = 0;
-
-	  uint8_t stlog = rxrawlog[raw];
-
-	  rawlen = 0;
-	  int32_t tmp = 0; uint8_t pos;
-
-          while (tmp >= 0) {
-	    pos = rxrawlog[raw];
-            memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[1].iov_len);
-            memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[3].iov_len);
-	    tmp = recvmsg(rawfds[raw], &rx[raw][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
-            if ((tmp > 0) && (*(4 + ((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base))) == 0x66)) (rxrawlog[raw]++);
-	  }
-
-	  for (pos = stlog; pos < rxrawlog[raw]; pos++) {
-            payhd_t *ptrrx = (payhd_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base);
-            if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); exit(-1); }
-	    else {
-              printf("raw (%d)\n",raw); fflush(stdout);
-              printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
-              printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
-	      sync_ack[raw] = 0;
-	    }
-          }
         }
       }
     }
 
-    if (send_first) {
+    if (send_first) { // SYNCHRONOUS AND ASYNCHRONOUS SEND
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
@@ -552,7 +549,7 @@ int main(int argc, char **argv) {
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
       ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
-
+ 
       send_first = false;
     }
   }
