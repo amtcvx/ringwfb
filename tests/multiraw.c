@@ -384,32 +384,6 @@ int main(int argc, char **argv) {
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
 
-#define RXRADIOTAPSIZE 35
-#define RXLOG 8
-  struct rx_t {
-    uint8_t rxradiotaphd[RXRADIOTAPSIZE];
-    uint8_t rxieeehd[24];
-    uint8_t rxllchd[4];
-    payhd_t rxpayhd;
-    uint8_t rxpaybuf[PAY_MTU];
-    struct iovec rxiov[5];
-    struct msghdr rxmsg;
-  } rx[MAXRAWDEV][RXLOG];
-
-  uint8_t rxrawlog[MAXRAWDEV];
-
-  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
-    for(uint8_t j = 0; j < RXLOG; j++) {
-      rx[i][j].rxiov[0].iov_base = &rx[i][j].rxradiotaphd; rx[i][j].rxiov[0].iov_len = sizeof(rx[i][j].rxradiotaphd);
-      rx[i][j].rxiov[1].iov_base = &rx[i][j].rxieeehd;     rx[i][j].rxiov[1].iov_len = sizeof(rx[i][j].rxieeehd);
-      rx[i][j].rxiov[2].iov_base = &rx[i][j].rxllchd;      rx[i][j].rxiov[2].iov_len = sizeof(rx[i][j].rxllchd);
-      rx[i][j].rxiov[3].iov_base = &rx[i][j].rxpayhd;      rx[i][j].rxiov[3].iov_len = sizeof(rx[i][j].rxpayhd);
-      rx[i][j].rxiov[4].iov_base = &rx[i][j].rxpaybuf;     rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
-
-      rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;             rx[i][j].rxmsg.msg_iovlen = 5;
-    }
-  }
-
 
   uint8_t radiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
@@ -439,16 +413,43 @@ int main(int argc, char **argv) {
 
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
     
-    memcpy(&tx[i].txradiotaphd, &radiotaphd, sizeof(radiotaphd));
-    memcpy(&tx[i].txieeehd, &ieeehd, sizeof(ieeehd));
+    memcpy((uint8_t *)tx[i].txradiotaphd, (uint8_t *)radiotaphd, sizeof(radiotaphd));
+    memcpy((uint8_t *)tx[i].txieeehd,     (uint8_t *)ieeehd, sizeof(ieeehd));
 
-    tx[i].txiov[0].iov_base = &tx[i].txradiotaphd; tx[i].txiov[0].iov_len = sizeof(tx[i].txradiotaphd);
-    tx[i].txiov[1].iov_base = &tx[i].txieeehd;     tx[i].txiov[1].iov_len = sizeof(tx[i].txieeehd);
-    tx[i].txiov[2].iov_base = &tx[i].txllchd;      tx[i].txiov[2].iov_len = sizeof(tx[i].txllchd);
-    tx[i].txiov[3].iov_base = &tx[i].txpayhd;      tx[i].txiov[3].iov_len = sizeof(tx[i].txpayhd);
-    tx[i].txiov[4].iov_base = &tx[i].txpaybuf;     tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
+    tx[i].txiov[0].iov_base = tx[i].txradiotaphd;     tx[i].txiov[0].iov_len = sizeof(tx[i].txradiotaphd);
+    tx[i].txiov[1].iov_base = tx[i].txieeehd;         tx[i].txiov[1].iov_len = sizeof(tx[i].txieeehd);
+    tx[i].txiov[2].iov_base = tx[i].txllchd;          tx[i].txiov[2].iov_len = sizeof(tx[i].txllchd);
+    tx[i].txiov[3].iov_base = (void *)&tx[i].txpayhd; tx[i].txiov[3].iov_len = sizeof(tx[i].txpayhd);
+    tx[i].txiov[4].iov_base = tx[i].txpaybuf;         tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
 
-    tx[i].txmsg.msg_iov = tx[i].txiov;             tx[i].txmsg.msg_iovlen = 5;
+    tx[i].txmsg.msg_iov = tx[i].txiov;                tx[i].txmsg.msg_iovlen = 5;
+  }
+
+
+#define RXRADIOTAPSIZE 35
+#define RXLOG 8
+  struct rx_t {
+    uint8_t rxradiotaphd[RXRADIOTAPSIZE];
+    uint8_t rxieeehd[24];
+    uint8_t rxllchd[4];
+    payhd_t rxpayhd;
+    uint8_t rxpaybuf[PAY_MTU];
+    struct iovec rxiov[5];
+    struct msghdr rxmsg;
+  } rx[MAXRAWDEV][RXLOG];
+
+  uint8_t rxrawlog[MAXRAWDEV];
+
+  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
+    for(uint8_t j = 0; j < RXLOG; j++) {
+      rx[i][j].rxiov[0].iov_base = rx[i][j].rxradiotaphd;     rx[i][j].rxiov[0].iov_len = sizeof(rx[i][j].rxradiotaphd);
+      rx[i][j].rxiov[1].iov_base = rx[i][j].rxieeehd;         rx[i][j].rxiov[1].iov_len = sizeof(rx[i][j].rxieeehd);
+      rx[i][j].rxiov[2].iov_base = rx[i][j].rxllchd;          rx[i][j].rxiov[2].iov_len = sizeof(rx[i][j].rxllchd);
+      rx[i][j].rxiov[3].iov_base = (void *)&rx[i][j].rxpayhd; rx[i][j].rxiov[3].iov_len = sizeof(rx[i][j].rxpayhd);
+      rx[i][j].rxiov[4].iov_base = rx[i][j].rxpaybuf;         rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
+
+      rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;                rx[i][j].rxmsg.msg_iovlen = 5;
+    }
   }
 
   ssize_t rawlen = 0;
@@ -520,10 +521,12 @@ int main(int argc, char **argv) {
 
         while (tmp >= 0) {
 	  pos = rxrawlog[cpt];
-          memset((uint8_t *)(rx[cpt][pos].rxmsg.msg_iov[1].iov_base), 0 , rx[cpt][pos].rxmsg.msg_iov[1].iov_len);
-          memset((uint8_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base), 0 , rx[cpt][pos].rxmsg.msg_iov[3].iov_len);
+
+          memset(rx[cpt][pos].rxmsg.msg_iov[1].iov_base, 0 , rx[cpt][pos].rxmsg.msg_iov[1].iov_len);
+          memset(rx[cpt][pos].rxmsg.msg_iov[3].iov_base, 0 , rx[cpt][pos].rxmsg.msg_iov[3].iov_len);
 	  tmp = recvmsg(rawfds[cpt], &rx[cpt][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
-          if ((tmp > 0) && (*(4 + ((uint8_t *)(rx[cpt][pos].rxmsg.msg_iov[1].iov_base))) == 0x66)) (rxrawlog[cpt]++);
+
+          if ((tmp > 0) && ((*(4 + ((uint8_t *)rx[cpt][pos].rxmsg.msg_iov[1].iov_base)) == 0x66))) (rxrawlog[cpt]++);
 	}
 
 	for (pos = stlog; pos < rxrawlog[cpt]; pos++) {
@@ -551,9 +554,10 @@ int main(int argc, char **argv) {
       ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
 
       // This will avoid to read your own send (why ?) 
-      memset((uint8_t *)(tx[sync_first].txmsg.msg_iov[1].iov_base), 0 , tx[sync_first].txmsg.msg_iov[1].iov_len);
-      memset((uint8_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base), 0 , tx[sync_first].txmsg.msg_iov[3].iov_len);
-
+      /*
+      memset(tx[sync_first].txmsg.msg_iov[1].iov_base, 0 , tx[sync_first].txmsg.msg_iov[1].iov_len);
+      memset(tx[sync_first].txmsg.msg_iov[3].iov_base, 0 , tx[sync_first].txmsg.msg_iov[3].iov_len);
+      */ 
       send_first = false;
     }
   }
