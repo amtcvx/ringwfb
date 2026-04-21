@@ -376,9 +376,9 @@ int main(int argc, char **argv) {
   uint8_t rawfds[nbraws];
   uint32_t index[nbraws];
   rawdev_t rawdevs[nbraws];
+  memset(rawdevs, 0, sizeof(rawdevs));
 
   for (uint8_t i = 0; i <  nbraws; i++) {
-    memset(&rawdevs[i],0,sizeof(rawdevs[i]));
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
     setsock( &rawfds[i], index[i]);
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
@@ -412,17 +412,20 @@ int main(int argc, char **argv) {
   } tx[MAXRAWDEV];
 
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
-    
-    memcpy((uint8_t *)tx[i].txradiotaphd, (uint8_t *)radiotaphd, sizeof(radiotaphd));
-    memcpy((uint8_t *)tx[i].txieeehd,     (uint8_t *)ieeehd, sizeof(ieeehd));
-
     tx[i].txiov[0].iov_base = tx[i].txradiotaphd;     tx[i].txiov[0].iov_len = sizeof(tx[i].txradiotaphd);
     tx[i].txiov[1].iov_base = tx[i].txieeehd;         tx[i].txiov[1].iov_len = sizeof(tx[i].txieeehd);
     tx[i].txiov[2].iov_base = tx[i].txllchd;          tx[i].txiov[2].iov_len = sizeof(tx[i].txllchd);
     tx[i].txiov[3].iov_base = (void *)&tx[i].txpayhd; tx[i].txiov[3].iov_len = sizeof(tx[i].txpayhd);
     tx[i].txiov[4].iov_base = tx[i].txpaybuf;         tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
-
     tx[i].txmsg.msg_iov = tx[i].txiov;                tx[i].txmsg.msg_iovlen = 5;
+  }
+
+  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
+    memcpy(tx[i].txmsg.msg_iov[0].iov_base, radiotaphd, tx[i].txmsg.msg_iov[0].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[0].iov_len);
+    memcpy(tx[i].txmsg.msg_iov[1].iov_base, ieeehd,     tx[i].txmsg.msg_iov[1].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[1].iov_len);
+    memset(tx[i].txmsg.msg_iov[2].iov_base, 0, tx[i].txmsg.msg_iov[2].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[2].iov_len);
+    memset(tx[i].txmsg.msg_iov[3].iov_base, 0, tx[i].txmsg.msg_iov[3].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[3].iov_len);
+    memset(tx[i].txmsg.msg_iov[4].iov_base, 0, tx[i].txmsg.msg_iov[4].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[4].iov_len);
   }
 
 
@@ -447,8 +450,17 @@ int main(int argc, char **argv) {
       rx[i][j].rxiov[2].iov_base = rx[i][j].rxllchd;          rx[i][j].rxiov[2].iov_len = sizeof(rx[i][j].rxllchd);
       rx[i][j].rxiov[3].iov_base = (void *)&rx[i][j].rxpayhd; rx[i][j].rxiov[3].iov_len = sizeof(rx[i][j].rxpayhd);
       rx[i][j].rxiov[4].iov_base = rx[i][j].rxpaybuf;         rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
-
       rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;                rx[i][j].rxmsg.msg_iovlen = 5;
+    }
+  }
+
+  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
+    for(uint8_t j = 0; j < RXLOG; j++) {
+      memset(rx[i][j].rxmsg.msg_iov[0].iov_base, 0, rx[i][j].rxmsg.msg_iov[0].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[0].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[1].iov_base, 0, rx[i][j].rxmsg.msg_iov[1].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[1].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[2].iov_base, 0, rx[i][j].rxmsg.msg_iov[2].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[2].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[3].iov_base, 0, rx[i][j].rxmsg.msg_iov[3].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[3].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[4].iov_base, 0, rx[i][j].rxmsg.msg_iov[4].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[4].iov_len);
     }
   }
 
@@ -543,6 +555,7 @@ int main(int argc, char **argv) {
     }
 
     if (send_first) { // SYNCHRONOUS AND ASYNCHRONOUS SEND
+		      
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
@@ -554,10 +567,10 @@ int main(int argc, char **argv) {
       ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
 
       // This will avoid to read your own send (why ?) 
-      /*
+      /* 
       memset(tx[sync_first].txmsg.msg_iov[1].iov_base, 0 , tx[sync_first].txmsg.msg_iov[1].iov_len);
       memset(tx[sync_first].txmsg.msg_iov[3].iov_base, 0 , tx[sync_first].txmsg.msg_iov[3].iov_len);
-      */ 
+      */
       send_first = false;
     }
   }
