@@ -528,7 +528,7 @@ int main(int argc, char **argv) {
 
 	for (pos = stlog; pos < rxrawlog[cpt]; pos++) {
           payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
-          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); }
+          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); exit(-1); }
 	  else {
             printf("raw (%d)\n",cpt); fflush(stdout);
             printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
@@ -549,7 +549,11 @@ int main(int argc, char **argv) {
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
       ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
- 
+
+      // This will avoid to read your own send (why ?) 
+      memset((uint8_t *)(tx[sync_first].txmsg.msg_iov[1].iov_base), 0 , tx[sync_first].txmsg.msg_iov[1].iov_len);
+      memset((uint8_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base), 0 , tx[sync_first].txmsg.msg_iov[3].iov_len);
+
       send_first = false;
     }
   }
