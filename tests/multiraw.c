@@ -380,18 +380,15 @@ int main(int argc, char **argv) {
   memset(readsets, 0, sizeof(readsets));
   readsets[0].fd = fds[0]; readsets[0].events = POLLIN;
 
-  uint8_t rxfds[nbraws], txfds[nbraws];
+  uint8_t rawfds[nbraws];
   uint32_t index[nbraws];
   rawdev_t rawdevs[nbraws];
 
   for (uint8_t i = 0; i <  nbraws; i++) {
     memset(&rawdevs[i],0,sizeof(rawdevs[i]));
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
-
-    setsock( &txfds[i], index[i]);
-    setsock( &rxfds[i], index[i]);
- 
-    readsets[i + 1].fd = rxfds[i]; readsets[i + 1].events = POLLIN;
+    setsock( &rawfds[i], index[i]);
+    readsets[i + 1].fd = rawfds[i]; readsets[i + 1].events = POLLIN;
   }
 
 #define RXRADIOTAPSIZE 35
@@ -476,8 +473,13 @@ int main(int argc, char **argv) {
   while (poll(readsets, nbfds, -1) != -1) {
 
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) {
+
+      if (readsets[cpt].revents & (POLLERR | POLLNVAL)) { printf("socket error: %s", strerror(errno)); fflush(stdout); }
+
       if (readsets[cpt].revents & POLLIN) {
+
         if (cpt == 0) {
+
           len = read(fds[0], &exptime, sizeof(uint64_t));
 
           printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
@@ -507,38 +509,33 @@ int main(int argc, char **argv) {
 
         } else {
 
-          if (readsets[cpt].revents & (POLLERR | POLLNVAL)) { printf("socket error: %s", strerror(errno)); fflush(stdout); }
+          uint8_t raw = cpt - 1; 
 
-          if (readsets[cpt].revents & POLLIN) {
+	  sync_cpt[raw] = 0;
 
-            uint8_t raw = cpt - 1; 
+	  rxrawlog[raw] = 0;
 
-	    sync_cpt[raw] = 0;
+	  uint8_t stlog = rxrawlog[raw];
 
-	    rxrawlog[raw] = 0;
+	  rawlen = 0;
+	  int32_t tmp = 0; uint8_t pos;
 
-	    uint8_t stlog = rxrawlog[raw];
+          while (tmp >= 0) {
+	    pos = rxrawlog[raw];
+            memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[1].iov_len);
+            memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[3].iov_len);
+	    tmp = recvmsg(rawfds[raw], &rx[raw][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
+            if ((tmp > 0) && (*(4 + ((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base))) == 0x66)) (rxrawlog[raw]++);
+	  }
 
-	    rawlen = 0;
-	    int32_t tmp = 0; uint8_t pos;
-
-            while (tmp >= 0) { 
-	      pos = rxrawlog[raw];
-              memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[1].iov_len);
-              memset((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base), 0 , rx[raw][pos].rxmsg.msg_iov[3].iov_len);
-	      tmp = recvmsg(rxfds[raw], &rx[raw][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
-              if ((tmp > 0) && (*(4 + ((uint8_t *)(rx[raw][pos].rxmsg.msg_iov[1].iov_base))) == 0x66)) (rxrawlog[raw]++);
-	    }
-
-	    for (pos = stlog; pos < rxrawlog[raw]; pos++) {
-              payhd_t *ptrrx = (payhd_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base);
-              if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); exit(-1); }
-	      else {
-                printf("raw (%d)\n",raw); fflush(stdout);
-                printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
-                printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
-		sync_ack[raw] = 0;
-              }
+	  for (pos = stlog; pos < rxrawlog[raw]; pos++) {
+            payhd_t *ptrrx = (payhd_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base);
+            if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); exit(-1); }
+	    else {
+              printf("raw (%d)\n",raw); fflush(stdout);
+              printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
+              printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
+	      sync_ack[raw] = 0;
 	    }
           }
         }
@@ -550,7 +547,7 @@ int main(int argc, char **argv) {
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
 
-      rawlen = sendmsg(txfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
+      rawlen = sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
 
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
