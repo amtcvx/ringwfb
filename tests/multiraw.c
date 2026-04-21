@@ -44,8 +44,8 @@ sudo ./exe_multiraw
 #include <errno.h>
 
 /************************************************************************************************/
-//#define DRONEID 0
-#define DRONEID 1
+#define DRONEID 0
+//#define DRONEID 1
 
 #define MAXRAWDEV 4
 
@@ -380,7 +380,7 @@ int main(int argc, char **argv) {
   memset(readsets, 0, sizeof(readsets));
   readsets[0].fd = fds[0]; readsets[0].events = POLLIN;
 
-  uint8_t rxfds[nbraws]; // txfds[nbraws]
+  uint8_t rxfds[nbraws], txfds[nbraws];
   uint32_t index[nbraws];
   rawdev_t rawdevs[nbraws];
 
@@ -388,7 +388,7 @@ int main(int argc, char **argv) {
     memset(&rawdevs[i],0,sizeof(rawdevs[i]));
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
 
-//    setsock( &txfds[i], index[i]);
+    setsock( &txfds[i], index[i]);
     setsock( &rxfds[i], index[i]);
  
     readsets[i + 1].fd = rxfds[i]; readsets[i + 1].events = POLLIN;
@@ -532,7 +532,7 @@ int main(int argc, char **argv) {
 
 	    for (pos = stlog; pos < rxrawlog[raw]; pos++) {
               payhd_t *ptrrx = (payhd_t *)(rx[raw][pos].rxmsg.msg_iov[3].iov_base);
-              if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); }
+              if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); exit(-1); }
 	      else {
                 printf("raw (%d)\n",raw); fflush(stdout);
                 printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
@@ -550,8 +550,7 @@ int main(int argc, char **argv) {
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
 
-      //rawlen = sendmsg(txfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
-      rawlen = sendmsg(rxfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
+      rawlen = sendmsg(txfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
 
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
