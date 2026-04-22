@@ -187,69 +187,79 @@ void upfreq(uint8_t sockid, struct nl_sock *socknl, uint8_t raw, uint32_t ifinde
 //sudo sh -c "echo -n '1-1:1.0' > /sys/bus/usb/drivers/rtw_8812au/bind"
 bool reload(char *ifname) {
 
-  bool ret = false;
+  char netpath[] = "/sys/class/net";
+  char driverpath[] = "/sys/bus/usb/drivers/";
 
-  char *ptr,*netpath = "/sys/class/net";
-  char *driverpath = "/sys/bus/usb/drivers/";
-  char path[1024],buf[1024];
-  ssize_t lenlink;
-  FILE *fd;
+  bool ret = false;
 
   char dirpath[1024];
   strcpy(dirpath,driverpath);
   strcat(dirpath,DRIVER_NAME);
-  if (!(opendir(dirpath))) exit(-1);
 
+  DIR *d1;
+  if (!(d1 = opendir(dirpath))) exit(-1);
+
+  char path[1024],buf[1024];
   sprintf(path,"%s/%s/device",netpath,ifname);
+
+  ssize_t lenlink;
   if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
     buf[lenlink] = '\0';
-    ptr = strrchr( buf, '/' );
+    char *ptr = strrchr( buf, '/' );
     ptr++;
     strcpy(path,dirpath);
     strcat(path,"/unbind");
+    FILE *fd;
     fd = fopen(path,"a");
     fputs(ptr,fd);fflush(fd);
     strcpy(path,dirpath);
     strcat(path,"/bind");
+    fclose(fd);
     fd = fopen(path,"a");
     fputs(ptr,fd);fflush(fd);
+    fclose(fd);
     ret = true;
   }
+  closedir(d1);
+
   return(ret);
 }
 
 /******************************************************************************/
 void unblock_rfkill(char *ifname) {
 
-  char *ptr,*netpath = "/sys/class/net";
-  char path[1024],buf[1024],drivername[50];
-  ssize_t lenlink;
-  struct dirent *dir1;
-  DIR *d1;
-  FILE *fd;
+  char netpath[] = "/sys/class/net";
 
+  ssize_t lenlink;
+  char path[1024],buf[1024],drivername[50];
+  
   sprintf(path,"%s/%s/device/driver",netpath,ifname);
+
   if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
     buf[lenlink] = '\0';
-    ptr = strrchr( buf, '/' );
+    char *ptr = strrchr( buf, '/' );
     strcpy(drivername, ++ptr);
   }
 
   if (strcmp(drivername, DRIVER_NAME) == 0) {
 
     sprintf(path,"%s/%s/phy80211",netpath,ifname);
-    d1 = opendir(path);
-    while ((dir1 = readdir(d1)) != NULL)
-      if ((strncmp("rfkill",dir1->d_name,5)) == 0) break;
+
+    DIR *d1;
+    if (!(d1 = opendir(path))) exit(-1);
+
+    struct dirent *dir1;
+    while ((dir1 = readdir(d1)) != NULL) if ((strncmp("rfkill",dir1->d_name,5)) == 0) break;
     if ((strncmp("rfkill",dir1->d_name,6)) == 0) {
       sprintf(path,"%s/%s/phy80211/%s/soft",netpath,ifname,dir1->d_name);
-      fd = fopen(path,"r+");
+      FILE *fd = fopen(path,"r+");
       if (fgetc(fd)==49) {
         fseek(fd, -1, SEEK_CUR);
         fputc(48, fd);
       };
       fclose(fd);
     }
+    closedir(d1);
   }
 }
 
@@ -262,6 +272,7 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get_by_name(cache, ifname))) exit(-1);
   *ifindex = rtnl_link_get_ifindex(ltap);
+  rtnl_link_put(ltap); nl_cache_free(cache);
 
   struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);;
@@ -272,14 +283,16 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
   if (nl_send_auto(socknl, nlmsg) >= 0)  nl_recvmsgs_default(socknl);
   nlmsg_free(nlmsg);
 
-  struct rtnl_link *link, *change;
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
-  if (!(link = rtnl_link_get(cache,*ifindex))) exit(-1);
-  if (!(rtnl_link_get_flags (link) & IFF_UP)) {
+  if (!(ltap = rtnl_link_get(cache,*ifindex))) exit(-1);
+  if (!(rtnl_link_get_flags (ltap) & IFF_UP)) {
+    struct rtnl_link *change;
     change = rtnl_link_alloc ();
     rtnl_link_set_flags (change, IFF_UP);
-    rtnl_link_change(sockrt, link, change, 0);
+    rtnl_link_change(sockrt, ltap, change, 0);
+    rtnl_link_put(change);
   }
+  rtnl_link_put(ltap); nl_cache_free(cache);
 
   bool msg_received = false;
   struct nl_cb *cb;
@@ -293,7 +306,9 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
   nl_send_auto(socknl, nlmsg);
   msg_received = false;
   while (!msg_received) nl_recvmsgs(socknl, cb);
+
   nlmsg_free(nlmsg);
+  nl_cb_put(cb);
 }
 
 /*****************************************************************************/
@@ -317,28 +332,35 @@ void  setsock(uint8_t *fd, uint32_t index) {
 /******************************************************************************/
 uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
 
-  char *netpath = "/sys/class/net";
-  char path[1024],buf[1024],*ptr;
-  ssize_t lenlink;
-  uint8_t i=0;
+  char netpath[] = "/sys/class/net";
+  uint8_t cpt=0;
 
   DIR *d1;
+  if (!(d1 = opendir(netpath))) exit(-1);
+
   struct dirent *dir1;
-  d1 = opendir(netpath);
   while ((dir1 = readdir(d1)) != NULL) {
+
+    ssize_t lenlink;
+    char path[1024],buf[1024];
+
     sprintf(path,"%s/%s/device/driver",netpath,dir1->d_name);
+
     if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
       buf[lenlink] = '\0';
-      ptr = strrchr( buf, '/' );
-      if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(ifnames[i++],dir1->d_name);
+      char *ptr = strrchr( buf, '/' );
+      if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(ifnames[cpt++],dir1->d_name);
     }
   }
-  for(uint8_t j=0; j < i; j++) reload(ifnames[j]);
+
+  closedir(d1);
+
+  for(uint8_t j=0; j < cpt; j++) reload(ifnames[j]);
   sleep(1.0);
 
-  for(uint8_t j=0; j < i; j++) unblock_rfkill(ifnames[j]);
+  for(uint8_t j=0; j < cpt; j++) unblock_rfkill(ifnames[j]);
 
-  return(i);
+  return(cpt);
 }
 
 
@@ -567,10 +589,10 @@ int main(int argc, char **argv) {
       ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
 
       // This will avoid to read your own send (why ?) 
-      /* 
+     /*  
       memset(tx[sync_first].txmsg.msg_iov[1].iov_base, 0 , tx[sync_first].txmsg.msg_iov[1].iov_len);
       memset(tx[sync_first].txmsg.msg_iov[3].iov_base, 0 , tx[sync_first].txmsg.msg_iov[3].iov_len);
-      */
+     */ 
       send_first = false;
     }
   }
