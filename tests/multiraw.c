@@ -406,6 +406,8 @@ int main(int argc, char **argv) {
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
 
+  uint8_t dummycontrol[1024];
+  struct sockaddr_in dummyadr;
 
   uint8_t radiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
@@ -440,6 +442,9 @@ int main(int argc, char **argv) {
     tx[i].txiov[3].iov_base = (void *)&tx[i].txpayhd; tx[i].txiov[3].iov_len = sizeof(tx[i].txpayhd);
     tx[i].txiov[4].iov_base = tx[i].txpaybuf;         tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
     tx[i].txmsg.msg_iov = tx[i].txiov;                tx[i].txmsg.msg_iovlen = 5;
+
+    tx[i].txmsg.msg_control = dummycontrol;           tx[i].txmsg.msg_controllen = sizeof(dummycontrol);
+    tx[i].txmsg.msg_name = &dummyadr;                 tx[i].txmsg.msg_namelen = sizeof(dummyadr);
   }
 
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
@@ -473,6 +478,9 @@ int main(int argc, char **argv) {
       rx[i][j].rxiov[3].iov_base = (void *)&rx[i][j].rxpayhd; rx[i][j].rxiov[3].iov_len = sizeof(rx[i][j].rxpayhd);
       rx[i][j].rxiov[4].iov_base = rx[i][j].rxpaybuf;         rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
       rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;                rx[i][j].rxmsg.msg_iovlen = 5;
+
+      rx[i][j].rxmsg.msg_control = dummycontrol;              rx[i][j].rxmsg.msg_controllen = sizeof(dummycontrol);
+      rx[i][j].rxmsg.msg_name = &dummyadr;                    rx[i][j].rxmsg.msg_namelen = sizeof(dummyadr);
     }
   }
 
@@ -555,11 +563,9 @@ int main(int argc, char **argv) {
 
         while (tmp >= 0) {
 	  pos = rxrawlog[cpt];
-
           memset(rx[cpt][pos].rxmsg.msg_iov[1].iov_base, 0 , rx[cpt][pos].rxmsg.msg_iov[1].iov_len);
           memset(rx[cpt][pos].rxmsg.msg_iov[3].iov_base, 0 , rx[cpt][pos].rxmsg.msg_iov[3].iov_len);
 	  tmp = recvmsg(rawfds[cpt], &rx[cpt][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
-
           if ((tmp > 0) && ((*(4 + ((uint8_t *)rx[cpt][pos].rxmsg.msg_iov[1].iov_base)) == 0x66))) (rxrawlog[cpt]++);
 	}
 
@@ -588,11 +594,6 @@ int main(int argc, char **argv) {
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
       ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
 
-      // This will avoid to read your own send (why ?) 
-     /*  
-      memset(tx[sync_first].txmsg.msg_iov[1].iov_base, 0 , tx[sync_first].txmsg.msg_iov[1].iov_len);
-      memset(tx[sync_first].txmsg.msg_iov[3].iov_base, 0 , tx[sync_first].txmsg.msg_iov[3].iov_len);
-     */ 
       send_first = false;
     }
   }
