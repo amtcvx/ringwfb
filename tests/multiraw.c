@@ -313,8 +313,11 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 /*****************************************************************************/
 void  setsock(uint8_t *fd, uint32_t index) {
 
-  uint16_t protocol = 0; //htons(ETH_P_ALL);
-  if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+/*
+https://stackoverflow.com/questions/62866943/how-does-the-af-packet-socket-work-in-linux
+*/
+  uint16_t protocol = htons(ETH_P_ALL);
+  if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW, protocol))) exit(-1);
 
   uint32_t bufsize = 1600; // PAY_MTU + 100 
 
@@ -326,6 +329,7 @@ void  setsock(uint8_t *fd, uint32_t index) {
   sll.sll_family   = AF_PACKET;
   sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
+
   if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // must be AFTER wifi setting
   drain(*fd);
 
@@ -575,14 +579,12 @@ int main(int argc, char **argv) {
 
 	for (pos = stlog; pos < rxrawlog[cpt]; pos++) {
           payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
-          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened (%d) (%d) (%d)!!\n\n",ptrrx->droneid, ptrrx->msglen, cpt);fflush(stdout); exit(-1); }
+          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened (%d) (%d) (%d)!!\n\n",ptrrx->droneid, ptrrx->msglen, cpt);fflush(stdout); } //exit(-1); }
 	  else {
             printf("raw (%d)\n",cpt); fflush(stdout);
             printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
             printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
 	    sync_ack[cpt] = 0;
-
-	    exit(-1);
 	  }
         }
       }
