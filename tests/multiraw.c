@@ -406,8 +406,6 @@ int main(int argc, char **argv) {
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
 
-  uint8_t dummycontrol[1024];
-  struct sockaddr_in dummyadr;
 
   uint8_t radiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
@@ -443,16 +441,17 @@ int main(int argc, char **argv) {
     tx[i].txiov[4].iov_base = tx[i].txpaybuf;         tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
     tx[i].txmsg.msg_iov = tx[i].txiov;                tx[i].txmsg.msg_iovlen = 5;
 
-    tx[i].txmsg.msg_control = dummycontrol;           tx[i].txmsg.msg_controllen = sizeof(dummycontrol);
-    tx[i].txmsg.msg_name = &dummyadr;                 tx[i].txmsg.msg_namelen = sizeof(dummyadr);
+    tx[i].txmsg.msg_control = NULL;                   tx[i].txmsg.msg_controllen = 0;
+    tx[i].txmsg.msg_name = NULL;                      tx[i].txmsg.msg_namelen = 0;
+    tx[i].txmsg.msg_flags = 0;
   }
 
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
-    memcpy(tx[i].txmsg.msg_iov[0].iov_base, radiotaphd, tx[i].txmsg.msg_iov[0].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[0].iov_len);
-    memcpy(tx[i].txmsg.msg_iov[1].iov_base, ieeehd,     tx[i].txmsg.msg_iov[1].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[1].iov_len);
-    memset(tx[i].txmsg.msg_iov[2].iov_base, 0, tx[i].txmsg.msg_iov[2].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[2].iov_len);
-    memset(tx[i].txmsg.msg_iov[3].iov_base, 0, tx[i].txmsg.msg_iov[3].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[3].iov_len);
-    memset(tx[i].txmsg.msg_iov[4].iov_base, 0, tx[i].txmsg.msg_iov[4].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[4].iov_len);
+    memcpy(tx[i].txmsg.msg_iov[0].iov_base, radiotaphd, tx[i].txmsg.msg_iov[0].iov_len);
+    memcpy(tx[i].txmsg.msg_iov[1].iov_base, ieeehd,     tx[i].txmsg.msg_iov[1].iov_len);
+    memset(tx[i].txmsg.msg_iov[2].iov_base, 0,          tx[i].txmsg.msg_iov[2].iov_len);
+    memset(tx[i].txmsg.msg_iov[3].iov_base, 0,          tx[i].txmsg.msg_iov[3].iov_len);
+    memset(tx[i].txmsg.msg_iov[4].iov_base, 0,          tx[i].txmsg.msg_iov[4].iov_len);
   }
 
 
@@ -479,18 +478,19 @@ int main(int argc, char **argv) {
       rx[i][j].rxiov[4].iov_base = rx[i][j].rxpaybuf;         rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
       rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;                rx[i][j].rxmsg.msg_iovlen = 5;
 
-      rx[i][j].rxmsg.msg_control = dummycontrol;              rx[i][j].rxmsg.msg_controllen = sizeof(dummycontrol);
-      rx[i][j].rxmsg.msg_name = &dummyadr;                    rx[i][j].rxmsg.msg_namelen = sizeof(dummyadr);
+      rx[i][j].rxmsg.msg_control = NULL;                      rx[i][j].rxmsg.msg_controllen = 0;
+      rx[i][j].rxmsg.msg_name = NULL;                         rx[i][j].rxmsg.msg_namelen = 0;
+      rx[i][j].rxmsg.msg_flags = 0;
     }
   }
 
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
     for(uint8_t j = 0; j < RXLOG; j++) {
-      memset(rx[i][j].rxmsg.msg_iov[0].iov_base, 0, rx[i][j].rxmsg.msg_iov[0].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[0].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[1].iov_base, 0, rx[i][j].rxmsg.msg_iov[1].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[1].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[2].iov_base, 0, rx[i][j].rxmsg.msg_iov[2].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[2].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[3].iov_base, 0, rx[i][j].rxmsg.msg_iov[3].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[3].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[4].iov_base, 0, rx[i][j].rxmsg.msg_iov[4].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[4].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[0].iov_base, 0, rx[i][j].rxmsg.msg_iov[0].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[1].iov_base, 0, rx[i][j].rxmsg.msg_iov[1].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[2].iov_base, 0, rx[i][j].rxmsg.msg_iov[2].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[3].iov_base, 0, rx[i][j].rxmsg.msg_iov[3].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[4].iov_base, 0, rx[i][j].rxmsg.msg_iov[4].iov_len);
     }
   }
 
