@@ -39,7 +39,6 @@ sudo ./exe_multiraw
 
 #include <dirent.h>
 
-//#include <sys/timerfd.h>
 #include <time.h>
 
 #include <errno.h>
@@ -52,7 +51,7 @@ sudo ./exe_multiraw
 
 #define DRIVER_NAME "rtl88XXau"
 
-#define PAY_MTU 1400
+#define PAY_MTU 1500
 
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
@@ -314,8 +313,13 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 /*****************************************************************************/
 void  setsock(uint8_t *fd, uint32_t index) {
 
-  uint16_t protocol = htons(ETH_P_ALL);
+  uint16_t protocol = 0; //htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+
+  uint32_t bufsize = 1600; // PAY_MTU + 100 
+
+  if(setsockopt(*fd, SOL_SOCKET, SO_SNDBUF, &bufsize , sizeof(bufsize)) !=0) exit(-1);
+  if(setsockopt(*fd, SOL_SOCKET, SO_RCVBUF, &bufsize , sizeof(bufsize)) !=0) exit(-1);
 
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
@@ -571,12 +575,14 @@ int main(int argc, char **argv) {
 
 	for (pos = stlog; pos < rxrawlog[cpt]; pos++) {
           payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
-          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); exit(-1); }
+          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened (%d) (%d) (%d)!!\n\n",ptrrx->droneid, ptrrx->msglen, cpt);fflush(stdout); exit(-1); }
 	  else {
             printf("raw (%d)\n",cpt); fflush(stdout);
             printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
             printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
 	    sync_ack[cpt] = 0;
+
+	    exit(-1);
 	  }
         }
       }
