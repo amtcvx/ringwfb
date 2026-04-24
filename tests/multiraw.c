@@ -521,6 +521,11 @@ int main(int argc, char **argv) {
   uint64_t curms,  stoms, intms = 1000;
   clock_gettime(CLOCK_MONOTONIC, &ts); stoms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
+/*
+uint8_t myfd = 0;
+if (-1 == (myfd = socket(AF_PACKET,SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
+*/
+
   while (true) {
 
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
@@ -583,7 +588,7 @@ int main(int argc, char **argv) {
 	for (pos = stlog; pos < rxrawlog[cpt]; pos++) {
           payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
           if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened (%d) (%d) (%d)   [%d][%d][%d]  !!\n\n",
-			  ptrrx->droneid, ptrrx->msglen, cpt, (rxaddr.sll_pkttype == PACKET_OUTGOING),true,rxaddr.sll_ifindex);fflush(stdout); exit(-1); }
+			  ptrrx->droneid, ptrrx->msglen, cpt, (rxaddr.sll_pkttype == PACKET_OUTGOING),true,rxaddr.sll_ifindex);fflush(stdout); } //exit(-1);
 	  else {
             printf("raw (%d)\n",cpt); fflush(stdout);
             printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
@@ -599,8 +604,17 @@ int main(int argc, char **argv) {
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
-
       rawlen = sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
+
+/*
+struct sockaddr_ll myssl;
+memset( &myssl, 0, sizeof( myssl ) );
+myssl.sll_family   = AF_PACKET;
+myssl.sll_ifindex  = index[sync_first];
+myssl.sll_protocol = htons(ETH_P_ALL);
+tx[sync_first].txmsg.msg_name = &myssl; tx[sync_first].txmsg.msg_namelen = sizeof(struct sockaddr_ll);
+rawlen = sendmsg(myfd, &tx[sync_first].txmsg, MSG_DONTWAIT);
+*/
 
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",

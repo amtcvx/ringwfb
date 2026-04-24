@@ -39,7 +39,6 @@ sudo ./exe_multiraw
 
 #include <dirent.h>
 
-//#include <sys/timerfd.h>
 #include <time.h>
 
 #include <errno.h>
@@ -52,7 +51,7 @@ sudo ./exe_multiraw
 
 #define DRIVER_NAME "rtl88XXau"
 
-#define PAY_MTU 1400
+#define PAY_MTU 1500
 
 /************************************************************************************************/
 #define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
@@ -314,14 +313,23 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 /*****************************************************************************/
 void  setsock(uint8_t *fd, uint32_t index) {
 
+/*
+https://stackoverflow.com/questions/62866943/how-does-the-af-packet-socket-work-in-linux
+*/
   uint16_t protocol = htons(ETH_P_ALL);
-  if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW,protocol))) exit(-1);
+  if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW, protocol))) exit(-1);
+
+  uint32_t bufsize = 1600; // PAY_MTU + 100 
+
+  if(setsockopt(*fd, SOL_SOCKET, SO_SNDBUF, &bufsize , sizeof(bufsize)) !=0) exit(-1);
+  if(setsockopt(*fd, SOL_SOCKET, SO_RCVBUF, &bufsize , sizeof(bufsize)) !=0) exit(-1);
 
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
   sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
+
   if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // must be AFTER wifi setting
   drain(*fd);
 
@@ -406,8 +414,6 @@ int main(int argc, char **argv) {
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
 
-  uint8_t dummycontrol[1024];
-  struct sockaddr_in dummyadr;
 
   uint8_t radiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
@@ -443,16 +449,17 @@ int main(int argc, char **argv) {
     tx[i].txiov[4].iov_base = tx[i].txpaybuf;         tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
     tx[i].txmsg.msg_iov = tx[i].txiov;                tx[i].txmsg.msg_iovlen = 5;
 
-    tx[i].txmsg.msg_control = dummycontrol;           tx[i].txmsg.msg_controllen = sizeof(dummycontrol);
-    tx[i].txmsg.msg_name = &dummyadr;                 tx[i].txmsg.msg_namelen = sizeof(dummyadr);
+    tx[i].txmsg.msg_control = NULL;                   tx[i].txmsg.msg_controllen = 0;
+    tx[i].txmsg.msg_name = NULL;                      tx[i].txmsg.msg_namelen = 0;
+    tx[i].txmsg.msg_flags = 0;
   }
 
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
-    memcpy(tx[i].txmsg.msg_iov[0].iov_base, radiotaphd, tx[i].txmsg.msg_iov[0].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[0].iov_len);
-    memcpy(tx[i].txmsg.msg_iov[1].iov_base, ieeehd,     tx[i].txmsg.msg_iov[1].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[1].iov_len);
-    memset(tx[i].txmsg.msg_iov[2].iov_base, 0, tx[i].txmsg.msg_iov[2].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[2].iov_len);
-    memset(tx[i].txmsg.msg_iov[3].iov_base, 0, tx[i].txmsg.msg_iov[3].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[3].iov_len);
-    memset(tx[i].txmsg.msg_iov[4].iov_base, 0, tx[i].txmsg.msg_iov[4].iov_len); //printf("(%ld)\n",tx[i].txmsg.msg_iov[4].iov_len);
+    memcpy(tx[i].txmsg.msg_iov[0].iov_base, radiotaphd, tx[i].txmsg.msg_iov[0].iov_len);
+    memcpy(tx[i].txmsg.msg_iov[1].iov_base, ieeehd,     tx[i].txmsg.msg_iov[1].iov_len);
+    memset(tx[i].txmsg.msg_iov[2].iov_base, 0,          tx[i].txmsg.msg_iov[2].iov_len);
+    memset(tx[i].txmsg.msg_iov[3].iov_base, 0,          tx[i].txmsg.msg_iov[3].iov_len);
+    memset(tx[i].txmsg.msg_iov[4].iov_base, 0,          tx[i].txmsg.msg_iov[4].iov_len);
   }
 
 
@@ -470,6 +477,8 @@ int main(int argc, char **argv) {
 
   uint8_t rxrawlog[MAXRAWDEV];
 
+  struct sockaddr_ll rxaddr;
+
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
     for(uint8_t j = 0; j < RXLOG; j++) {
       rx[i][j].rxiov[0].iov_base = rx[i][j].rxradiotaphd;     rx[i][j].rxiov[0].iov_len = sizeof(rx[i][j].rxradiotaphd);
@@ -479,18 +488,20 @@ int main(int argc, char **argv) {
       rx[i][j].rxiov[4].iov_base = rx[i][j].rxpaybuf;         rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
       rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;                rx[i][j].rxmsg.msg_iovlen = 5;
 
-      rx[i][j].rxmsg.msg_control = dummycontrol;              rx[i][j].rxmsg.msg_controllen = sizeof(dummycontrol);
-      rx[i][j].rxmsg.msg_name = &dummyadr;                    rx[i][j].rxmsg.msg_namelen = sizeof(dummyadr);
+      rx[i][j].rxmsg.msg_control = NULL;                      rx[i][j].rxmsg.msg_controllen = 0;
+      rx[i][j].rxmsg.msg_name = &rxaddr;                      rx[i][j].rxmsg.msg_namelen = sizeof(struct sockaddr_ll);
+//      rx[i][j].rxmsg.msg_name = NULL;                       rx[i][j].rxmsg.msg_namelen = 0;
+      rx[i][j].rxmsg.msg_flags = 0;
     }
   }
 
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
     for(uint8_t j = 0; j < RXLOG; j++) {
-      memset(rx[i][j].rxmsg.msg_iov[0].iov_base, 0, rx[i][j].rxmsg.msg_iov[0].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[0].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[1].iov_base, 0, rx[i][j].rxmsg.msg_iov[1].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[1].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[2].iov_base, 0, rx[i][j].rxmsg.msg_iov[2].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[2].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[3].iov_base, 0, rx[i][j].rxmsg.msg_iov[3].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[3].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[4].iov_base, 0, rx[i][j].rxmsg.msg_iov[4].iov_len); //printf("(%ld)\n",rx[i][j].rxmsg.msg_iov[4].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[0].iov_base, 0, rx[i][j].rxmsg.msg_iov[0].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[1].iov_base, 0, rx[i][j].rxmsg.msg_iov[1].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[2].iov_base, 0, rx[i][j].rxmsg.msg_iov[2].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[3].iov_base, 0, rx[i][j].rxmsg.msg_iov[3].iov_len);
+      memset(rx[i][j].rxmsg.msg_iov[4].iov_base, 0, rx[i][j].rxmsg.msg_iov[4].iov_len);
     }
   }
 
@@ -509,6 +520,11 @@ int main(int argc, char **argv) {
   struct timespec ts;  
   uint64_t curms,  stoms, intms = 1000;
   clock_gettime(CLOCK_MONOTONIC, &ts); stoms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+
+/*
+uint8_t myfd = 0;
+if (-1 == (myfd = socket(AF_PACKET,SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
+*/
 
   while (true) {
 
@@ -571,7 +587,8 @@ int main(int argc, char **argv) {
 
 	for (pos = stlog; pos < rxrawlog[cpt]; pos++) {
           payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
-          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !!\n\n");fflush(stdout); exit(-1); }
+          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened (%d) (%d) (%d)   [%d][%d][%d]  !!\n\n",
+			  ptrrx->droneid, ptrrx->msglen, cpt, (rxaddr.sll_pkttype == PACKET_OUTGOING),true,rxaddr.sll_ifindex);fflush(stdout); } //exit(-1);
 	  else {
             printf("raw (%d)\n",cpt); fflush(stdout);
             printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
@@ -587,8 +604,17 @@ int main(int argc, char **argv) {
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
-
       rawlen = sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
+
+/*
+struct sockaddr_ll myssl;
+memset( &myssl, 0, sizeof( myssl ) );
+myssl.sll_family   = AF_PACKET;
+myssl.sll_ifindex  = index[sync_first];
+myssl.sll_protocol = htons(ETH_P_ALL);
+tx[sync_first].txmsg.msg_name = &myssl; tx[sync_first].txmsg.msg_namelen = sizeof(struct sockaddr_ll);
+rawlen = sendmsg(myfd, &tx[sync_first].txmsg, MSG_DONTWAIT);
+*/
 
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
