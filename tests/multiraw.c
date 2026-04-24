@@ -477,6 +477,8 @@ int main(int argc, char **argv) {
 
   uint8_t rxrawlog[MAXRAWDEV];
 
+  struct sockaddr_ll rxaddr;
+
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
     for(uint8_t j = 0; j < RXLOG; j++) {
       rx[i][j].rxiov[0].iov_base = rx[i][j].rxradiotaphd;     rx[i][j].rxiov[0].iov_len = sizeof(rx[i][j].rxradiotaphd);
@@ -487,7 +489,8 @@ int main(int argc, char **argv) {
       rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;                rx[i][j].rxmsg.msg_iovlen = 5;
 
       rx[i][j].rxmsg.msg_control = NULL;                      rx[i][j].rxmsg.msg_controllen = 0;
-      rx[i][j].rxmsg.msg_name = NULL;                         rx[i][j].rxmsg.msg_namelen = 0;
+      rx[i][j].rxmsg.msg_name = &rxaddr;                      rx[i][j].rxmsg.msg_namelen = sizeof(struct sockaddr_ll);
+//      rx[i][j].rxmsg.msg_name = NULL;                       rx[i][j].rxmsg.msg_namelen = 0;
       rx[i][j].rxmsg.msg_flags = 0;
     }
   }
@@ -579,7 +582,8 @@ int main(int argc, char **argv) {
 
 	for (pos = stlog; pos < rxrawlog[cpt]; pos++) {
           payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
-          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened (%d) (%d) (%d)!!\n\n",ptrrx->droneid, ptrrx->msglen, cpt);fflush(stdout); } //exit(-1); }
+          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened (%d) (%d) (%d)   [%d][%d][%d]  !!\n\n",
+			  ptrrx->droneid, ptrrx->msglen, cpt, (rxaddr.sll_pkttype == PACKET_OUTGOING),true,rxaddr.sll_ifindex);fflush(stdout); exit(-1); }
 	  else {
             printf("raw (%d)\n",cpt); fflush(stdout);
             printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
