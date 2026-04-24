@@ -1,10 +1,10 @@
 /*
 
-gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c multiraw.c -o multiraw.o
+gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c multiraw_2.c -o multiraw_2.o
 
-cc multiraw.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw
+cc multiraw_2.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw_2
 
-sudo ./exe_multiraw
+sudo ./exe_multiraw_2
 
 */
 
@@ -431,6 +431,13 @@ int main(int argc, char **argv) {
   payhd_t txpayhd;
   uint8_t txpaybuf[PAY_MTU];
   struct msghdr txmsg = { .msg_name = NULL, .msg_namelen = 0, .msg_control = NULL, .msg_controllen = 0, .msg_flags = 0 };
+
+  struct iovec txiov[2] = { 
+	  { .iov_base = txradiotaphd, .iov_len = sizeof(txradiotaphd) },
+	  { .iov_base = txieeehd, .iov_len = sizeof(txieeehd) },
+  };
+  txmsg.msg_iov = txiov; txmsg.msg_iovlen = 2;
+/*
   struct iovec txiov[5];
   txiov[0].iov_base = txradiotaphd;     txiov[0].iov_len = sizeof(txradiotaphd);
   txiov[1].iov_base = txieeehd;         txiov[1].iov_len = sizeof(txieeehd);
@@ -438,6 +445,7 @@ int main(int argc, char **argv) {
   txiov[3].iov_base = (void *)&txpayhd; txiov[3].iov_len = sizeof(txpayhd);
   txiov[4].iov_base = txpaybuf;         txiov[4].iov_len = sizeof(txpaybuf);
   txmsg.msg_iov = txiov; txmsg.msg_iovlen = 5;
+*/
 
 #define RXRADIOTAPSIZE 35
   uint8_t rxradiotaphd[RXRADIOTAPSIZE];
@@ -446,6 +454,13 @@ int main(int argc, char **argv) {
   payhd_t rxpayhd;
   uint8_t rxpaybuf[PAY_MTU];
   struct msghdr rxmsg = { .msg_name = NULL, .msg_namelen = 0, .msg_control = NULL, .msg_controllen = 0, .msg_flags = 0 };
+
+  struct iovec rxiov[2] = { 
+	  { .iov_base = rxradiotaphd, .iov_len = sizeof(rxradiotaphd) },
+	  { .iov_base = rxieeehd, .iov_len = sizeof(rxieeehd) },
+  };
+  rxmsg.msg_iov = rxiov; rxmsg.msg_iovlen = 2;
+/*
   struct iovec rxiov[5];
   rxiov[0].iov_base = rxradiotaphd;     rxiov[0].iov_len = sizeof(rxradiotaphd);
   rxiov[1].iov_base = rxieeehd;         rxiov[1].iov_len = sizeof(rxieeehd);
@@ -453,7 +468,7 @@ int main(int argc, char **argv) {
   rxiov[3].iov_base = (void *)&rxpayhd; rxiov[3].iov_len = sizeof(rxpayhd);
   rxiov[4].iov_base = rxpaybuf;         rxiov[4].iov_len = sizeof(rxpaybuf);
   rxmsg.msg_iov = rxiov; rxmsg.msg_iovlen = 5;
-
+*/
   size_t rawlen[nbraws], rawlog[nbraws];
   for (uint8_t i = 0; i< nbraws; i++) { rawlen[i] = 0; rawlog[i] = 0; }
 
@@ -476,6 +491,7 @@ int main(int argc, char **argv) {
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) { // ASYNCHRONOUS RECV
       tmp = 0;
       while (tmp >= 0) {
+        memset(rxmsg.msg_iov[1].iov_base, 0 , rxmsg.msg_iov[1].iov_len);
         tmp = recvmsg(rawfds[cpt], &rxmsg, MSG_DONTWAIT); rawlen[cpt] += tmp;
         if ((tmp > 0) && ((*(4 + ((uint8_t *)rxmsg.msg_iov[1].iov_base)) == 0x66))) (rawlog[cpt]++);
       }
@@ -485,6 +501,9 @@ int main(int argc, char **argv) {
       send_first = false;
       tmp = sendmsg(rawfds[0], &txmsg, MSG_DONTWAIT);
       printf("SEND [0][%d]\n",tmp);fflush(stdout);
+
+      // NEED TO RESET TX TO AVOID DUPLICATION IN RX !!
+      // memset(txmsg.msg_iov[1].iov_base, 0 , txmsg.msg_iov[1].iov_len);
     }
   }
 }
