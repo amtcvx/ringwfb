@@ -433,8 +433,8 @@ int main(int argc, char **argv) {
   struct msghdr txmsg = { .msg_name = NULL, .msg_namelen = 0, .msg_control = NULL, .msg_controllen = 0, .msg_flags = 0 };
 
   struct iovec txiov[2] = { 
-	  { .iov_base = txradiotaphd, .iov_len = sizeof(txradiotaphd) },
-	  { .iov_base = txieeehd, .iov_len = sizeof(txieeehd) },
+	  { .iov_base = (void *)&txradiotaphd, .iov_len = sizeof(txradiotaphd) },
+	  { .iov_base = (void *)&txieeehd, .iov_len = sizeof(txieeehd) },
   };
   txmsg.msg_iov = txiov; txmsg.msg_iovlen = 2;
 /*
@@ -456,8 +456,8 @@ int main(int argc, char **argv) {
   struct msghdr rxmsg = { .msg_name = NULL, .msg_namelen = 0, .msg_control = NULL, .msg_controllen = 0, .msg_flags = 0 };
 
   struct iovec rxiov[2] = { 
-	  { .iov_base = rxradiotaphd, .iov_len = sizeof(rxradiotaphd) },
-	  { .iov_base = rxieeehd, .iov_len = sizeof(rxieeehd) },
+	  { .iov_base = (void *)&rxradiotaphd, .iov_len = sizeof(rxradiotaphd) },
+	  { .iov_base = (void *)&rxieeehd, .iov_len = sizeof(rxieeehd) },
   };
   rxmsg.msg_iov = rxiov; rxmsg.msg_iovlen = 2;
 /*
