@@ -436,6 +436,9 @@ int main(int argc, char **argv) {
   uint64_t curms,  stoms, intms = 1000;
   clock_gettime(CLOCK_MONOTONIC, &ts); stoms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
+
+  uint8_t rxbuf[2][2000];
+
   while (true) {
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
     poll(readsets, nbfds, stoms > curms ? stoms - curms : 0);
@@ -475,6 +478,7 @@ int main(int argc, char **argv) {
 
 	int32_t tmp = 0; uint8_t pos = 0;
         while (tmp >= 0) {
+/*
           struct rx_t *rxcur = &rx[cpt][pos];
           rxcur->rxiov[0].iov_base = (void *)&rxcur->rxradiotaphd;  rxcur->rxiov[0].iov_len = sizeof(rxcur->rxradiotaphd);
           rxcur->rxiov[1].iov_base = (void *)&rxcur->rxieeehd;      rxcur->rxiov[1].iov_len = sizeof(rxcur->rxieeehd);
@@ -487,23 +491,32 @@ int main(int argc, char **argv) {
           rxcur->rxmsg.msg_flags = 0;
           memset(rxcur->rxmsg.msg_iov[1].iov_base, 0 , rxcur->rxmsg.msg_iov[1].iov_len);
           tmp = recvmsg(rawfds[cpt], &rxcur->rxmsg, MSG_DONTWAIT); rawlen[cpt] += tmp;
+*/
+          tmp = recv(rawfds[cpt], &rxbuf[pos][0], sizeof(rxbuf), MSG_DONTWAIT); rawlen[cpt] += tmp;
 
-//	  printf("(%d)  (%d)%ld)\n",pos,cpt,rawlen[cpt]); fflush(stdout);
 
-          if ((tmp > 0) && ((*(4 + ((uint8_t *)rxcur->rxmsg.msg_iov[1].iov_base))) == 0x66)) if (pos < RXLOG) pos++;
+//	  printf("(%d)(%d)(%d)%ld)\n",tmp,cpt,pos,rawlen[cpt]); fflush(stdout);
+
+//	  for (uint8_t k=0; k < 60; k++) printf(" %2x ",rxbuf[pos][k]); printf("\n");fflush(stdout);
+
+//          if ((tmp > 0) && ((*(4 + ((uint8_t *)rxcur->rxmsg.msg_iov[1].iov_base))) == 0x66)) if (pos < RXLOG) pos++;
+//          if ((tmp > 0) && (rxbuf[pos][RXRADIOTAPSIZE + 4] == 0x66)) if (pos < 2) pos++;
         }
 
+/*
         for (uint8_t i = 0; i < pos; i++) {
 
-          printf("rawlen (%d)(%ld)\n",cpt,rawlen[cpt]); fflush(stdout);
+//          printf("rawlen (%d)(%ld)\n",cpt,rawlen[cpt]); fflush(stdout);
 
-          payhd_t *ptrrx = (payhd_t *)(rx[cpt][i].rxmsg.msg_iov[3].iov_base);
+//          payhd_t *ptrrx = (payhd_t *)(rx[cpt][i].rxmsg.msg_iov[3].iov_base);
+          payhd_t *ptrrx = (payhd_t *)(&rxbuf[pos][RXRADIOTAPSIZE + 24 + 4]);
           if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened  !!\n\n"); fflush(stdout); exit(-1);}
 	  else {
             printf("raw(%d)  droneid(%d) msglen(%d)\n",cpt,ptrrx->droneid,ptrrx->msglen); fflush(stdout);
 	    sync_ack[cpt] = 0;
 	  }
         }
+*/
       }
     }
 
@@ -518,7 +531,7 @@ int main(int argc, char **argv) {
 
       send_first = false;
       // NEED TO RESET TX TO AVOID DUPLICATION IN RX !!
-      memset(tx[sync_first].txmsg.msg_iov[1].iov_base, 0 , tx[sync_first].txmsg.msg_iov[1].iov_len);
+      //memset(tx[sync_first].txmsg.msg_iov[1].iov_base, 0 , tx[sync_first].txmsg.msg_iov[1].iov_len);
     }
   }
 }
