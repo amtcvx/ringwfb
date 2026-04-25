@@ -480,11 +480,9 @@ int main(int argc, char **argv) {
     }
 
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) { // ASYNCHRONOUS RECV
-      tmp = 0;
+      tmp = 0; pos = 0;
       while (tmp >= 0) {
-
         struct rx_t *rxcur = &rx[cpt][pos];
-
         rxcur->rxiov[0].iov_base = (void *)&rxcur->rxradiotaphd;  rxcur->rxiov[0].iov_len = sizeof(rxcur->rxradiotaphd);
         rxcur->rxiov[1].iov_base = (void *)&rxcur->rxieeehd;      rxcur->rxiov[1].iov_len = sizeof(rxcur->rxieeehd);
         rxcur->rxiov[2].iov_base = (void *)&rxcur->rxllchd;       rxcur->rxiov[2].iov_len = sizeof(rxcur->rxllchd);
@@ -494,14 +492,24 @@ int main(int argc, char **argv) {
         rxcur->rxmsg.msg_control = NULL;                          rxcur->rxmsg.msg_controllen = 0;
         rxcur->rxmsg.msg_name = NULL;                             rxcur->rxmsg.msg_namelen = 0;
         rxcur->rxmsg.msg_flags = 0;
-
         memset(rxcur->rxmsg.msg_iov[1].iov_base, 0 , rxcur->rxmsg.msg_iov[1].iov_len);
-
         tmp = recvmsg(rawfds[cpt], &rxcur->rxmsg, MSG_DONTWAIT); rawlen[cpt] += tmp;
-
         if ((tmp > 0) && ((*(4 + ((uint8_t *)&rxcur->rxmsg.msg_iov[1].iov_base)) == 0x66))) { rawlog[cpt]++; pos++; }
-
       }
+
+      for (uint8_t i = 0; i < pos; i++) {
+
+        printf("(%d)(%ld)\n,",cpt,rawlen[cpt]); fflush(stdout);
+
+        payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
+        if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened !\n\n"); fflush(stdout); } //exit(-1);
+        else {
+          printf("raw (%d)\n",cpt); fflush(stdout);
+          printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
+          printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
+        }
+      }
+
     }
 
     if (send_first) { // SYNCHRONOUS AND ASYNCHRONOUS SEND
