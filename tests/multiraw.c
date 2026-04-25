@@ -453,6 +453,13 @@ int main(int argc, char **argv) {
         if (sync_ack[sync_scan] > 1) { upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs ); sync_ack[sync_scan] = 0; }
         if (sync_ack[sync_scan] < 2) sync_ack[sync_scan]++;
       }
+
+      for (uint8_t i = 0; i < nbraws; i++) {
+        if (sync_first < 0) {
+          if (sync_ack[i] < 2) sync_first = i;
+	}
+      }
+
       for (uint8_t i = 0; i < nbraws; i++) {
         if (sync_first < 0) {
           if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs);
@@ -492,15 +499,12 @@ int main(int argc, char **argv) {
 
         for (uint8_t i = 0; i < pos; i++) {
 
-          printf("(%d)(%ld)\n,",cpt,rawlen[cpt]); fflush(stdout);
+          printf("rawlen (%d)(%ld)\n",cpt,rawlen[cpt]); fflush(stdout);
 
-          payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
-
+          payhd_t *ptrrx = (payhd_t *)(rx[cpt][i].rxmsg.msg_iov[3].iov_base);
           if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened  !!\n\n"); fflush(stdout); exit(-1);}
 	  else {
-            printf("raw (%d)\n",cpt); fflush(stdout);
-            printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
-            printf("msglen (%d)\n",ptrrx->msglen); fflush(stdout);
+            printf("raw(%d)  droneid(%d) msglen(%d)\n",cpt,ptrrx->droneid,ptrrx->msglen); fflush(stdout);
 	    sync_ack[cpt] = 0;
 	  }
         }
