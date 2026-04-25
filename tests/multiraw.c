@@ -291,9 +291,6 @@ void  setsock(uint8_t *fd, uint32_t index) {
 
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW, protocol))) exit(-1);
-  uint32_t bufsize = 1600; // PAY_MTU + 100 
-  if(setsockopt(*fd, SOL_SOCKET, SO_SNDBUF, &bufsize , sizeof(bufsize)) !=0) exit(-1);
-  if(setsockopt(*fd, SOL_SOCKET, SO_RCVBUF, &bufsize , sizeof(bufsize)) !=0) exit(-1);
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
@@ -413,7 +410,7 @@ int main(int argc, char **argv) {
 
 
 #define RXRADIOTAPSIZE 35
-#define RXLOG 8
+#define RXLOG 2
   struct rx_t {
     uint8_t rxradiotaphd[RXRADIOTAPSIZE];
     uint8_t rxieeehd[24];
@@ -449,15 +446,11 @@ int main(int argc, char **argv) {
       printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
         rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
 
+      rawlen[0] = 0; rawlen[1] = 0;
+
       if (sync_scan >= 0) {
         if (sync_ack[sync_scan] > 1) { upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs ); sync_ack[sync_scan] = 0; }
         if (sync_ack[sync_scan] < 2) sync_ack[sync_scan]++;
-      }
-
-      for (uint8_t i = 0; i < nbraws; i++) {
-        if (sync_first < 0) {
-          if (sync_ack[i] < 2) sync_first = i;
-	}
       }
 
       for (uint8_t i = 0; i < nbraws; i++) {
@@ -494,6 +487,9 @@ int main(int argc, char **argv) {
           rxcur->rxmsg.msg_flags = 0;
           memset(rxcur->rxmsg.msg_iov[1].iov_base, 0 , rxcur->rxmsg.msg_iov[1].iov_len);
           tmp = recvmsg(rawfds[cpt], &rxcur->rxmsg, MSG_DONTWAIT); rawlen[cpt] += tmp;
+
+//	  printf("(%d)  (%d)%ld)\n",pos,cpt,rawlen[cpt]); fflush(stdout);
+
           if ((tmp > 0) && ((*(4 + ((uint8_t *)rxcur->rxmsg.msg_iov[1].iov_base))) == 0x66)) if (pos < RXLOG) pos++;
         }
 
@@ -512,7 +508,6 @@ int main(int argc, char **argv) {
     }
 
     if (send_first) { // SYNCHRONOUS AND ASYNCHRONOUS SEND
-		      
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
@@ -522,6 +517,8 @@ int main(int argc, char **argv) {
       ptrtx->droneid, ptrtx->msglen, sync_first, len, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
 
       send_first = false;
+      // NEED TO RESET TX TO AVOID DUPLICATION IN RX !!
+      memset(tx[sync_first].txmsg.msg_iov[1].iov_base, 0 , tx[sync_first].txmsg.msg_iov[1].iov_len);
     }
   }
 }
