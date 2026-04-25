@@ -448,30 +448,21 @@ int main(int argc, char **argv) {
 */
 
 #define RXRADIOTAPSIZE 35
-  uint8_t rxradiotaphd[RXRADIOTAPSIZE];
-  uint8_t rxieeehd[24];
-  uint8_t rxllchd[4];
-  payhd_t rxpayhd;
-  uint8_t rxpaybuf[PAY_MTU];
-  struct msghdr rxmsg = { .msg_name = NULL, .msg_namelen = 0, .msg_control = NULL, .msg_controllen = 0, .msg_flags = 0 };
+#define RXLOG 8
+  struct rx_t {
+    uint8_t rxradiotaphd[RXRADIOTAPSIZE];
+    uint8_t rxieeehd[24];
+    uint8_t rxllchd[4];
+    payhd_t rxpayhd;
+    uint8_t rxpaybuf[PAY_MTU];
+    struct iovec rxiov[5];
+    struct msghdr rxmsg;
+  } rx[MAXRAWDEV][RXLOG];
 
-  struct iovec rxiov[2] = { 
-	  { .iov_base = (void *)&rxradiotaphd, .iov_len = sizeof(rxradiotaphd) },
-	  { .iov_base = (void *)&rxieeehd, .iov_len = sizeof(rxieeehd) },
-  };
-  rxmsg.msg_iov = rxiov; rxmsg.msg_iovlen = 2;
-/*
-  struct iovec rxiov[5];
-  rxiov[0].iov_base = rxradiotaphd;     rxiov[0].iov_len = sizeof(rxradiotaphd);
-  rxiov[1].iov_base = rxieeehd;         rxiov[1].iov_len = sizeof(rxieeehd);
-  rxiov[2].iov_base = rxllchd;          rxiov[2].iov_len = sizeof(rxllchd);
-  rxiov[3].iov_base = (void *)&rxpayhd; rxiov[3].iov_len = sizeof(rxpayhd);
-  rxiov[4].iov_base = rxpaybuf;         rxiov[4].iov_len = sizeof(rxpaybuf);
-  rxmsg.msg_iov = rxiov; rxmsg.msg_iovlen = 5;
-*/
   size_t rawlen[nbraws], rawlog[nbraws];
   for (uint8_t i = 0; i< nbraws; i++) { rawlen[i] = 0; rawlog[i] = 0; }
 
+  uint8_t pos = 0;
   int32_t tmp = 0; 
   bool send_first = false;
 
@@ -491,9 +482,25 @@ int main(int argc, char **argv) {
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) { // ASYNCHRONOUS RECV
       tmp = 0;
       while (tmp >= 0) {
-        memset(rxmsg.msg_iov[1].iov_base, 0 , rxmsg.msg_iov[1].iov_len);
-        tmp = recvmsg(rawfds[cpt], &rxmsg, MSG_DONTWAIT); rawlen[cpt] += tmp;
-        if ((tmp > 0) && ((*(4 + ((uint8_t *)rxmsg.msg_iov[1].iov_base)) == 0x66))) (rawlog[cpt]++);
+
+        struct rx_t *rxcur = &rx[cpt][pos];
+
+        rxcur->rxiov[0].iov_base = (void *)&rxcur->rxradiotaphd;  rxcur->rxiov[0].iov_len = sizeof(rxcur->rxradiotaphd);
+        rxcur->rxiov[1].iov_base = (void *)&rxcur->rxieeehd;      rxcur->rxiov[1].iov_len = sizeof(rxcur->rxieeehd);
+        rxcur->rxiov[2].iov_base = (void *)&rxcur->rxllchd;       rxcur->rxiov[2].iov_len = sizeof(rxcur->rxllchd);
+        rxcur->rxiov[3].iov_base = (void *)&rxcur->rxpayhd;       rxcur->rxiov[3].iov_len = sizeof(rxcur->rxpayhd);
+        rxcur->rxiov[4].iov_base = (void *)&rxcur->rxpaybuf;      rxcur->rxiov[3].iov_len = sizeof(rxcur->rxpaybuf);
+	rxcur->rxmsg.msg_iov = rxcur->rxiov;                      rxcur->rxmsg.msg_iovlen = 5;
+        rxcur->rxmsg.msg_control = NULL;                          rxcur->rxmsg.msg_controllen = 0;
+        rxcur->rxmsg.msg_name = NULL;                             rxcur->rxmsg.msg_namelen = 0;
+        rxcur->rxmsg.msg_flags = 0;
+
+        memset(rxcur->rxmsg.msg_iov[1].iov_base, 0 , rxcur->rxmsg.msg_iov[1].iov_len);
+
+        tmp = recvmsg(rawfds[cpt], &rxcur->rxmsg, MSG_DONTWAIT); rawlen[cpt] += tmp;
+
+        if ((tmp > 0) && ((*(4 + ((uint8_t *)&rxcur->rxmsg.msg_iov[1].iov_base)) == 0x66))) { rawlog[cpt]++; pos++; }
+
       }
     }
 
