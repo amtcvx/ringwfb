@@ -497,11 +497,11 @@ int main(int argc, char **argv) {
 
 //	  printf("(%d)(%d)(%d)%ld)\n",tmp,cpt,pos,rawlen[cpt]); fflush(stdout);
 
-//	  for (uint8_t k=0; k < 60; k++) printf(" %2x ",rxbuf[pos][k]); printf("\n");fflush(stdout);
-
 //          if ((tmp > 0) && ((*(4 + ((uint8_t *)rxcur->rxmsg.msg_iov[1].iov_base))) == 0x66)) if (pos < RXLOG) pos++;
-//          if ((tmp > 0) && (rxbuf[pos][RXRADIOTAPSIZE + 4] == 0x66)) if (pos < 2) pos++;
-        }
+          if (tmp > (RXRADIOTAPSIZE + 24 + 4 + sizeof(payhd_t))) {
+//	    for (uint8_t k=RXRADIOTAPSIZE; k <= (RXRADIOTAPSIZE+4) ; k++) printf(" %2x ",rxbuf[pos][k]); printf("\n");fflush(stdout);
+	    if (rxbuf[pos][RXRADIOTAPSIZE + 4] == 0x66) { printf("BINGO\n"); } //if (pos < 1) pos++; }
+	  }
 
 /*
         for (uint8_t i = 0; i < pos; i++) {
@@ -515,8 +515,8 @@ int main(int argc, char **argv) {
             printf("raw(%d)  droneid(%d) msglen(%d)\n",cpt,ptrrx->droneid,ptrrx->msglen); fflush(stdout);
 	    sync_ack[cpt] = 0;
 	  }
-        }
 */
+        }
       }
     }
 
@@ -524,7 +524,7 @@ int main(int argc, char **argv) {
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
-      size_t len = sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
+      size_t len = 0; // sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) en(%ld) freq(%d) \n",
       ptrtx->droneid, ptrtx->msglen, sync_first, len, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
