@@ -480,14 +480,14 @@ int main(int argc, char **argv) {
           rxcur->rxiov[1].iov_base = (void *)&rxcur->rxieeehd;      rxcur->rxiov[1].iov_len = sizeof(rxcur->rxieeehd);
           rxcur->rxiov[2].iov_base = (void *)&rxcur->rxllchd;       rxcur->rxiov[2].iov_len = sizeof(rxcur->rxllchd);
           rxcur->rxiov[3].iov_base = (void *)&rxcur->rxpayhd;       rxcur->rxiov[3].iov_len = sizeof(rxcur->rxpayhd);
-          rxcur->rxiov[4].iov_base = (void *)&rxcur->rxpaybuf;      rxcur->rxiov[3].iov_len = sizeof(rxcur->rxpaybuf);
+          rxcur->rxiov[4].iov_base = (void *)&rxcur->rxpaybuf;      rxcur->rxiov[4].iov_len = sizeof(rxcur->rxpaybuf);
           rxcur->rxmsg.msg_iov = rxcur->rxiov;                      rxcur->rxmsg.msg_iovlen = 5;
           rxcur->rxmsg.msg_control = NULL;                          rxcur->rxmsg.msg_controllen = 0;
           rxcur->rxmsg.msg_name = NULL;                             rxcur->rxmsg.msg_namelen = 0;
           rxcur->rxmsg.msg_flags = 0;
           memset(rxcur->rxmsg.msg_iov[1].iov_base, 0 , rxcur->rxmsg.msg_iov[1].iov_len);
           tmp = recvmsg(rawfds[cpt], &rxcur->rxmsg, MSG_DONTWAIT); rawlen[cpt] += tmp;
-          if ((tmp > 0) && ((*(4 + ((uint8_t *)&rxcur->rxmsg.msg_iov[1].iov_base)) == 0x66))) if (pos < RXLOG) pos++;
+          if ((tmp > 0) && ((*(4 + ((uint8_t *)rxcur->rxmsg.msg_iov[1].iov_base))) == 0x66)) if (pos < RXLOG) pos++;
         }
 
         for (uint8_t i = 0; i < pos; i++) {
@@ -513,17 +513,6 @@ int main(int argc, char **argv) {
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
       size_t len = sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
-
-/*
-struct sockaddr_ll myssl;
-memset( &myssl, 0, sizeof( myssl ) );
-myssl.sll_family   = AF_PACKET;
-myssl.sll_ifindex  = index[sync_first];
-myssl.sll_protocol = htons(ETH_P_ALL);
-tx[sync_first].txmsg.msg_name = &myssl; tx[sync_first].txmsg.msg_namelen = sizeof(struct sockaddr_ll);
-rawlen = sendmsg(myfd, &tx[sync_first].txmsg, MSG_DONTWAIT);
-*/
-
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) en(%ld) freq(%d) \n",
       ptrtx->droneid, ptrtx->msglen, sync_first, len, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
