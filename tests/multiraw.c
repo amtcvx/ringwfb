@@ -105,7 +105,6 @@ int getsinglewifi_callback(struct nl_msg *nlmsg, void *arg) {
   struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(nlmsg));
   struct nlattr *tb_msg[NL80211_ATTR_MAX + 1];
   nla_parse(tb_msg, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
-
   if (tb_msg[NL80211_ATTR_WIPHY_BANDS]) {
     struct nlattr *tb_band[NL80211_BAND_ATTR_MAX + 1];
     struct nlattr *tb_freq[NL80211_FREQUENCY_ATTR_MAX + 1];
@@ -113,24 +112,19 @@ int getsinglewifi_callback(struct nl_msg *nlmsg, void *arg) {
     struct nlattr *nl_freq;
     int rem_band, rem_freq;
     int last_band = -1;
-
     rawdev_t *ptr = ((rawdev_t *)arg);
-
     nla_for_each_nested(nl_band, tb_msg[NL80211_ATTR_WIPHY_BANDS], rem_band) {
       if (last_band != nl_band->nla_type) last_band = nl_band->nla_type;
       nla_parse(tb_band, NL80211_BAND_ATTR_MAX, nla_data(nl_band), nla_len(nl_band), NULL);
       if (tb_band[NL80211_BAND_ATTR_FREQS]) {
         nla_for_each_nested(nl_freq, tb_band[NL80211_BAND_ATTR_FREQS], rem_freq) {
           nla_parse(tb_freq, NL80211_FREQUENCY_ATTR_MAX, nla_data(nl_freq), nla_len(nl_freq), NULL);
-
           uint32_t freq = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_FREQ]);
           ptr->freqs[ptr->nbfreqs] = freq;
-
           if (freq == 2484) freq = 14;
           else if (freq < 2484) freq = (freq - 2407) / 5;
           else if (freq < 5000) freq = 15 + ((freq - 2512) / 20);
           else freq = ((freq - 5000) / 5);
-
           ptr->chans[ptr->nbfreqs] = freq;
           ptr->nbfreqs++;
         }
@@ -188,16 +182,12 @@ bool reload(char *ifname) {
 
   char netpath[] = "/sys/class/net";
   char driverpath[] = "/sys/bus/usb/drivers/";
-
   bool ret = false;
-
   char dirpath[1024];
   strcpy(dirpath,driverpath);
   strcat(dirpath,DRIVER_NAME);
-
   DIR *d1;
   if (!(d1 = opendir(dirpath))) exit(-1);
-
   char path[1024],buf[1024];
   sprintf(path,"%s/%s/device",netpath,ifname);
 
@@ -220,7 +210,6 @@ bool reload(char *ifname) {
     ret = true;
   }
   closedir(d1);
-
   return(ret);
 }
 
@@ -228,25 +217,18 @@ bool reload(char *ifname) {
 void unblock_rfkill(char *ifname) {
 
   char netpath[] = "/sys/class/net";
-
   ssize_t lenlink;
   char path[1024],buf[1024],drivername[50];
-  
   sprintf(path,"%s/%s/device/driver",netpath,ifname);
-
   if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
     buf[lenlink] = '\0';
     char *ptr = strrchr( buf, '/' );
     strcpy(drivername, ++ptr);
   }
-
   if (strcmp(drivername, DRIVER_NAME) == 0) {
-
     sprintf(path,"%s/%s/phy80211",netpath,ifname);
-
     DIR *d1;
     if (!(d1 = opendir(path))) exit(-1);
-
     struct dirent *dir1;
     while ((dir1 = readdir(d1)) != NULL) if ((strncmp("rfkill",dir1->d_name,5)) == 0) break;
     if ((strncmp("rfkill",dir1->d_name,6)) == 0) {
@@ -267,12 +249,10 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 
   struct nl_cache *cache;
   struct rtnl_link *ltap;
-
   if ((rtnl_link_alloc_cache(sockrt, sockid, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get_by_name(cache, ifname))) exit(-1);
   *ifindex = rtnl_link_get_ifindex(ltap);
   rtnl_link_put(ltap); nl_cache_free(cache);
-
   struct nl_msg *nlmsg;
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);;
   genlmsg_put(nlmsg,0,0,sockid,0,0,NL80211_CMD_SET_INTERFACE,0);  //  DOWN interfaces
@@ -281,7 +261,6 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
   nl_send_auto(socknl, nlmsg);
   if (nl_send_auto(socknl, nlmsg) >= 0)  nl_recvmsgs_default(socknl);
   nlmsg_free(nlmsg);
-
   if ((rtnl_link_alloc_cache(sockrt, AF_UNSPEC, &cache)) < 0) exit(-1);
   if (!(ltap = rtnl_link_get(cache,*ifindex))) exit(-1);
   if (!(rtnl_link_get_flags (ltap) & IFF_UP)) {
@@ -292,20 +271,17 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
     rtnl_link_put(change);
   }
   rtnl_link_put(ltap); nl_cache_free(cache);
-
   bool msg_received = false;
   struct nl_cb *cb;
   if (!(cb = nl_cb_alloc(NL_CB_DEFAULT))) exit(-1);
   nl_cb_set(cb, NL_CB_FINISH, NL_CB_CUSTOM, finish_callback, &msg_received);
   nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, getsinglewifi_callback, prawdev);
-
   if (!(nlmsg  = nlmsg_alloc())) exit(-1);
   genlmsg_put(nlmsg, NL_AUTO_PORT, NL_AUTO_SEQ, sockid, 0, NLM_F_DUMP, NL80211_CMD_GET_WIPHY, 0);
   nla_put_u32(nlmsg, NL80211_ATTR_IFINDEX, *ifindex);
   nl_send_auto(socknl, nlmsg);
   msg_received = false;
   while (!msg_received) nl_recvmsgs(socknl, cb);
-
   nlmsg_free(nlmsg);
   nl_cb_put(cb);
 }
@@ -313,26 +289,18 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 /*****************************************************************************/
 void  setsock(uint8_t *fd, uint32_t index) {
 
-/*
-https://stackoverflow.com/questions/62866943/how-does-the-af-packet-socket-work-in-linux
-*/
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW, protocol))) exit(-1);
-
   uint32_t bufsize = 1600; // PAY_MTU + 100 
-
   if(setsockopt(*fd, SOL_SOCKET, SO_SNDBUF, &bufsize , sizeof(bufsize)) !=0) exit(-1);
   if(setsockopt(*fd, SOL_SOCKET, SO_RCVBUF, &bufsize , sizeof(bufsize)) !=0) exit(-1);
-
   struct sockaddr_ll sll;
   memset( &sll, 0, sizeof( sll ) );
   sll.sll_family   = AF_PACKET;
   sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
-
   if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // must be AFTER wifi setting
   drain(*fd);
-
   const int32_t sock_qdisc_bypass = 1;
   if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
 }
@@ -342,32 +310,23 @@ uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
 
   char netpath[] = "/sys/class/net";
   uint8_t cpt=0;
-
   DIR *d1;
   if (!(d1 = opendir(netpath))) exit(-1);
-
   struct dirent *dir1;
   while ((dir1 = readdir(d1)) != NULL) {
-
     ssize_t lenlink;
     char path[1024],buf[1024];
-
     sprintf(path,"%s/%s/device/driver",netpath,dir1->d_name);
-
     if ((lenlink = readlink(path, buf, sizeof(buf)-1)) != -1) {
       buf[lenlink] = '\0';
       char *ptr = strrchr( buf, '/' );
       if (strcmp(DRIVER_NAME, ++ptr)==0) strcpy(ifnames[cpt++],dir1->d_name);
     }
   }
-
   closedir(d1);
-
   for(uint8_t j=0; j < cpt; j++) reload(ifnames[j]);
   sleep(1.0);
-
   for(uint8_t j=0; j < cpt; j++) unblock_rfkill(ifnames[j]);
-
   return(cpt);
 }
 
@@ -387,33 +346,27 @@ int main(int argc, char **argv) {
   char ifnames[MAXRAWDEV][50];
   uint8_t nbraws = getwifi(ifnames);
   if (nbraws == 0) exit(-1);
-
   struct nl_sock *socknl;
   uint8_t sockid;
   if  (!(socknl = nl_socket_alloc()))  exit(-1);
   nl_socket_set_buffer_size(socknl, 8192, 8192);
   if (genl_connect(socknl)) exit(-1);
   if ((sockid = genl_ctrl_resolve(socknl, "nl80211")) < 0) exit(-1);
-
   struct nl_sock *sockrt;
   if (!(sockrt = nl_socket_alloc())) exit(-1);
   if (nl_connect(sockrt, NETLINK_ROUTE)) exit(-1);
-
   uint8_t nbfds = nbraws;
   struct pollfd readsets[nbfds];
   memset(readsets, 0, sizeof(readsets));
-
   uint8_t rawfds[nbraws];
   uint32_t index[nbraws];
   rawdev_t rawdevs[nbraws];
   memset(rawdevs, 0, sizeof(rawdevs));
-
   for (uint8_t i = 0; i <  nbraws; i++) {
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
     setsock( &rawfds[i], index[i]);
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
-
 
   uint8_t radiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
@@ -430,7 +383,6 @@ int main(int argc, char **argv) {
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
         0x10, 0x86                          // Sequence control
   };
-
  struct tx_t {
     uint8_t txradiotaphd[sizeof(radiotaphd)];
     uint8_t txieeehd[sizeof(ieeehd)];
@@ -440,7 +392,6 @@ int main(int argc, char **argv) {
     struct iovec txiov[5];
     struct msghdr txmsg;
   } tx[MAXRAWDEV];
-
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
     tx[i].txiov[0].iov_base = tx[i].txradiotaphd;     tx[i].txiov[0].iov_len = sizeof(tx[i].txradiotaphd);
     tx[i].txiov[1].iov_base = tx[i].txieeehd;         tx[i].txiov[1].iov_len = sizeof(tx[i].txieeehd);
@@ -448,12 +399,10 @@ int main(int argc, char **argv) {
     tx[i].txiov[3].iov_base = (void *)&tx[i].txpayhd; tx[i].txiov[3].iov_len = sizeof(tx[i].txpayhd);
     tx[i].txiov[4].iov_base = tx[i].txpaybuf;         tx[i].txiov[4].iov_len = sizeof(tx[i].txpaybuf);
     tx[i].txmsg.msg_iov = tx[i].txiov;                tx[i].txmsg.msg_iovlen = 5;
-
     tx[i].txmsg.msg_control = NULL;                   tx[i].txmsg.msg_controllen = 0;
     tx[i].txmsg.msg_name = NULL;                      tx[i].txmsg.msg_namelen = 0;
     tx[i].txmsg.msg_flags = 0;
   }
-
   for(uint8_t i = 0; i < MAXRAWDEV; i++) {
     memcpy(tx[i].txmsg.msg_iov[0].iov_base, radiotaphd, tx[i].txmsg.msg_iov[0].iov_len);
     memcpy(tx[i].txmsg.msg_iov[1].iov_base, ieeehd,     tx[i].txmsg.msg_iov[1].iov_len);
@@ -475,42 +424,11 @@ int main(int argc, char **argv) {
     struct msghdr rxmsg;
   } rx[MAXRAWDEV][RXLOG];
 
-  uint8_t rxrawlog[MAXRAWDEV];
-
-  struct sockaddr_ll rxaddr;
-
-  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
-    for(uint8_t j = 0; j < RXLOG; j++) {
-      rx[i][j].rxiov[0].iov_base = rx[i][j].rxradiotaphd;     rx[i][j].rxiov[0].iov_len = sizeof(rx[i][j].rxradiotaphd);
-      rx[i][j].rxiov[1].iov_base = rx[i][j].rxieeehd;         rx[i][j].rxiov[1].iov_len = sizeof(rx[i][j].rxieeehd);
-      rx[i][j].rxiov[2].iov_base = rx[i][j].rxllchd;          rx[i][j].rxiov[2].iov_len = sizeof(rx[i][j].rxllchd);
-      rx[i][j].rxiov[3].iov_base = (void *)&rx[i][j].rxpayhd; rx[i][j].rxiov[3].iov_len = sizeof(rx[i][j].rxpayhd);
-      rx[i][j].rxiov[4].iov_base = rx[i][j].rxpaybuf;         rx[i][j].rxiov[4].iov_len = sizeof(rx[i][j].rxpaybuf);
-      rx[i][j].rxmsg.msg_iov = rx[i][j].rxiov;                rx[i][j].rxmsg.msg_iovlen = 5;
-
-      rx[i][j].rxmsg.msg_control = NULL;                      rx[i][j].rxmsg.msg_controllen = 0;
-      rx[i][j].rxmsg.msg_name = &rxaddr;                      rx[i][j].rxmsg.msg_namelen = sizeof(struct sockaddr_ll);
-//      rx[i][j].rxmsg.msg_name = NULL;                       rx[i][j].rxmsg.msg_namelen = 0;
-      rx[i][j].rxmsg.msg_flags = 0;
-    }
-  }
-
-  for(uint8_t i = 0; i < MAXRAWDEV; i++) {
-    for(uint8_t j = 0; j < RXLOG; j++) {
-      memset(rx[i][j].rxmsg.msg_iov[0].iov_base, 0, rx[i][j].rxmsg.msg_iov[0].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[1].iov_base, 0, rx[i][j].rxmsg.msg_iov[1].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[2].iov_base, 0, rx[i][j].rxmsg.msg_iov[2].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[3].iov_base, 0, rx[i][j].rxmsg.msg_iov[3].iov_len);
-      memset(rx[i][j].rxmsg.msg_iov[4].iov_base, 0, rx[i][j].rxmsg.msg_iov[4].iov_len);
-    }
-  }
-
-  ssize_t rawlen = 0;
-
   bool send_first = false;
   int8_t sync_first = -1, sync_scan = -1;
   uint8_t sync_cpt[nbraws], sync_ack[nbraws];
-  for (uint8_t i = 0; i < nbraws; i++) { sync_cpt[i] = 1; sync_ack[i] = 1; }
+  size_t rawlen[nbraws];
+  for (uint8_t i = 0; i < nbraws; i++) { sync_cpt[i] = 1; sync_ack[i] = 1; rawlen[i] = 0; }
 
   for (uint8_t i = 0; i < nbraws; i++) {
     rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
@@ -521,21 +439,13 @@ int main(int argc, char **argv) {
   uint64_t curms,  stoms, intms = 1000;
   clock_gettime(CLOCK_MONOTONIC, &ts); stoms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
-/*
-uint8_t myfd = 0;
-if (-1 == (myfd = socket(AF_PACKET,SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
-*/
-
   while (true) {
-
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
     poll(readsets, nbfds, stoms > curms ? stoms - curms : 0);
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
-
     if (curms >= stoms) { // SYNCHRONOUS
-
       stoms = curms + intms - ((curms - stoms) % intms);
-				    
+
       printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
         rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
 
@@ -543,7 +453,6 @@ if (-1 == (myfd = socket(AF_PACKET,SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
         if (sync_ack[sync_scan] > 1) { upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs ); sync_ack[sync_scan] = 0; }
         if (sync_ack[sync_scan] < 2) sync_ack[sync_scan]++;
       }
-
       for (uint8_t i = 0; i < nbraws; i++) {
         if (sync_first < 0) {
           if (sync_cpt[i] == 0) upfreq(sockid, socknl, i, index[i], nbraws, rawdevs);
@@ -551,9 +460,7 @@ if (-1 == (myfd = socket(AF_PACKET,SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
 	  if (sync_cpt[i] == 5) sync_first = i;
         }
       }
-
       if (sync_first >= 0) send_first = true;
-
       if ((sync_scan < 0) && (sync_first >= 0)) {
         for(uint8_t i = 0; i < nbraws; i++) if (i != sync_first) {
           sync_scan = i;  rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
@@ -563,32 +470,33 @@ if (-1 == (myfd = socket(AF_PACKET,SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
     }
 
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) { // ASYNCHRONOUS RECV
-
-      if (readsets[cpt].revents & (POLLERR | POLLNVAL)) { printf("socket error: %s", strerror(errno)); fflush(stdout); }
-
       if (readsets[cpt].revents & POLLIN) {
-
 	sync_cpt[cpt] = 0;
 
-	rxrawlog[cpt] = 0;
-
-	uint8_t stlog = rxrawlog[cpt];
-
-	rawlen = 0;
-	int32_t tmp = 0; uint8_t pos;
-
+	int32_t tmp = 0; uint8_t pos = 0;
         while (tmp >= 0) {
-	  pos = rxrawlog[cpt];
-          memset(rx[cpt][pos].rxmsg.msg_iov[1].iov_base, 0 , rx[cpt][pos].rxmsg.msg_iov[1].iov_len);
-          memset(rx[cpt][pos].rxmsg.msg_iov[3].iov_base, 0 , rx[cpt][pos].rxmsg.msg_iov[3].iov_len);
-	  tmp = recvmsg(rawfds[cpt], &rx[cpt][pos].rxmsg, MSG_DONTWAIT); rawlen += tmp;
-          if ((tmp > 0) && ((*(4 + ((uint8_t *)rx[cpt][pos].rxmsg.msg_iov[1].iov_base)) == 0x66))) (rxrawlog[cpt]++);
-	}
+          struct rx_t *rxcur = &rx[cpt][pos];
+          rxcur->rxiov[0].iov_base = (void *)&rxcur->rxradiotaphd;  rxcur->rxiov[0].iov_len = sizeof(rxcur->rxradiotaphd);
+          rxcur->rxiov[1].iov_base = (void *)&rxcur->rxieeehd;      rxcur->rxiov[1].iov_len = sizeof(rxcur->rxieeehd);
+          rxcur->rxiov[2].iov_base = (void *)&rxcur->rxllchd;       rxcur->rxiov[2].iov_len = sizeof(rxcur->rxllchd);
+          rxcur->rxiov[3].iov_base = (void *)&rxcur->rxpayhd;       rxcur->rxiov[3].iov_len = sizeof(rxcur->rxpayhd);
+          rxcur->rxiov[4].iov_base = (void *)&rxcur->rxpaybuf;      rxcur->rxiov[3].iov_len = sizeof(rxcur->rxpaybuf);
+          rxcur->rxmsg.msg_iov = rxcur->rxiov;                      rxcur->rxmsg.msg_iovlen = 5;
+          rxcur->rxmsg.msg_control = NULL;                          rxcur->rxmsg.msg_controllen = 0;
+          rxcur->rxmsg.msg_name = NULL;                             rxcur->rxmsg.msg_namelen = 0;
+          rxcur->rxmsg.msg_flags = 0;
+          memset(rxcur->rxmsg.msg_iov[1].iov_base, 0 , rxcur->rxmsg.msg_iov[1].iov_len);
+          tmp = recvmsg(rawfds[cpt], &rxcur->rxmsg, MSG_DONTWAIT); rawlen[cpt] += tmp;
+          if ((tmp > 0) && ((*(4 + ((uint8_t *)&rxcur->rxmsg.msg_iov[1].iov_base)) == 0x66))) if (pos < RXLOG) pos++;
+        }
 
-	for (pos = stlog; pos < rxrawlog[cpt]; pos++) {
+        for (uint8_t i = 0; i < pos; i++) {
+
+          printf("(%d)(%ld)\n,",cpt,rawlen[cpt]); fflush(stdout);
+
           payhd_t *ptrrx = (payhd_t *)(rx[cpt][pos].rxmsg.msg_iov[3].iov_base);
-          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened (%d) (%d) (%d)   [%d][%d][%d]  !!\n\n",
-			  ptrrx->droneid, ptrrx->msglen, cpt, (rxaddr.sll_pkttype == PACKET_OUTGOING),true,rxaddr.sll_ifindex);fflush(stdout); } //exit(-1);
+
+          if (ptrrx->droneid == DRONEID) { printf("\n!! This should no happened  !!\n\n"); fflush(stdout); exit(-1);}
 	  else {
             printf("raw (%d)\n",cpt); fflush(stdout);
             printf("droneid (%d)\n",ptrrx->droneid); fflush(stdout);
@@ -604,7 +512,7 @@ if (-1 == (myfd = socket(AF_PACKET,SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
-      rawlen = sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
+      size_t len = sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
 
 /*
 struct sockaddr_ll myssl;
@@ -617,8 +525,8 @@ rawlen = sendmsg(myfd, &tx[sync_first].txmsg, MSG_DONTWAIT);
 */
 
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
-      printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) rawlen(%ld) freq(%d) \n",
-      ptrtx->droneid, ptrtx->msglen, sync_first, rawlen, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
+      printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) en(%ld) freq(%d) \n",
+      ptrtx->droneid, ptrtx->msglen, sync_first, len, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
 
       send_first = false;
     }
