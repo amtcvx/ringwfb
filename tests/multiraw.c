@@ -480,7 +480,7 @@ int main(int argc, char **argv) {
       if (readsets[cpt].revents & POLLIN) {
 	sync_cpt[cpt] = 0;
 
-	int32_t tmp = 0; uint8_t pos = 0;
+	int32_t tmp = 0; uint16_t payoffset = 0; uint8_t pos = 0; 
         while (tmp >= 0) {
 /*
           struct rx_t *rxcur = &rx[cpt][pos];
@@ -500,22 +500,28 @@ int main(int argc, char **argv) {
 
           if (tmp > 4) {
 
-	    uint16_t payoffset =  (uint16_t)rxbuf[pos][2] + IEE_LLC_OFFSET; // radiotapsize + ...
+	    uint16_t tmppayoffset =  (uint16_t)rxbuf[pos][2] + IEE_LLC_OFFSET; // radiotapsize + ...
           
-	    if ((tmp -= payoffset) > 0) {
+	    if ((tmp -= tmppayoffset) > 0) {
 
-	      if ((tmp -= (sizeof(payhd_t) + ((payhd_t *)&rxbuf[pos][payoffset])->msglen + FCS_OFFSET )) == 0) {
+	      if ((tmp -= (sizeof(payhd_t) + ((payhd_t *)&rxbuf[pos][tmppayoffset])->msglen + FCS_OFFSET )) == 0) {
 	      
-	        payhd_t *ptrrx = (payhd_t *)&rxbuf[pos][payoffset]; 
-	        printf("(%d)(%d)\n",ptrrx->droneid,ptrrx->msglen); 
-
-		if (pos < RXLOG) pos++;
+		if (pos < RXLOG) { pos++; payoffset = tmppayoffset; }
 
 //                for (uint8_t k=0; k < ptrrx->msglen; k++) printf(" %2X ",rxbuf[pos][k + sizeof(payhd_t) + payoffset]); printf("\n");
 	      }
 	    }
 	  }
 	}
+
+	if (pos > 0) {
+	  payhd_t *ptrrx = (payhd_t *)&rxbuf[0][payoffset]; 
+	  printf("(%d)(%d)\n",ptrrx->droneid,ptrrx->msglen); 
+          for (uint8_t k=0; k < ptrrx->msglen; k++) printf(" %2X ",rxbuf[0][k + sizeof(payhd_t) + payoffset]); printf("\n");
+
+	  sync_ack[cpt] = 0;
+	}
+
 
 /*
         for (uint8_t i = 0; i < pos; i++) {
@@ -530,7 +536,6 @@ int main(int argc, char **argv) {
 	    sync_ack[cpt] = 0;
 	  }
 */
-        }
       }
     }
 
