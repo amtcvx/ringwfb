@@ -372,6 +372,7 @@ int main(int argc, char **argv) {
         0x08, 0x00,  // RADIOTAP_F_TX_NOACK
         MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
   };
+
   uint8_t ieeehd[] = {
         0x08, 0x01,                         // Frame Control : Data frame from STA to DS
         0x00, 0x00,                         // Duration
@@ -380,7 +381,8 @@ int main(int argc, char **argv) {
         0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
         0x10, 0x86                          // Sequence control
   };
- struct tx_t {
+
+  struct tx_t {
     uint8_t txradiotaphd[sizeof(radiotaphd)];
     uint8_t txieeehd[sizeof(ieeehd)];
     uint8_t txllchd[4];
@@ -436,8 +438,10 @@ int main(int argc, char **argv) {
   uint64_t curms,  stoms, intms = 1000;
   clock_gettime(CLOCK_MONOTONIC, &ts); stoms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
-
-  uint8_t rxbuf[2][2000];
+#define ONLINE_MTU 2000
+#define IEE_LLC_OFFSET 24 + 4
+#define FCS_OFFSET 4
+  uint8_t rxbuf[2][ONLINE_MTU];
 
   while (true) {
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
@@ -492,16 +496,26 @@ int main(int argc, char **argv) {
           memset(rxcur->rxmsg.msg_iov[1].iov_base, 0 , rxcur->rxmsg.msg_iov[1].iov_len);
           tmp = recvmsg(rawfds[cpt], &rxcur->rxmsg, MSG_DONTWAIT); rawlen[cpt] += tmp;
 */
-          tmp = recv(rawfds[cpt], &rxbuf[pos][0], sizeof(rxbuf), MSG_DONTWAIT); rawlen[cpt] += tmp;
+          tmp = recv(rawfds[cpt], &rxbuf[pos][0], ONLINE_MTU, MSG_DONTWAIT); rawlen[cpt] += tmp;
 
+          if (tmp > 4) {
 
-//	  printf("(%d)(%d)(%d)%ld)\n",tmp,cpt,pos,rawlen[cpt]); fflush(stdout);
+	    uint16_t payoffset =  (uint16_t)rxbuf[pos][2] + IEE_LLC_OFFSET; // radiotapsize + ...
+          
+	    if ((tmp -= payoffset) > 0) {
 
-//          if ((tmp > 0) && ((*(4 + ((uint8_t *)rxcur->rxmsg.msg_iov[1].iov_base))) == 0x66)) if (pos < RXLOG) pos++;
-          if (tmp > (RXRADIOTAPSIZE + 24 + 4 + sizeof(payhd_t))) {
-//	    for (uint8_t k=RXRADIOTAPSIZE; k <= (RXRADIOTAPSIZE+4) ; k++) printf(" %2x ",rxbuf[pos][k]); printf("\n");fflush(stdout);
-	    if (rxbuf[pos][RXRADIOTAPSIZE + 4] == 0x66) { printf("BINGO\n"); } //if (pos < 1) pos++; }
+	      if ((tmp -= (sizeof(payhd_t) + ((payhd_t *)&rxbuf[pos][payoffset])->msglen + FCS_OFFSET )) == 0) {
+	      
+	        payhd_t *ptrrx = (payhd_t *)&rxbuf[pos][payoffset]; 
+	        printf("(%d)(%d)\n",ptrrx->droneid,ptrrx->msglen); 
+
+		if (pos < RXLOG) pos++;
+
+//                for (uint8_t k=0; k < ptrrx->msglen; k++) printf(" %2X ",rxbuf[pos][k + sizeof(payhd_t) + payoffset]); printf("\n");
+	      }
+	    }
 	  }
+	}
 
 /*
         for (uint8_t i = 0; i < pos; i++) {
