@@ -520,6 +520,11 @@ int main(int argc, char **argv) {
           for (uint8_t k=0; k < ptrrx->msglen; k++) printf(" %2X ",rxbuf[0][k + sizeof(payhd_t) + payoffset]); printf("\n");
 
 	  sync_ack[cpt] = 0;
+
+	} else {
+
+          printf("rawlen (%d)(%ld)\n",cpt,rawlen[cpt]); fflush(stdout);
+
 	}
 
 
@@ -543,7 +548,7 @@ int main(int argc, char **argv) {
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->droneid = DRONEID;
       ((payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base))->msglen = 1;
       tx[sync_first].txmsg.msg_iov[4].iov_len = 1;
-      size_t len = 0; // sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
+      size_t len = sendmsg(rawfds[sync_first], &tx[sync_first].txmsg, MSG_DONTWAIT);
       payhd_t *ptrtx = (payhd_t *)(tx[sync_first].txmsg.msg_iov[3].iov_base);
       printf("sendmsg droneid(%d) msglen(%d) sync_first(%d) en(%ld) freq(%d) \n",
       ptrtx->droneid, ptrtx->msglen, sync_first, len, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
