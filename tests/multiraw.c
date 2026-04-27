@@ -286,8 +286,52 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
   nl_cb_put(cb);
 }
 
+/******************************************************************************/
+// sudo tcpdump -i wlx244bfeb72618 ether src not 3c:7c:3f:a9:bd:ca -dd
+/*
+void setmacfilter(uint8_t fd, uint8_t macsrc[12]) {
+
+  struct sock_filter arr[] = {
+    { 0x30, 0, 0, 0x00000003 },
+    { 0x64, 0, 0, 0x00000008 },
+    { 0x7, 0, 0, 0x00000000 },
+    { 0x30, 0, 0, 0x00000002 },
+    { 0x4c, 0, 0, 0x00000000 },
+    { 0x2, 0, 0, 0x00000000 },
+    { 0x7, 0, 0, 0x00000000 },
+    { 0x50, 0, 0, 0x00000000 },
+    { 0x45, 17, 0, 0x00000004 },
+    { 0x45, 0, 11, 0x00000008 },
+    { 0x50, 0, 0, 0x00000001 },
+    { 0x45, 0, 9, 0x00000002 },
+    { 0x45, 0, 4, 0x00000001 },
+    { 0x40, 0, 0, 0x0000001a },
+//      { 0x15, 0, 11, 0x3fa9bdca },
+      { 0x15, 0, 11, 0xfeb72618 },
+    { 0x48, 0, 0, 0x00000018 },
+//      { 0x15, 8, 9, 0x00003c7c },
+      { 0x15, 8, 9, 0x0000244b },
+    { 0x40, 0, 0, 0x00000012 },
+//      { 0x15, 0, 7, 0x3fa9bdca },
+      { 0x15, 0, 11, 0xfeb72618 },
+    { 0x48, 0, 0, 0x00000010 },
+//      { 0x15, 4, 5, 0x00003c7c },
+      { 0x15, 8, 9, 0x0000244b },
+    { 0x40, 0, 0, 0x0000000c },
+//      { 0x15, 0, 3, 0x3fa9bdca },
+      { 0x15, 0, 11, 0xfeb72618 },
+    { 0x48, 0, 0, 0x0000000a },
+//      { 0x15, 0, 1, 0x00003c7c },
+      { 0x15, 8, 9, 0x0000244b },
+    { 0x6, 0, 0, 0x00000000 },
+    { 0x6, 0, 0, 0x00040000 },
+  };
+  struct sock_fprog notmacsrc_program = { .len = (sizeof(arr) / sizeof((arr)[0])), .filter = arr};
+  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &notmacsrc_program, sizeof(notmacsrc_program));
+}   
+*/
 /*****************************************************************************/
-void  setsock(uint8_t *fd, uint32_t index) {
+void  setsock(uint8_t *fd, uint32_t index, uint8_t macsrc[12]) {
 
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW, protocol))) exit(-1);
@@ -296,10 +340,14 @@ void  setsock(uint8_t *fd, uint32_t index) {
   sll.sll_family   = AF_PACKET;
   sll.sll_ifindex  = index;
   sll.sll_protocol = protocol;
+
   if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // must be AFTER wifi setting
   drain(*fd);
+
   const int32_t sock_qdisc_bypass = 1;
   if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
+
+//  setmacfilter(*fd, macsrc);
 }
 
 /******************************************************************************/
@@ -358,9 +406,12 @@ int main(int argc, char **argv) {
   uint32_t index[nbraws];
   rawdev_t rawdevs[nbraws];
   memset(rawdevs, 0, sizeof(rawdevs));
+
+  uint8_t macsrc[2][12] = { { 0x3c,0x7c,0x3f,0xa9,0xbd,0xca }, {0x24,0x4b,0xfe,0xb7,0x26,0x18} };
+
   for (uint8_t i = 0; i <  nbraws; i++) {
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
-    setsock( &rawfds[i], index[i]);
+    setsock( &rawfds[i], index[i], &macsrc[i][0]);
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
 
