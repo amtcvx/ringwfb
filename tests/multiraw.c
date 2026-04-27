@@ -153,7 +153,7 @@ bool setfreq(uint8_t sockid, struct nl_sock *socknl, int ifindex, uint32_t freq)
 
 /******************************************************************************/
 void drain(uint8_t fd) {
-
+/*
   struct sock_filter zero_bytecode = BPF_STMT(BPF_RET | BPF_K, 0);
   struct sock_fprog zero_program = { 1, &zero_bytecode};
   setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &zero_program, sizeof(zero_program));
@@ -162,6 +162,14 @@ void drain(uint8_t fd) {
   struct sock_filter full_bytecode = BPF_STMT(BPF_RET | BPF_K, (u_int)-1);
   struct sock_fprog full_program = { 1, &full_bytecode};
   setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &full_program, sizeof(full_program));
+*/
+  struct sock_filter arr[] = {
+    { 0x06, 0, 0, 0x00000000 }
+  };
+  struct sock_fprog bloc_all = { .len = (sizeof(arr) / sizeof((arr)[0])), .filter = arr };
+  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &bloc_all, sizeof(bloc_all));
+  char drain[1];
+  while (recv(fd, drain, sizeof(drain), MSG_DONTWAIT) > 0) printf("----\n");
 }   
 
 /*****************************************************************************/
@@ -290,7 +298,10 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 /*  sudo tcpdump not ether src 3c:7c:3f:a9:bd:ca and not ether dst 3c:7c:3f:a9:bd:ca and not ether src 24:4b:fe:b7:26:18 and not ether dst 24:4b:fe:b7:26:18 -dd
 */
 void setmacfilter(uint8_t fd, uint8_t macsrc[12]) {
-
+  struct sock_filter arr[] = {
+    { 0x06, 0, 0, 0x00000000 }
+  };
+/*
   struct sock_filter arr[] = {
     { 0x20, 0, 0, 0x00000008 },
     { 0x15, 0, 2, 0x3fa9bdca },
@@ -311,6 +322,7 @@ void setmacfilter(uint8_t fd, uint8_t macsrc[12]) {
     { 0x6, 0, 0, 0x00000000 },
     { 0x6, 0, 0, 0x00040000 },
   };
+*/
   struct sock_fprog notmacsrc_program = { .len = (sizeof(arr) / sizeof((arr)[0])), .filter = arr};
   setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &notmacsrc_program, sizeof(notmacsrc_program));
 }   
