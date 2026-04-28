@@ -291,10 +291,9 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 /******************************************************************************/
 /*  sudo tcpdump not ether src 3c:7c:3f:a9:bd:ca and not ether dst 3c:7c:3f:a9:bd:ca and not ether src 24:4b:fe:b7:26:18 and not ether dst 24:4b:fe:b7:26:18 -dd
  *
- *  https://organicprogrammer.com/2022/03/28/how-to-implement-libpcap-on-linux-with-raw-socket-part2/
-https://docs.kernel.org/networking/af_xdp.html
-https://mas-bandwidth.com/xdp-for-game-programmers/
-      
+https://docs.kernel.org/6.2/networking/filter.html
+https://docs.kernel.org/6.2/networking/packet_mmap.html
+    
 void setmacfilter(uint8_t fd, uint8_t macsrc[12]) {
   struct sock_filter arr[] = {
     { 0x06, 0, 0, 0x00000000 }
