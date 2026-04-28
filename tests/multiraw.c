@@ -153,23 +153,17 @@ bool setfreq(uint8_t sockid, struct nl_sock *socknl, int ifindex, uint32_t freq)
 
 /******************************************************************************/
 void drain(uint8_t fd) {
-/*
+
   struct sock_filter zero_bytecode = BPF_STMT(BPF_RET | BPF_K, 0);
   struct sock_fprog zero_program = { 1, &zero_bytecode};
   setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &zero_program, sizeof(zero_program));
   char drain[1];
   while (recv(fd, drain, sizeof(drain), MSG_DONTWAIT) >= 0) printf("----\n");
+
   struct sock_filter full_bytecode = BPF_STMT(BPF_RET | BPF_K, (u_int)-1);
   struct sock_fprog full_program = { 1, &full_bytecode};
   setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &full_program, sizeof(full_program));
-*/
-  struct sock_filter arr[] = {
-    { 0x06, 0, 0, 0x00000000 }
-  };
-  struct sock_fprog bloc_all = { .len = (sizeof(arr) / sizeof((arr)[0])), .filter = arr };
-  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &bloc_all, sizeof(bloc_all));
-  char drain[1];
-  while (recv(fd, drain, sizeof(drain), MSG_DONTWAIT) > 0) printf("----\n");
+
 }   
 
 /*****************************************************************************/
@@ -298,12 +292,12 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 /*  sudo tcpdump not ether src 3c:7c:3f:a9:bd:ca and not ether dst 3c:7c:3f:a9:bd:ca and not ether src 24:4b:fe:b7:26:18 and not ether dst 24:4b:fe:b7:26:18 -dd
  *
  *  https://organicprogrammer.com/2022/03/28/how-to-implement-libpcap-on-linux-with-raw-socket-part2/
-*/
+
 void setmacfilter(uint8_t fd, uint8_t macsrc[12]) {
   struct sock_filter arr[] = {
     { 0x06, 0, 0, 0x00000000 }
   };
-/*
+
   struct sock_filter arr[] = {
     { 0x20, 0, 0, 0x00000008 },
     { 0x15, 0, 2, 0x3fa9bdca },
@@ -324,11 +318,11 @@ void setmacfilter(uint8_t fd, uint8_t macsrc[12]) {
     { 0x6, 0, 0, 0x00000000 },
     { 0x6, 0, 0, 0x00040000 },
   };
-*/
+
   struct sock_fprog notmacsrc_program = { .len = (sizeof(arr) / sizeof((arr)[0])), .filter = arr};
   setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &notmacsrc_program, sizeof(notmacsrc_program));
 }   
-
+*/
 /*****************************************************************************/
 void  setsock(uint8_t *fd, uint32_t index, uint8_t macsrc[12]) {
 
@@ -346,7 +340,7 @@ void  setsock(uint8_t *fd, uint32_t index, uint8_t macsrc[12]) {
   const int32_t sock_qdisc_bypass = 1;
   if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
 
-  setmacfilter(*fd, macsrc);
+//  setmacfilter(*fd, macsrc);
 }
 
 /******************************************************************************/
@@ -424,9 +418,9 @@ int main(int argc, char **argv) {
   uint8_t ieeehd[] = {
         0x08, 0x01,                         // Frame Control : Data frame from STA to DS
         0x00, 0x00,                         // Duration
-        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Receiver MAC
-        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Transmitter MAC
-        0x66, 0x55, 0x44, 0x33, 0x22, 0x11, // Destination MAC
+        0x36, 0x35, 0x34, 0x33, 0x32, 0x31, // Receiver MAC
+        0x26, 0x25, 0x24, 0x23, 0x22, 0x21, // Transmitter MAC
+        0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
         0x10, 0x86                          // Sequence control
   };
 
@@ -515,7 +509,8 @@ int main(int argc, char **argv) {
 	}
 	if (pos > 0) {
 	  payhd_t *ptrrx = (payhd_t *)&rxbuf[0][payoffset]; 
-	  printf("recv (%d)(%d)\n",ptrrx->droneid,ptrrx->msglen); 
+	  printf("recv droneid(%d) msglen(%d) cptraw(%d)\n",ptrrx->droneid,ptrrx->msglen,cpt); 
+          for (uint8_t k=39; k < (39+18); k++) printf(" %2X ",rxbuf[0][k]); printf("\n");
           //for (uint8_t k=0; k < ptrrx->msglen; k++) printf(" %2X ",rxbuf[0][k + sizeof(payhd_t) + payoffset]); printf("\n");
 	  sync_ack[cpt] = 0;
 	} else {
@@ -539,11 +534,13 @@ int main(int argc, char **argv) {
       size_t len = send(rawfds[sync_first], &txbuf[sync_first][0], txpaylen + sizeof(payhd_t) + msglen,  MSG_DONTWAIT);
 
       payhd_t *ptrtx = (payhd_t *)(&txbuf[sync_first][txpaylen]);
-      printf("send ret(%ld) droneid(%d) seq(%ld) msglen(%d) backfreq(%d)   sync_first(%d)  freq(%d) \n",
-        len, ptrtx->droneid, ptrtx->seq, ptrtx->msglen, ptrtx->backfreq, sync_first, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
+      printf("send droneid(%d) msglen(%d) cptraw(%d)\n",ptrtx->droneid,ptrtx->msglen,sync_first); 
+      for (uint8_t k=17; k < (17+18); k++) printf(" %2X ",txbuf[sync_first][k]); printf("\n");
+//      printf("send ret(%ld) droneid(%d) seq(%ld) msglen(%d) backfreq(%d)   sync_first(%d)  freq(%d) \n",
+//        len, ptrtx->droneid, ptrtx->seq, ptrtx->msglen, ptrtx->backfreq, sync_first, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
 
       send_first = false;
-      // NEED TO RESET TX TO AVOID DUPLICATION IN RX !!
+      // NEED TO RESET TX TO AVOID SPARK DUPLICATION IN RX !!
       //memset(&txbuf[sync_first][0], 0, txpaylen);
     }
   }
