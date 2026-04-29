@@ -41,10 +41,10 @@ void main(int argc, char **argv) {
   printf("(%s)\n",argv[1]);
 
   int fd;
-  if (fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL)) < 0) exit(-1);
+  if (-1 == (fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
 
   int v = TPACKET_V3;
-  setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v)); 
+  if (-1 == setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v))) exit(-1); 
 
   struct ring_t {
     struct iovec *rd;
@@ -62,13 +62,14 @@ void main(int argc, char **argv) {
   ring.req.tp_retire_blk_tov = 60;
   ring.req.tp_feature_req_word = TP_FT_REQ_FILL_RXHASH;
 
-  setsockopt(fd, SOL_PACKET, PACKET_RX_RING, &ring.req, sizeof(ring.req)); 
+  if (-1 == setsockopt(fd, SOL_PACKET, PACKET_RX_RING, &ring.req, sizeof(ring.req))) exit(-1);
 
   ring.map = mmap(NULL, ring.req.tp_block_size * ring.req.tp_block_nr,
                          PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, 0);
 
   ring.rd = malloc(ring.req.tp_block_nr * sizeof(*ring.rd));
   if (!ring.rd) exit(-1);
+
   for (i = 0; i < ring.req.tp_block_nr; ++i) {
     ring.rd[i].iov_base = ring.map + (i * ring.req.tp_block_size);
     ring.rd[i].iov_len = ring.req.tp_block_size;
@@ -83,7 +84,7 @@ void main(int argc, char **argv) {
   ll.sll_pkttype = 0;
   ll.sll_halen = 0;
 
-  bind(fd, (struct sockaddr *) &ll, sizeof(ll));
+  if (-1 == bind(fd, (struct sockaddr *) &ll, sizeof(ll))) exit(-1);
 
   struct pollfd pfd = {
     .fd = fd,
