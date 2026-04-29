@@ -58,6 +58,10 @@ int main(int argc, char **argv) {
     .revents = 0
   };
 
+  struct timespec ts;
+  uint64_t curms,  stoms, intms = 1000;
+  clock_gettime(CLOCK_MONOTONIC, &ts); stoms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+
   int block_pos = 0;
   int pkt_num = 0;
   for( block_pos = 0; 1; block_pos = ((block_pos+1) % req.tp_block_nr) ) {
@@ -69,8 +73,13 @@ int main(int argc, char **argv) {
     } *pbd = (struct block_desc *) ( map + (block_pos * req.tp_block_size) );
 
     if( ( pbd->h1.block_status & TP_STATUS_USER ) == 0 ) {
-      poll(&pfd, 1, -1);
-      continue;
+      clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+      poll(&pfd, 1, stoms > curms ? stoms - curms : 0);
+      clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+      if (curms >= stoms) { // SYNCHRONOUS
+        stoms = curms + intms - ((curms - stoms) % intms);
+	printf("TIC\n");
+      }
     }
     printf( "number of packets captured: %d\n", pbd->h1.num_pkts );
 
