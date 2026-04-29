@@ -53,27 +53,44 @@ void main(int argc, char **argv) {
     struct iovec rd[blocknum][sizeof(struct iovec)];
     uint8_t *map;
     struct tpacket_req3 req;
-  } ring;
+  } ringrx,ringtx;
 
+  memset(&ringrx.req, 0, sizeof(ringrx.req));
+  ringrx.req.tp_block_size = blocksiz;
+  ringrx.req.tp_frame_size = framesiz;
+  ringrx.req.tp_block_nr = blocknum;
+  ringrx.req.tp_frame_nr = (blocksiz * blocknum) / framesiz;
+  ringrx.req.tp_retire_blk_tov = 60;
+  ringrx.req.tp_feature_req_word = TP_FT_REQ_FILL_RXHASH;
 
-  memset(&ring.req, 0, sizeof(ring.req));
-  ring.req.tp_block_size = blocksiz;
-  ring.req.tp_frame_size = framesiz;
-  ring.req.tp_block_nr = blocknum;
-  ring.req.tp_frame_nr = (blocksiz * blocknum) / framesiz;
-  ring.req.tp_retire_blk_tov = 60;
-  ring.req.tp_feature_req_word = TP_FT_REQ_FILL_RXHASH;
+  if (-1 == setsockopt(fd, SOL_PACKET, PACKET_RX_RING, &ringrx.req, sizeof(ringrx.req))) exit(-1);
 
-  if (-1 == setsockopt(fd, SOL_PACKET, PACKET_RX_RING, &ring.req, sizeof(ring.req))) exit(-1);
-
-  ring.map = mmap(NULL, ring.req.tp_block_size * ring.req.tp_block_nr,
+  ringrx.map = mmap(NULL, ringrx.req.tp_block_size * ringrx.req.tp_block_nr,
                          PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, 0);
 
   for (i = 0; i < blocknum; ++i) {
-    ring.rd[i]->iov_base = ring.map + (i * blocksiz);
-    ring.rd[i]->iov_len = blocksiz;
+    ringrx.rd[i]->iov_base = ringrx.map + (i * blocksiz);
+    ringrx.rd[i]->iov_len = blocksiz;
   }
+/*
+  memset(&ringtx.req, 0, sizeof(ringrx.req));
+  ringtx.req.tp_block_size = blocksiz;
+  ringtx.req.tp_frame_size = framesiz;
+  ringtx.req.tp_block_nr = blocknum;
+  ringtx.req.tp_frame_nr = (blocksiz * blocknum) / framesiz;
+  ringtx.req.tp_retire_blk_tov = 60;
+  ringtx.req.tp_feature_req_word = TP_FT_REQ_FILL_RXHASH;
 
+  if (-1 == setsockopt(fd, SOL_PACKET, PACKET_TX_RING, &ringtx.req, sizeof(ringtx.req))) exit(-1);
+
+  ringtx.map = mmap(NULL, ringtx.req.tp_block_size * ringtx.req.tp_block_nr,
+                         PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, 0);
+
+  for (i = 0; i < blocknum; ++i) {
+    ringtx.rd[i]->iov_base = ringtx.map + (i * blocksiz);
+    ringtx.rd[i]->iov_len = blocksiz;
+  }
+*/
   struct sockaddr_ll ll;
   memset(&ll, 0, sizeof(ll));
   ll.sll_family = PF_PACKET;
@@ -82,6 +99,9 @@ void main(int argc, char **argv) {
   ll.sll_hatype = 0;
   ll.sll_pkttype = 0;
   ll.sll_halen = 0;
+
+  int on = 1;
+  setsockopt(fd, SOL_PACKET, PACKET_QDISC_BYPASS, &on, sizeof(on));
 
   if (-1 == bind(fd, (struct sockaddr *) &ll, sizeof(ll))) exit(-1);
 
@@ -136,7 +156,7 @@ void main(int argc, char **argv) {
     if (pfd.revents & POLLIN) {
       printf("HELLO\n");
 
-      pbd = (struct block_desc *)ring.rd[block_num]->iov_base;
+      pbd = (struct block_desc *)ringrx.rd[block_num]->iov_base;
       int num_pkts = pbd->h1.num_pkts, i;
       unsigned long bytes = 0;
       struct tpacket3_hdr *ppd;
@@ -154,22 +174,6 @@ void main(int argc, char **argv) {
 
       pbd->h1.block_status = TP_STATUS_KERNEL;
       block_num = (block_num + 1) % blocknum;
-
-/*
-      struct tpacket3_hdr *ppd = (struct tpacket3_hdr *) ((uint8_t *) pbd + pbd->h1.offset_to_first_pkt);
-      uint32_t num_pkts = pbd->h1.num_pkts;
-      uint64_t bytes = 0;
-      for (uint32_t i = 0; i < num_pkts; ++i) {
-        bytes += ppd->tp_snaplen;
-        //printf("");
-        ppd = (struct tpacket3_hdr *) ((uint8_t *) ppd +  ppd->tp_next_offset);
-      }
-      packets_total += num_pkts;
-      bytes_total += bytes;
-
-      pbd->h1.block_status = TP_STATUS_KERNEL;
-      numblock = (numblock + 1) % nbblocks;
-*/
     }
   }
 
@@ -181,8 +185,7 @@ void main(int argc, char **argv) {
     stats.tp_packets, bytes_total, stats.tp_drops,
     stats.tp_freeze_q_cnt);
 
-  munmap(ring.map, ring.req.tp_block_size * ring.req.tp_block_nr);
-//  free(ring.rd);
+  munmap(ringrx.map, ringrx.req.tp_block_size * ringrx.req.tp_block_nr);
   close(fd);
 }
 
