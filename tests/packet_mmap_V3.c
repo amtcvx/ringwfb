@@ -46,14 +46,16 @@ void main(int argc, char **argv) {
   int v = TPACKET_V3;
   if (-1 == setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v))) exit(-1); 
 
+  unsigned int blocknum = 64;
+  unsigned int blocksiz = 1 << 22, framesiz = 1 << 11;
+
   struct ring_t {
-    struct iovec *rd;
+    struct iovec rd[blocknum][sizeof(struct iovec)];
     uint8_t *map;
     struct tpacket_req3 req;
   } ring;
 
-  unsigned int blocksiz = 1 << 22, framesiz = 1 << 11;
-  unsigned int blocknum = 64;
+
   memset(&ring.req, 0, sizeof(ring.req));
   ring.req.tp_block_size = blocksiz;
   ring.req.tp_frame_size = framesiz;
@@ -67,12 +69,9 @@ void main(int argc, char **argv) {
   ring.map = mmap(NULL, ring.req.tp_block_size * ring.req.tp_block_nr,
                          PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, 0);
 
-  ring.rd = malloc(ring.req.tp_block_nr * sizeof(*ring.rd));
-  if (!ring.rd) exit(-1);
-
-  for (i = 0; i < ring.req.tp_block_nr; ++i) {
-    ring.rd[i].iov_base = ring.map + (i * ring.req.tp_block_size);
-    ring.rd[i].iov_len = ring.req.tp_block_size;
+  for (i = 0; i < blocknum; ++i) {
+    ring.rd[i]->iov_base = ring.map + (i * blocksiz);
+    ring.rd[i]->iov_len = blocksiz;
   }
 
   struct sockaddr_ll ll;
@@ -137,7 +136,7 @@ void main(int argc, char **argv) {
     if (pfd.revents & POLLIN) {
       printf("HELLO\n");
 
-      pbd = (struct block_desc *)ring.rd[block_num].iov_base;
+      pbd = (struct block_desc *)ring.rd[block_num]->iov_base;
       int num_pkts = pbd->h1.num_pkts, i;
       unsigned long bytes = 0;
       struct tpacket3_hdr *ppd;
@@ -183,7 +182,7 @@ void main(int argc, char **argv) {
     stats.tp_freeze_q_cnt);
 
   munmap(ring.map, ring.req.tp_block_size * ring.req.tp_block_nr);
-  free(ring.rd);
+//  free(ring.rd);
   close(fd);
 }
 
