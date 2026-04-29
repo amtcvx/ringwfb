@@ -83,15 +83,6 @@ int main(int argc, char **argv) {
   struct tpacket_hdr * const txmap = mmap(0, s_packet_req.tp_block_size * s_packet_req.tp_block_nr, PROT_WRITE, MAP_SHARED, txsock, 0);
   if (txmap == MAP_FAILED ) exit(-1);
 
-  const int c_packet_sz = 200;
-  for (uint32_t i=0; i<s_packet_req.tp_block_nr; i++ ) {
-    struct tpacket_hdr * ps_header = ((struct tpacket_hdr *)((void *)txmap + (s_packet_req.tp_block_size*i)));
-    #define my_TPACKET_ALIGN(x)	(((x)+(uint64_t)(TPACKET_ALIGNMENT-1))&~((uint64_t)(TPACKET_ALIGNMENT-1)))
-    char * pkt_ptr = ((void*) ps_header) + my_TPACKET_ALIGN(sizeof(struct tpacket_hdr));
-    for(int j=0; j<c_packet_sz; j++ )  pkt_ptr[j] = j;
-    ps_header->tp_len = (uint32_t)c_packet_sz;
-    ps_header->tp_status = TP_STATUS_SEND_REQUEST;
-  }
 
   struct timespec ts;
   uint64_t curms,  stoms, intms = 1000;
@@ -114,8 +105,17 @@ int main(int argc, char **argv) {
       if (curms >= stoms) { // SYNCHRONOUS
         stoms = curms + intms - ((curms - stoms) % intms);
 	printf("TIC\n");
-/*
-	int total_pkts = 0, ec_send, total_bytes = 0;
+
+        const int c_packet_sz = 200;
+        for (uint32_t i=0; i<s_packet_req.tp_block_nr; i++ ) {
+          struct tpacket_hdr * ps_header = ((struct tpacket_hdr *)((void *)txmap + (s_packet_req.tp_block_size*i)));
+          #define my_TPACKET_ALIGN(x)	(((x)+(uint64_t)(TPACKET_ALIGNMENT-1))&~((uint64_t)(TPACKET_ALIGNMENT-1)))
+          char * pkt_ptr = ((void*) ps_header) + my_TPACKET_ALIGN(sizeof(struct tpacket_hdr));
+          for(int j=0; j<c_packet_sz; j++ )  pkt_ptr[j] = j;
+          ps_header->tp_len = (uint32_t)c_packet_sz;
+          ps_header->tp_status = TP_STATUS_SEND_REQUEST;
+        }
+ 	int total_pkts = 0, ec_send, total_bytes = 0;
 	while (total_pkts<s_packet_req.tp_block_nr ) {
 	  if ((ec_send = sendto( txsock, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll))) < 0) exit(-1);
 	  else  {
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
 	    printf("%s %d send %d packets (+%d bytes)\n", __func__, __LINE__, total_pkts, total_bytes );
 	  }
         }
-*/
+
       }
     }
     printf( "number of packets captured: %d\n", pbd->h1.num_pkts );
