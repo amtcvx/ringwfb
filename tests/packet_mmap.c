@@ -1,5 +1,5 @@
 /*
-gcc packet_mmap.c -o packet_nmap
+gcc -g packet_mmap.c -o packet_nmap
 */
 
 #include <linux/if_packet.h>
@@ -16,21 +16,23 @@ gcc packet_mmap.c -o packet_nmap
 #include <stdio.h>
 #include <netdb.h>
 #include <poll.h>
+#include <errno.h>
 
 /******************************************************************************/
 int main(int argc, char **argv) {
 
-  int rxsock;
-  if ((rxsock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0 ) exit(-1);;
-
+  int sock;
+  if ((sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0 ) exit(-1);;
   int i = TPACKET_V3;
-  if (setsockopt( rxsock, SOL_PACKET, PACKET_VERSION, &i, sizeof(i) ) < 0 ) exit(-1);
+  if (setsockopt( sock, SOL_PACKET, PACKET_VERSION, &i, sizeof(i) ) < 0 ) exit(-1);
+
 
   struct ifreq ifr;
   strcpy( ifr.ifr_name, argv[1] );
-  if (ioctl( rxsock, SIOCGIFFLAGS, &ifr) == -1) exit(-1);
+  if (ioctl( sock, SIOCGIFFLAGS, &ifr) == -1) exit(-1);
   ifr.ifr_flags |= ( IFF_PROMISC | IFF_UP );
-  if (ioctl( rxsock, SIOCSIFFLAGS, &ifr ) == -1 ) exit(-1);
+  if (ioctl( sock, SIOCSIFFLAGS, &ifr ) == -1 ) exit(-1);
+
 
   struct tpacket_req3 req = {
     .tp_block_size = 1 << 22,
@@ -38,51 +40,41 @@ int main(int argc, char **argv) {
     .tp_block_nr = 64,
   };
   req.tp_frame_nr = (req.tp_block_size * req.tp_block_nr) / req.tp_frame_size;
+  if (setsockopt( sock, SOL_PACKET, PACKET_RX_RING, &req, sizeof(struct tpacket_req3) ) < 0 ) exit(-1);
 
-  if (setsockopt( rxsock, SOL_PACKET, PACKET_RX_RING, &req, sizeof(struct tpacket_req3) ) < 0 ) exit(-1);
+  struct tpacket_req3 s_packet_req = {
+//  struct tpacket_req s_packet_req = {
+    .tp_block_size = 1<<12,
+    .tp_frame_size = 1<<12,
+    .tp_block_nr = 10
+  };
+  s_packet_req.tp_frame_nr = (s_packet_req.tp_block_size * s_packet_req.tp_block_nr) / s_packet_req.tp_frame_size;
+//  if (setsockopt( sock, SOL_PACKET, PACKET_TX_RING, &s_packet_req, sizeof(s_packet_req) ) < 0 ) exit(-1);
+  if (setsockopt( sock, SOL_PACKET, PACKET_TX_RING, &s_packet_req, sizeof(struct tpacket_req3) ) < 0 ) exit(-1);
 
-  uint8_t *const rxmap = mmap( NULL, req.tp_block_size * req.tp_block_nr, PROT_READ|PROT_WRITE, MAP_SHARED | MAP_LOCKED, rxsock, 0 );
+  uint8_t *const rxmap = mmap( NULL, req.tp_block_size * req.tp_block_nr, PROT_READ, MAP_SHARED, sock, 0 );
+  printf("(%s)\n",strerror(errno));
+
   if (rxmap == MAP_FAILED ) exit(-1);
+
+  struct tpacket_hdr * const txmap = mmap(0, s_packet_req.tp_block_size * s_packet_req.tp_block_nr, PROT_WRITE, MAP_SHARED, sock, 0);
+  if (txmap == MAP_FAILED ) exit(-1);
+
+  int one = 1; // MUST BE SET to prevent TX in RX (seen also with wireshark)
+  if (setsockopt(sock, SOL_PACKET, PACKET_QDISC_BYPASS, &one, sizeof(one)) < 0 ) exit(-1);
 
   struct sockaddr_ll ll = {
     .sll_family = PF_PACKET,
     .sll_protocol = htons(ETH_P_ALL),
     .sll_ifindex = if_nametoindex(ifr.ifr_name)
-  };
-  if (bind( rxsock, (struct sockaddr *) &ll, sizeof(ll)) < 0) exit(-1);
-
+  }; 
+  if (bind( sock, (struct sockaddr *) &ll, sizeof(ll)) < 0) exit(-1);
+  
   struct pollfd pfd = {
-    .fd = rxsock,
+    .fd = sock,
     .events = POLLIN | POLLERR,
     .revents = 0
   };
-
-
-  int txsock;
-  if ((txsock = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0 ) exit(-1);
-  struct sockaddr_ll my_addr = {
-    .sll_family = AF_PACKET,
-    .sll_protocol = htons(ETH_P_ALL),
-    .sll_ifindex = (int)if_nametoindex(argv[1])
-  };
- 
-  if (bind( txsock, (struct sockaddr *)&my_addr, sizeof(struct sockaddr_ll) ) == -1 ) exit(-1);
-
-  struct tpacket_req s_packet_req = {
-    .tp_block_size = 1<<12,
-    .tp_frame_size = 1<<12,
-    .tp_block_nr = 10
-  };
-  s_packet_req.tp_frame_nr = (s_packet_req.tp_block_size*s_packet_req.tp_block_nr)/s_packet_req.tp_frame_size;
- 
-  if (setsockopt( txsock, SOL_PACKET, PACKET_TX_RING, (char *)&s_packet_req, sizeof(s_packet_req) ) < 0 ) exit(-1);
-
-  int one = 1; // MUST BE SET to prevent TX in RX (seen also with wireshark)
-  if (setsockopt(txsock, SOL_PACKET, PACKET_QDISC_BYPASS, &one, sizeof(one)) < 0 ) exit(-1);
-
-  struct tpacket_hdr * const txmap = mmap(0, s_packet_req.tp_block_size * s_packet_req.tp_block_nr, PROT_WRITE, MAP_SHARED, txsock, 0);
-  if (txmap == MAP_FAILED ) exit(-1);
-
 
   struct timespec ts;
   uint64_t curms,  stoms, intms = 1000;
@@ -117,7 +109,7 @@ int main(int argc, char **argv) {
         }
  	int total_pkts = 0, ec_send, total_bytes = 0;
 	while (total_pkts<s_packet_req.tp_block_nr ) {
-	  if ((ec_send = sendto( txsock, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll))) < 0) exit(-1);
+	  if ((ec_send = sendto( sock, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll))) < 0) exit(-1);
 	  else  {
 	    total_pkts += ec_send/(c_packet_sz);
 	    total_bytes += ec_send;
@@ -144,5 +136,5 @@ int main(int argc, char **argv) {
 
   munmap(rxmap, req.tp_block_size * req.tp_block_nr);
   munmap(txmap, s_packet_req.tp_block_size * s_packet_req.tp_block_nr );
-  close(rxsock); close(txsock);
+  close(sock);
 }
