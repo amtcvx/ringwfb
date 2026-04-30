@@ -45,42 +45,48 @@ void main(int argc, char **argv) {
 
   int tpver = TPACKET_V3;
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_VERSION,  &tpver, sizeof(tpver)))) exit(-1);
-
+/*
   int discard = 1;
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_LOSS, &discard, sizeof(discard)))) exit(-1);
 
   int on = 1;
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_QDISC_BYPASS, &on, sizeof(on)))) exit(-1);
-/*
-  unsigned int blocknr = 64;
-  unsigned int blocksize = 1 << 22, framesize = 1 << 11;
-  unsigned int framenr =  (blocksize * blocknr) / framesize;
 */
-  unsigned int  blocksize= 4096, blocknr  = 4, framesize= 2048, framenr = 8; // (for PAGE_SIZE == 4096)
+  unsigned int  blocksize= 4096, blocknr  = 4, framesize= 2048; // (for PAGE_SIZE == 4096)
+  unsigned int  framenr =  (blocksize * blocknr) / framesize;
 
-  struct ring_t ringrx,ringtx;
+/*
+  struct ring_t ringrx;
   memset(&ringrx.req,0,sizeof(ringrx.req));
   ringrx.req.tp_block_size = blocksize;
   ringrx.req.tp_block_nr = blocknr;
   ringrx.req.tp_frame_size = framesize;
   ringrx.req.tp_frame_nr = framenr;
+
+  if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_RX_RING, &ringrx.req, sizeof(ringrx.req)))) exit(-1);
+
+  ringrx.map = (uint8_t *)mmap( NULL, blocksize * blocknr, PROT_READ|PROT_WRITE, MAP_SHARED, sockfd, 0 );
+
+  ringrx.rd = malloc(blocknr * sizeof(*ringrx.rd));
+  for (int i = 0; i < blocknr; ++i) {
+    ringrx.rd[i].iov_base = ringrx.map + (i * blocksize);
+    ringrx.rd[i].iov_len = blocksize;
+  }
+*/
+
+  struct ring_t ringtx;
   memset(&ringtx.req,0,sizeof(ringtx.req));
   ringtx.req.tp_block_size = blocksize;
   ringtx.req.tp_block_nr = blocknr;
   ringtx.req.tp_frame_size = framesize;
   ringtx.req.tp_frame_nr = framenr;
 
-  if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_RX_RING, &ringrx.req, sizeof(ringrx.req)))) exit(-1);
+  if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_TX_RING, &ringtx.req, sizeof(ringtx.req)))) exit(-1);
 
-//  if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_TX_RING, &ringtx.req, sizeof(ringtx.req)))) exit(-1);
+  struct tpacket_hdr *map = (uint8_t *)mmap( NULL, blocksize * blocknr, PROT_WRITE, MAP_SHARED, sockfd, 0 );
+tx_buffer_payload_offset = TPACKET2_HDRLEN - sizeof(struct sockaddr_ll);
+tx_buffer_payload_offset += sizeof(ether_header_t);
 
-//  ringrx.map = mmap(NULL, blocksize * blocknr, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, sockfd, 0);
-  ringrx.map = mmap(NULL, blocksize * blocknr, PROT_READ  | PROT_WRITE , MAP_SHARED , sockfd, 0);
-  ringrx.rd = malloc(blocknr * sizeof(*ringrx.rd));
-  for (int i = 0; i < blocknr; ++i) {
-    ringrx.rd[i].iov_base = ringrx.map + (i * blocksize);
-    ringrx.rd[i].iov_len = blocksize;
-  }
 
   struct sockaddr_ll sockaddr;
   memset(&sockaddr, 0, sizeof(sockaddr));
