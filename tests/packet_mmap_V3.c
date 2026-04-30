@@ -1,7 +1,13 @@
 /*
 gcc -g packet_mmap_V3.c -o packet_mmap_V3
 
+
+http://paul.chavent.free.fr/packet_mmap.html
+   
 https://docs.kernel.org/networking/packet_mmap.html
+     
+https://www.kernel.org/doc/Documentation/networking/packet_mmap.txt
+      
 https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
 */
 
@@ -46,6 +52,9 @@ void main(int argc, char **argv) {
   int v = TPACKET_V3;
   if (-1 == setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v))) exit(-1); 
 
+  int tx_has_off = 1;
+  if (setsockopt(fd, SOL_PACKET,  PACKET_TX_HAS_OFF, &tx_has_off, sizeof(tx_has_off)) < 0) exit(-1);
+
   unsigned int blocknum = 64;
   unsigned int blocksiz = 1 << 22, framesiz = 1 << 11;
 
@@ -72,7 +81,7 @@ void main(int argc, char **argv) {
     ringrx.rd[i]->iov_base = ringrx.map + (i * blocksiz);
     ringrx.rd[i]->iov_len = blocksiz;
   }
-/*
+
   memset(&ringtx.req, 0, sizeof(ringrx.req));
   ringtx.req.tp_block_size = blocksiz;
   ringtx.req.tp_frame_size = framesiz;
@@ -90,7 +99,7 @@ void main(int argc, char **argv) {
     ringtx.rd[i]->iov_base = ringtx.map + (i * blocksiz);
     ringtx.rd[i]->iov_len = blocksiz;
   }
-*/
+
   struct sockaddr_ll ll;
   memset(&ll, 0, sizeof(ll));
   ll.sll_family = PF_PACKET;

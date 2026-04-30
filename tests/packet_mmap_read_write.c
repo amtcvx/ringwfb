@@ -1,5 +1,5 @@
 /*
-gcc packet_mmap_read_write.c -lpthread -o packet_mmap_read_write
+gcc -g packet_mmap_read_write.c -lpthread -o packet_mmap_read_write
 */
 
 #include <linux/if_packet.h>
