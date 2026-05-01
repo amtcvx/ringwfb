@@ -72,14 +72,14 @@ void main(int argc, char **argv) {
   uint8_t *txmap = rxmap + size;
 
 
-  for (int  i=0; i < tx_packet_req.tp_block_nr; i++ ) {
-    struct tpacket3_hdr * ps_header = ((struct tpacket3_hdr *)((void *)txmap + (tx_packet_req.tp_block_size*i)));
-    #define my_TPACKET_ALIGN(x)     (((x)+(uint64_t)(TPACKET_ALIGNMENT-1))&~((uint64_t)(TPACKET_ALIGNMENT-1)))
-    char * pkt_ptr = ((void*) ps_header) + my_TPACKET_ALIGN(sizeof(struct tpacket_hdr));
-    for(int j=0; j<c_packet_sz; j++ ) pkt_ptr[j] = j; 
-    ps_header->tp_len = (uint32_t)c_packet_sz;
-    ps_header->tp_status = TP_STATUS_SEND_REQUEST;
-  }
+  /*---------------------------------------------------------------------*/
+  int tx_len = 4;
+  int i = 0;
+  struct tpacket3_hdr *tx_header = ((struct tpacket3_hdr *)((void *)txmap + (tx_packet_req.tp_block_size*i)));
+
+  tx_header->tp_snaplen = tx_header->tp_len = tx_len;
+  tx_header->tp_next_offset = 0;
+  tx_header->tp_status = TP_STATUS_SEND_REQUEST;
 
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
@@ -95,15 +95,7 @@ void main(int argc, char **argv) {
     .revents = 0
   };
 
-  struct block_desc {
-    uint32_t version;
-    uint32_t offset_to_priv;
-    struct tpacket_hdr_v1 h1;
-  } *pbdrx;
-
-  unsigned int blockcur = 0;
-
-  int total_pkts = 0, ec_send, total_bytes = 0;
+  unsigned int blockcur = 0; 
 
   struct timespec ts;
   uint64_t curms,  stoms, intms = 1000;
@@ -111,44 +103,26 @@ void main(int argc, char **argv) {
 
   while (likely(!sigint)) {
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+    poll(&pfd, 1, stoms > curms ? stoms - curms : 0);
+    clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
-//   		return f0 + (n * ring->req3.tp_frame_size);
-//    pbd = (struct block_desc*)ringrx.rd[blockcur].iov_base;
-//    if ((pbd->h1.block_status & TP_STATUS_USER) == 0) {
-      poll(&pfd, 1, stoms > curms ? stoms - curms : 0);
-      clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
-      if (curms >= stoms) { // SYNCHRONOUS
-        stoms = curms + intms - ((curms - stoms) % intms);
-        printf("TIC\n");
-      }
-/*
-      while ( total_pkts < tx_packet_req.tp_block_nr ) {
-        if ((ec_send = sendto( sockfd, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll))) < 0) exit(-1);
-        total_pkts += ec_send/(c_packet_sz);
-	total_bytes += ec_send;
-	printf("send %d packets (+%d bytes)\n",total_pkts, total_bytes );
-      }
-*/
-//      if (pfd.revents & POLLIN) {
-//        printf("HELLO\n");
+    if (curms >= stoms) { // SYNCHRONOUS
+      stoms = curms + intms - ((curms - stoms) % intms);
+      printf("TIC\n");
+    }
 
-//int packets_in_block = p_block->tph1.num_pkts;
+    struct tpacket3_hdr *rx_header = ((struct tpacket3_hdr *)((void *)rxmap + (rx_packet_req.tp_block_size * blockcur)));
+    if ((rx_header->tp_status & TP_STATUS_USER) == 0) {
+      rx_header->tp_status = TP_STATUS_KERNEL;
+      blockcur = (blockcur + 1) % rx_packet_req.tp_block_nr;
+      printf("RECV\n");
+    }
 
-// Keep track of the number of total packets captured during this second.
-//c_total += packets_in_block;
-
-//struct tpacket3_hdr *tph3;
-
-//tph3 = (struct tpacket3_hdr ) ((uint8_t) p_block + p_block->tph1.offset_to_first_pkt);
-// printf("%d ppb\n",packets_in_block);
-
-//for (int i = 0; i < packets_in_block; ++i) {
-//	 size_t len = tph3->tp_snaplen;
-
-////        pbd = (struct block_desc *)ringrx.rd[blockcur].iov_base;
-        //walk_block(pbd, block_num);
-//	pbd->h1.block_status = TP_STATUS_KERNEL;
- //       blockcur = (blockcur + 1) % blocknr;
+    if (tx_header->tp_status != TP_STATUS_AVAILABLE) { 
+      ssize_t sendlen = send(sockfd, NULL, 0, 0);
+      tx_header->tp_status = TP_STATUS_KERNEL;
+      printf("SENT (%ld))\n",sendlen);
+    }
   }
 
   struct tpacket_stats_v3 stats;
