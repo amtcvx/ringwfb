@@ -42,52 +42,51 @@ void main(int argc, char **argv) {
 
   int sockfd;
   if (-1 == (sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
-
+/*
   int tpver = TPACKET_V3;
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_VERSION,  &tpver, sizeof(tpver)))) exit(-1);
-/*
+
   int discard = 1;
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_LOSS, &discard, sizeof(discard)))) exit(-1);
-
+*/
   int on = 1;
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_QDISC_BYPASS, &on, sizeof(on)))) exit(-1);
-*/
-  unsigned int  blocksize= 4096, blocknr  = 4, framesize= 2048; // (for PAGE_SIZE == 4096)
-  unsigned int  framenr =  (blocksize * blocknr) / framesize;
 
-/*
-  struct ring_t ringrx;
-  memset(&ringrx.req,0,sizeof(ringrx.req));
-  ringrx.req.tp_block_size = blocksize;
-  ringrx.req.tp_block_nr = blocknr;
-  ringrx.req.tp_frame_size = framesize;
-  ringrx.req.tp_frame_nr = framenr;
+  /*---------------------------------------------------------------------*/
+  struct tpacket_req r_packet_req = {
+    .tp_block_size = 1 << 22,
+    .tp_frame_size = 1 << 11,
+    .tp_block_nr = 64
+  };
+  r_packet_req.tp_frame_nr = (r_packet_req.tp_block_size * r_packet_req.tp_block_nr)/r_packet_req.tp_frame_size;
 
-  if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_RX_RING, &ringrx.req, sizeof(ringrx.req)))) exit(-1);
+  if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_RX_RING, (char *)&r_packet_req, sizeof(r_packet_req))) exit(-1);
 
-  ringrx.map = (uint8_t *)mmap( NULL, blocksize * blocknr, PROT_READ|PROT_WRITE, MAP_SHARED, sockfd, 0 );
+  uint8_t *const rmap = mmap(NULL, r_packet_req.tp_block_size * r_packet_req.tp_block_nr, PROT_READ|PROT_WRITE, MAP_SHARED | MAP_LOCKED, sockfd, 0 );
 
-  ringrx.rd = malloc(blocknr * sizeof(*ringrx.rd));
-  for (int i = 0; i < blocknr; ++i) {
-    ringrx.rd[i].iov_base = ringrx.map + (i * blocksize);
-    ringrx.rd[i].iov_len = blocksize;
+  /*---------------------------------------------------------------------*/
+  struct tpacket_req s_packet_req = {
+    .tp_block_size = 1<<12,
+    .tp_frame_size = 1<<12,
+    .tp_block_nr = 10
+  };
+  s_packet_req.tp_frame_nr = (s_packet_req.tp_block_size*s_packet_req.tp_block_nr)/s_packet_req.tp_frame_size;
+
+  if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_TX_RING, (char *)&s_packet_req, sizeof(s_packet_req))) exit(-1);
+
+  struct tpacket_hdr * const smap = mmap(NULL, s_packet_req.tp_block_size * s_packet_req.tp_block_nr, PROT_WRITE, MAP_SHARED, sockfd, 0);
+
+  const int c_packet_sz = 200;
+  for (int  i=0; i < s_packet_req.tp_block_nr; i++ ) {
+    struct tpacket_hdr * ps_header = ((struct tpacket_hdr *)((void *)smap + (s_packet_req.tp_block_size*i)));
+    #define my_TPACKET_ALIGN(x)     (((x)+(uint64_t)(TPACKET_ALIGNMENT-1))&~((uint64_t)(TPACKET_ALIGNMENT-1)))
+    char * pkt_ptr = ((void*) ps_header) + my_TPACKET_ALIGN(sizeof(struct tpacket_hdr));
+    for(int j=0; j<c_packet_sz; j++ ) pkt_ptr[j] = j; 
+    ps_header->tp_len = (uint32_t)c_packet_sz;
+    ps_header->tp_status = TP_STATUS_SEND_REQUEST;
   }
-*/
 
-  struct ring_t ringtx;
-  memset(&ringtx.req,0,sizeof(ringtx.req));
-  ringtx.req.tp_block_size = blocksize;
-  ringtx.req.tp_block_nr = blocknr;
-  ringtx.req.tp_frame_size = framesize;
-  ringtx.req.tp_frame_nr = framenr;
-
-  if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_TX_RING, &ringtx.req, sizeof(ringtx.req)))) exit(-1);
-
-  struct tpacket_hdr *map = (uint8_t *)mmap( NULL, blocksize * blocknr, PROT_WRITE, MAP_SHARED, sockfd, 0 );
-tx_buffer_payload_offset = TPACKET2_HDRLEN - sizeof(struct sockaddr_ll);
-tx_buffer_payload_offset += sizeof(ether_header_t);
-
-
+  /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
   memset(&sockaddr, 0, sizeof(sockaddr));
   sockaddr.sll_family = AF_PACKET;
@@ -105,9 +104,11 @@ tx_buffer_payload_offset += sizeof(ether_header_t);
     uint32_t version;
     uint32_t offset_to_priv;
     struct tpacket_hdr_v1 h1;
-  } *pbd;
+  } *pbdrx;
 
   unsigned int blockcur = 0;
+
+  int total_pkts = 0, ec_send, total_bytes = 0;
 
   struct timespec ts;
   uint64_t curms,  stoms, intms = 1000;
@@ -116,23 +117,29 @@ tx_buffer_payload_offset += sizeof(ether_header_t);
   while (likely(!sigint)) {
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
-    pbd = (struct block_desc*)ringrx.rd[blockcur].iov_base;
-    if ((pbd->h1.block_status & TP_STATUS_USER) == 0) {
+//    pbd = (struct block_desc*)ringrx.rd[blockcur].iov_base;
+//    if ((pbd->h1.block_status & TP_STATUS_USER) == 0) {
       poll(&pfd, 1, stoms > curms ? stoms - curms : 0);
       clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
       if (curms >= stoms) { // SYNCHRONOUS
         stoms = curms + intms - ((curms - stoms) % intms);
         printf("TIC\n");
       }
-      if (pfd.revents & POLLIN) {
-        printf("HELLO\n");
+	while ( total_pkts < s_packet_req.tp_block_nr ) {
+	  if ((ec_send = sendto( sockfd, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll))) < 0) exit(-1);
+	  total_pkts += ec_send/(c_packet_sz);
+	  total_bytes += ec_send;
+	  printf("send %d packets (+%d bytes)\n",total_pkts, total_bytes );
+	}
+//      if (pfd.revents & POLLIN) {
+//        printf("HELLO\n");
 
-        pbd = (struct block_desc *)ringrx.rd[blockcur].iov_base;
+////        pbd = (struct block_desc *)ringrx.rd[blockcur].iov_base;
         //walk_block(pbd, block_num);
-	pbd->h1.block_status = TP_STATUS_KERNEL;
-        blockcur = (blockcur + 1) % blocknr;
-      }
-    }
+//	pbd->h1.block_status = TP_STATUS_KERNEL;
+ //       blockcur = (blockcur + 1) % blocknr;
+//      }
+//    }
   }
 
   struct tpacket_stats_v3 stats;
@@ -140,7 +147,8 @@ tx_buffer_payload_offset += sizeof(ether_header_t);
   if (getsockopt(sockfd, SOL_PACKET, PACKET_STATISTICS, &stats, &len) < 0) exit(-1);
   printf("\nReceived %u packets, %u dropped, freeze_q_cnt: %u\n",
     stats.tp_packets, stats.tp_drops, stats.tp_freeze_q_cnt);
-  munmap(ringrx.map, blocksize * blocknr);
-//  munmap(txmap, blocksize * blocknr);
+
+  munmap(smap, s_packet_req.tp_block_size * s_packet_req.tp_block_nr);
+  munmap(rmap, r_packet_req.tp_block_size * r_packet_req.tp_block_nr);
   close(sockfd);
 }
