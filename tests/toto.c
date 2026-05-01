@@ -15,6 +15,7 @@ gcc -g toto.c -o toto
 #include <poll.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 
 /******************************************************************************/
 #ifndef likely
@@ -42,10 +43,10 @@ void main(int argc, char **argv) {
 
   int sockfd;
   if (-1 == (sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
-/*
+
   int tpver = TPACKET_V3;
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_VERSION,  &tpver, sizeof(tpver)))) exit(-1);
-
+/*
   int discard = 1;
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_LOSS, &discard, sizeof(discard)))) exit(-1);
 */
@@ -53,30 +54,35 @@ void main(int argc, char **argv) {
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_QDISC_BYPASS, &on, sizeof(on)))) exit(-1);
 
   /*---------------------------------------------------------------------*/
-  struct tpacket_req r_packet_req = {
-    .tp_block_size = 1 << 22,
-    .tp_frame_size = 1 << 11,
-    .tp_block_nr = 64
-  };
-  r_packet_req.tp_frame_nr = (r_packet_req.tp_block_size * r_packet_req.tp_block_nr)/r_packet_req.tp_frame_size;
-
-  if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_RX_RING, (char *)&r_packet_req, sizeof(r_packet_req))) exit(-1);
-
-  uint8_t *const rmap = mmap(NULL, r_packet_req.tp_block_size * r_packet_req.tp_block_nr, PROT_READ|PROT_WRITE, MAP_SHARED | MAP_LOCKED, sockfd, 0 );
-
-  /*---------------------------------------------------------------------*/
-  struct tpacket_req s_packet_req = {
+  struct tpacket_req3 tx_packet_req = {
     .tp_block_size = 1<<12,
     .tp_frame_size = 1<<12,
     .tp_block_nr = 10
   };
-  s_packet_req.tp_frame_nr = (s_packet_req.tp_block_size*s_packet_req.tp_block_nr)/s_packet_req.tp_frame_size;
+  tx_packet_req.tp_frame_nr = (tx_packet_req.tp_block_size * tx_packet_req.tp_block_nr)/tx_packet_req.tp_frame_size;
 
-  if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_TX_RING, (char *)&s_packet_req, sizeof(s_packet_req))) exit(-1);
+  if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_TX_RING, (char *)&tx_packet_req, sizeof(tx_packet_req))) exit(-1);
 
-  struct tpacket_hdr * const smap = mmap(NULL, s_packet_req.tp_block_size * s_packet_req.tp_block_nr, PROT_WRITE, MAP_SHARED, sockfd, 0);
+  struct tpacket_req3 rx_packet_req = {
+    .tp_block_size = 1<<12,
+    .tp_frame_size = 1<<12,
+    .tp_block_nr = 10
+  };
+  rx_packet_req.tp_frame_nr = (rx_packet_req.tp_block_size * rx_packet_req.tp_block_nr)/rx_packet_req.tp_frame_size;
+
+  if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_RX_RING, (char *)&rx_packet_req, sizeof(rx_packet_req))) exit(-1);
+
+  /*---------------------------------------------------------------------*/
+  //uint8_t *const rmap = mmap(NULL, r_packet_req.tp_block_size * r_packet_req.tp_block_nr, PROT_READ|PROT_WRITE, MAP_SHARED | MAP_LOCKED, sockfd, 0 );
+
+  uint8_t *const txmap = mmap(NULL, tx_packet_req.tp_block_size * tx_packet_req.tp_block_nr, PROT_WRITE, MAP_SHARED, sockfd, 0);
+  if( txmap == MAP_FAILED ) { printf("'%s)\n",strerror(errno)); exit(-1); }
+
+  uint8_t *const rxmap = mmap(NULL, rx_packet_req.tp_block_size * rx_packet_req.tp_block_nr, PROT_READ, MAP_SHARED, sockfd, 0);
+  if( rxmap == MAP_FAILED ) exit(-1);
 
   const int c_packet_sz = 200;
+/*
   for (int  i=0; i < s_packet_req.tp_block_nr; i++ ) {
     struct tpacket_hdr * ps_header = ((struct tpacket_hdr *)((void *)smap + (s_packet_req.tp_block_size*i)));
     #define my_TPACKET_ALIGN(x)     (((x)+(uint64_t)(TPACKET_ALIGNMENT-1))&~((uint64_t)(TPACKET_ALIGNMENT-1)))
@@ -85,7 +91,7 @@ void main(int argc, char **argv) {
     ps_header->tp_len = (uint32_t)c_packet_sz;
     ps_header->tp_status = TP_STATUS_SEND_REQUEST;
   }
-
+*/
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
   memset(&sockaddr, 0, sizeof(sockaddr));
@@ -117,6 +123,7 @@ void main(int argc, char **argv) {
   while (likely(!sigint)) {
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
+//   		return f0 + (n * ring->req3.tp_frame_size);
 //    pbd = (struct block_desc*)ringrx.rd[blockcur].iov_base;
 //    if ((pbd->h1.block_status & TP_STATUS_USER) == 0) {
       poll(&pfd, 1, stoms > curms ? stoms - curms : 0);
@@ -125,7 +132,7 @@ void main(int argc, char **argv) {
         stoms = curms + intms - ((curms - stoms) % intms);
         printf("TIC\n");
       }
-	while ( total_pkts < s_packet_req.tp_block_nr ) {
+	while ( total_pkts < tx_packet_req.tp_block_nr ) {
 	  if ((ec_send = sendto( sockfd, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll))) < 0) exit(-1);
 	  total_pkts += ec_send/(c_packet_sz);
 	  total_bytes += ec_send;
@@ -148,7 +155,7 @@ void main(int argc, char **argv) {
   printf("\nReceived %u packets, %u dropped, freeze_q_cnt: %u\n",
     stats.tp_packets, stats.tp_drops, stats.tp_freeze_q_cnt);
 
-  munmap(smap, s_packet_req.tp_block_size * s_packet_req.tp_block_nr);
-  munmap(rmap, r_packet_req.tp_block_size * r_packet_req.tp_block_nr);
+  munmap(txmap, tx_packet_req.tp_block_size * tx_packet_req.tp_block_nr);
+  munmap(rxmap, rx_packet_req.tp_block_size * rx_packet_req.tp_block_nr);
   close(sockfd);
 }
