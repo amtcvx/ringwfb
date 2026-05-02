@@ -84,10 +84,11 @@ https://github.com/DPDK/dpdk/blob/main/drivers/net/af_packet/rte_eth_af_packet.c
 		 * for the tx_ring in packet_mmap.
 		 *
 		 * This results in poll() returning POLLOUT.
-		 */
-/*
+*/
+
   const int c_packet_sz = 200;
-  for(int i=0; i < block_nr; i++ ) {
+  int i=0;
+  //for(int i=0; i < block_nr; i++ ) {
     struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
 
     struct block_desc_t *tx_pbd = (struct block_desc_t *) tx_header;
@@ -99,9 +100,9 @@ https://github.com/DPDK/dpdk/blob/main/drivers/net/af_packet/rte_eth_af_packet.c
     for(int j=0; j<c_packet_sz; j++ ) pkt_ptr[j] = j; 
     tx_header->tp_len = (uint32_t)c_packet_sz;
     tx_header->tp_next_offset = 0;
-    tx_header->tp_status = TP_STATUS_AVAILABLE; //TP_STATUS_SEND_REQUEST;
-  }
-*/
+    tx_header->tp_status = TP_STATUS_SEND_REQUEST; // TP_STATUS_KERNEL
+  //}
+
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
   memset(&sockaddr, 0, sizeof(sockaddr));
@@ -145,22 +146,12 @@ https://github.com/DPDK/dpdk/blob/main/drivers/net/af_packet/rte_eth_af_packet.c
     }
 
     if (pfd.revents & POLLOUT) {
-      printf("HELLO\n");
-    }
+      struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1]));
+      ec_send = sendto( sockfd, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll) );
 
-/*
-    for(int i=0; i < block_nr; i++ ) {
-      struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
-      if (tx_header->tp_status == TP_STATUS_SEND_REQUEST) tosend = true;
+      printf("HELLO (%d)\n",ec_send);
+      memset(map[1],1,map_size);
     }
-
-    if (tosend) { 
-      tosend = false; if ((ec_send = send( sockfd, NULL, 0, 0) ) < 0) exit(-1); 
-      total_pkts += ec_send/(c_packet_sz);
-      total_bytes += ec_send;
-      printf("send %d packets (+%d bytes)\n", total_pkts, total_bytes ); fflush(stdout);
-    }
-*/
   }
 
   struct tpacket_stats_v3 stats;
