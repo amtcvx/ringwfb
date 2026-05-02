@@ -69,12 +69,29 @@ void main(int argc, char **argv) {
   map[1] = map[0] + map_size;
 
   /*---------------------------------------------------------------------*/
+/*
+https://github.com/DPDK/dpdk/blob/main/drivers/net/af_packet/rte_eth_af_packet.c
+
+		 * poll() will almost always return POLLOUT, even if there
+		 * are no extra buffers available
+		 *
+		 * This happens, because packet_poll() calls datagram_poll()
+		 * which checks the space left in the socket buffer and,
+		 * in the case of packet_mmap, the default socket buffer length
+		 * doesn't match the requested size for the tx_ring.
+		 * As such, there is almost always space left in socket buffer,
+		 * which doesn't seem to be correlated to the requested size
+		 * for the tx_ring in packet_mmap.
+		 *
+		 * This results in poll() returning POLLOUT.
+		 */
+/*
   const int c_packet_sz = 200;
   for(int i=0; i < block_nr; i++ ) {
     struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
 
     struct block_desc_t *tx_pbd = (struct block_desc_t *) tx_header;
-    tx_pbd->h1.block_status = TP_STATUS_KERNEL;
+    tx_pbd->h1.block_status = TP_STATUS_AVAILABLE;
 
     #define my_TPACKET_ALIGN(x)     (((x)+(uint64_t)(TPACKET_ALIGNMENT-1))&~((uint64_t)(TPACKET_ALIGNMENT-1)))
     char * pkt_ptr = ((void*) tx_header) + my_TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
@@ -82,9 +99,9 @@ void main(int argc, char **argv) {
     for(int j=0; j<c_packet_sz; j++ ) pkt_ptr[j] = j; 
     tx_header->tp_len = (uint32_t)c_packet_sz;
     tx_header->tp_next_offset = 0;
-    tx_header->tp_status = TP_STATUS_KERNEL; //TP_STATUS_SEND_REQUEST;
+    tx_header->tp_status = TP_STATUS_AVAILABLE; //TP_STATUS_SEND_REQUEST;
   }
-
+*/
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
   memset(&sockaddr, 0, sizeof(sockaddr));
@@ -127,7 +144,9 @@ void main(int argc, char **argv) {
       }
     }
 
-    printf("HELLO\n");
+    if (pfd.revents & POLLOUT) {
+      printf("HELLO\n");
+    }
 
 /*
     for(int i=0; i < block_nr; i++ ) {
