@@ -16,6 +16,7 @@ gcc -g toto.c -o toto
 #include <time.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdbool.h>
 
 /******************************************************************************/
 #ifndef likely
@@ -77,17 +78,10 @@ void main(int argc, char **argv) {
 
     for(int j=0; j<c_packet_sz; j++ ) pkt_ptr[j] = j; 
     ps_header->tp_len = (uint32_t)c_packet_sz;
-    ps_header->tp_status = TP_STATUS_SEND_REQUEST;
     ps_header->tp_next_offset = 0;
- }
+    ps_header->tp_status = TP_STATUS_KERNEL; // TP_STATUS_SEND_REQUEST;
+  }
 
-
-/*
- TPACKET3_HDRLEN
-  tx_header->tp_snaplen = tx_header->tp_len = tx_len;
-  tx_header->tp_next_offset = 0;
-  tx_header->tp_status = TP_STATUS_SEND_REQUEST;
-*/
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
   memset(&sockaddr, 0, sizeof(sockaddr));
@@ -98,13 +92,13 @@ void main(int argc, char **argv) {
 
   struct pollfd pfd = {
     .fd = sockfd,
-    .events = POLLIN | POLLOUT,
+    .events = POLLIN,
     .revents = 0
   };
 
   unsigned int blockcur = 0; 
   int total_pkts = 0, ec_send, total_bytes = 0;
-
+  bool tosend = false;
 
   struct timespec ts;
   uint64_t curms,  stoms, intms = 1000;
@@ -117,22 +111,28 @@ void main(int argc, char **argv) {
 
     if (curms >= stoms) { // SYNCHRONOUS
       stoms = curms + intms - ((curms - stoms) % intms);
-      printf("TIC\n");
+      printf("TIC\n"); fflush(stdout);
     }
-/*
-    struct tpacket3_hdr *rx_header = ((struct tpacket3_hdr *)((void *)rxmap + (rx_packet_req.tp_block_size * blockcur)));
-    if ((rx_header->tp_status & TP_STATUS_USER) == 0) {
-      rx_header->tp_status = TP_STATUS_KERNEL;
-      blockcur = (blockcur + 1) % rx_packet_req.tp_block_nr;
-      printf("RECV\n");
+
+    for(int i=0; i < block_nr; i++ ) {
+      struct tpacket3_hdr * rx_header = ((struct tpacket3_hdr *)((void *)map[0] + (block_size*i)));
+      if ((rx_header->tp_status & TP_STATUS_USER) == 0) { 
+        rx_header->tp_status = TP_STATUS_KERNEL;
+        printf("RECV\n"); fflush(stdout);
+      }
     }
-i*/
-    while( total_pkts < block_nr ) {
-      if ((ec_send = send( sockfd, NULL, 0, 0) ) < 0) exit(-1);
+
+
+    for(int i=0; i < block_nr; i++ ) {
+      struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
+      if (tx_header->tp_status == TP_STATUS_SEND_REQUEST) tosend = true;
+    }
+
+    if (tosend) { 
+      tosend = false; if ((ec_send = send( sockfd, NULL, 0, 0) ) < 0) exit(-1); 
       total_pkts += ec_send/(c_packet_sz);
       total_bytes += ec_send;
       printf("send %d packets (+%d bytes)\n", total_pkts, total_bytes ); fflush(stdout);
-      exit(-1);
     }
   }
 
