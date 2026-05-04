@@ -18,6 +18,8 @@ gcc -g packet_mmap_nothread.c -o packet_mmap_nothread
 #include <errno.h>
 #include <stdbool.h>
 
+#define PAY_MTU	1500
+
 /******************************************************************************/
 #ifndef likely
 # define likely(x)              __builtin_expect(!!(x), 1)
@@ -50,9 +52,9 @@ void main(int argc, char **argv) {
   if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_QDISC_BYPASS, &on, sizeof(on)))) exit(-1);
 
   /*---------------------------------------------------------------------*/
-  unsigned int block_size = 1<<22, frame_size = 1<<11, block_nr = 64;
-  unsigned int frame_nr = (block_size * block_nr) / frame_size;
+  unsigned int block_size = 1<<12, frame_size = 1<<11, block_nr = 1;
 
+  unsigned int frame_nr = (block_size * block_nr) / frame_size;
   struct tpacket_req3 packet_req[2] = { [0 ... 1] = {
     .tp_block_size = block_size,
     .tp_frame_size = frame_size,
@@ -60,16 +62,17 @@ void main(int argc, char **argv) {
     .tp_frame_nr = frame_nr
   }};
 
+  printf("block_size(%d) frame_size(%d) frame_nr(%d)\n",block_size,frame_size,frame_nr);
+
   if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_RX_RING, &packet_req[0], sizeof(struct tpacket_req3))) exit(-1); // FIRST
   if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_TX_RING, &packet_req[1], sizeof(struct tpacket_req3))) exit(-1); // SECOND
 
-  // https://docs.kernel.org/networking/packet_mmap.html
   size_t map_size = block_size * block_nr;
   uint8_t *map[2]; if (MAP_FAILED == (map[0] = mmap(0, map_size * 2, PROT_READ|PROT_WRITE, MAP_SHARED, sockfd, 0))) exit(-1);
   map[1] = map[0] + map_size;
 
   /*---------------------------------------------------------------------*/
-  const int c_packet_sz = 200;
+ // const int c_packet_sz = 200;
   int i=0;
   //for(int i=0; i < block_nr; i++ ) {
     struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
@@ -80,8 +83,8 @@ void main(int argc, char **argv) {
     #define my_TPACKET_ALIGN(x)     (((x)+(uint64_t)(TPACKET_ALIGNMENT-1))&~((uint64_t)(TPACKET_ALIGNMENT-1)))
     char * pkt_ptr = ((void*) tx_header) + my_TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
 
-    for(int j=0; j<c_packet_sz; j++ ) pkt_ptr[j] = j; 
-    tx_header->tp_len = (uint32_t)c_packet_sz;
+    for(int j=0; j < PAY_MTU; j++ ) pkt_ptr[j] = j; 
+    tx_header->tp_len = (uint32_t)PAY_MTU;
     tx_header->tp_next_offset = 0;
     tx_header->tp_status = TP_STATUS_SEND_REQUEST; // TP_STATUS_KERNEL
   //}
