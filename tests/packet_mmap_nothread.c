@@ -181,7 +181,7 @@ https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
         struct tpacket3_hdr *ppd = (struct tpacket3_hdr *) ((uint8_t *) rx_pbd + rx_pbd->h1.offset_to_first_pkt);
         for (i = 0; i < num_pkts; ++i) {
           bytes += ppd->tp_snaplen;
-	  printf("RECV(%ld)\n",bytes);
+	  printf("(%d)(%d)RECV(%ld)\n",rx_block_nr,i,bytes);
 //                display(ppd);
           ppd = (struct tpacket3_hdr *) ((uint8_t *) ppd + ppd->tp_next_offset);
         }
