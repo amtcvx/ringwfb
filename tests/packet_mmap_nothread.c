@@ -106,13 +106,13 @@ https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
 */
 
   uint8_t packet[PAY_MTU]; uint16_t packet_len = PAY_MTU;
-/*
+
   struct tblock_desc {
     uint32_t version;
     uint32_t offset_to_priv;
     struct tpacket_hdr_v1 h1;
   } *pblock_desc;
-
+/*
   pblock_desc = (struct tblock_desc *)map[1];
   pblock_desc->version = 3; pblock_desc->offset_to_priv = 0; 
   pblock_desc->h1.block_status = TP_STATUS_SEND_REQUEST; 
@@ -126,17 +126,6 @@ https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
   packet_hdr->tp_len = PAY_MTU;
   memcpy( map[1] + sizeof(struct tblock_desc) + TPACKET3_HDRLEN, packet, packet_len);
 */
-
-  for(int i=0; i < frame_nr; i++ ) {
-    struct tpacket3_hdr *hdr = (void*)(map[1] + (frame_size * i));
-    uint8_t *data = (uint8_t*)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
-    if (hdr->tp_status == TP_STATUS_AVAILABLE) {
-      memcpy(data, packet, packet_len);
-      hdr->tp_len = packet_len;
-      hdr->tp_status = TP_STATUS_SEND_REQUEST;
-    }
-  }
-
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
   memset(&sockaddr, 0, sizeof(sockaddr));
@@ -168,19 +157,39 @@ https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
       stoms = curms + intms - ((curms - stoms) % intms);
       printf("TIC\n"); fflush(stdout);
 
+
+      for(int i=0; i < frame_nr; i++ ) {
+        struct tpacket3_hdr *hdr = (void*)(map[1] + (frame_size * i));
+        uint8_t *data = (uint8_t*)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
+        if (hdr->tp_status == TP_STATUS_AVAILABLE) {
+          memcpy(data, packet, packet_len);
+          hdr->tp_len = packet_len;
+          hdr->tp_status = TP_STATUS_SEND_REQUEST;
+        }
+      }
       tosend = true;
     }
-/*
+
     if (pfd.revents & POLLIN) {
       struct tpacket3_hdr * rx_header = ((struct tpacket3_hdr *)((void *)map[0] + (block_size * rx_block_nr)));
-      struct block_desc_t *rx_pbd = (struct block_desc_t *) rx_header;
+      struct tblock_desc *rx_pbd = (struct tblock_desc *) rx_header;
       if ((rx_header->tp_status & TP_STATUS_USER) == 0) { 
         rx_pbd->h1.block_status = TP_STATUS_KERNEL;
-        printf("RECV\n"); fflush(stdout);
         rx_block_nr = (rx_block_nr + 1) % block_nr;
+        int num_pkts = rx_pbd->h1.num_pkts, i;
+        unsigned long bytes = 0;
+        struct tpacket3_hdr *ppd = (struct tpacket3_hdr *) ((uint8_t *) rx_pbd + rx_pbd->h1.offset_to_first_pkt);
+        for (i = 0; i < num_pkts; ++i) {
+          bytes += ppd->tp_snaplen;
+	  printf("RECV(%ld)\n",bytes);
+//                display(ppd);
+          ppd = (struct tpacket3_hdr *) ((uint8_t *) ppd + ppd->tp_next_offset);
+        }
+        total_pkts += num_pkts;
+        total_bytes += bytes;
       }
     }
-*/
+
     if (tosend) {
       tosend = false;
       ec_send = sendto( sockfd, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll) );
