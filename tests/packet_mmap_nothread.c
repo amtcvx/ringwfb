@@ -31,12 +31,6 @@ gcc -g packet_mmap_nothread.c -o packet_mmap_nothread
 static sig_atomic_t sigint = 0;
 static void sighandler(int num) { sigint = 1; }
 
-struct block_desc_t {
-  uint32_t version;
-  uint32_t offset_to_priv;
-  struct tpacket_hdr_v1 h1;
-};
-
 /******************************************************************************/
 void main(int argc, char **argv) {
 
@@ -74,38 +68,21 @@ void main(int argc, char **argv) {
 
   /*---------------------------------------------------------------------*/
 /*
-  https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html
-
-  uint8_t packet[PAY_MTU];
-
-  for(int i=0; i < block_nr; i++ ) {
-    struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
-    uint16_t packet_len = PAY_MTU;
-    tx_header->tp_snaplen = packet_len;
-    tx_header->tp_len = packet_len;
-    tx_header->tp_next_offset = 0;
-    tx_header->tp_status = TP_STATUS_SEND_REQUEST; // TP_STATUS_KERNEL
-    memcpy((uint8_t *)tx_header + TPACKET3_HDRLEN - sizeof(struct sockaddr_ll), packet, packet_len);
-    if (i == 0) tx_header->tp_next_offset = 0;
-    else tx_header->tp_next_offset = 0;
-  }
-*/
-/*
 https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
      
 
-   [..................................................... tpackset_bloc_desc ........................................................... ]
-                                [ ............................................ packet_hdr_v1 ............................................]
+   [..................................................... tpacket_block_desc ........................................................ ]
+                                [ ............................................ packet_hdr_v1 .........................................]
  block                       block_hdr
    |                            |
-   [ version ][ offset_to_priv ][ bloc_status ][ num_pkts ][ offset_to_first_pkts ][ block_len ][ seq_num ][ ts_first_pkt ][ ts_last_pkt ]
+   [ version ][ offset_to_priv ][ bloc_status ][ num_pkts ][ offset_to_first_pkt ][ blk_len ][ seq_num ][ ts_first_pkt ][ ts_last_pkt ]
                                                                       |
                                                                     - [ tp_next_offset ] -> (*)
-					                            |    [ tp_sec ]
-								    |       [ tp_nsec ]
+					                            |   [ tp_sec ]
+								    |     [ tp_nsec ]
 								    |	    [ tp_snaplen ]
 								    |	      [ tp_len ]
-						      tpacket3_hdr  |            [ tp_status ]
+						      tpacket3_hdr  |           [ tp_status ]
 								    |	          [ tp_mac ]
 								    |		    [ tp_net ]
 								    |		      [ tp_rxhash ]
@@ -115,11 +92,11 @@ https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
 			            TPACKET3_HDRLEN = tpacket3_hdr + TPACKET_ALIGNMENT + [ struct sockaddrl_ll ]
 
                                                                (*)  - [ tp_next_offset ] 
-					                            |    [ tp_sec ]
-								    |       [ tp_nsec ]
+					                            |   [ tp_sec ]
+								    |     [ tp_nsec ]
 								    |	    [ tp_snaplen ]
 								    |	      [ tp_len ]
-						      tpacket3_hdr  |            [ tp_status ]
+						      tpacket3_hdr  |           [ tp_status ]
 								    |	          [ tp_mac ]
 								    |		    [ tp_net ]
 								    |		      [ tp_rxhash ]
@@ -128,16 +105,37 @@ https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
 
 */
 
+  uint8_t packet[PAY_MTU]; uint16_t packet_len = PAY_MTU;
+/*
+  struct tblock_desc {
+    uint32_t version;
+    uint32_t offset_to_priv;
+    struct tpacket_hdr_v1 h1;
+  } *pblock_desc;
 
+  pblock_desc = (struct tblock_desc *)map[1];
+  pblock_desc->version = 3; pblock_desc->offset_to_priv = 0; 
+  pblock_desc->h1.block_status = TP_STATUS_SEND_REQUEST; 
+  pblock_desc->h1.num_pkts = 1;
+  pblock_desc->h1.offset_to_first_pkt = 0;
+  pblock_desc->h1.blk_len = map_size;
+  pblock_desc->h1.seq_num = 0;
 
-    struct tpacket_block_desc *block_desc = (struct tpacket_block_desc*)map[1];
+  struct tpacket3_hdr *packet_hdr = (struct tpacket3_hdr *)(map[1] + sizeof(struct tblock_desc));
+  packet_hdr->tp_next_offset = 0;
+  packet_hdr->tp_len = PAY_MTU;
+  memcpy( map[1] + sizeof(struct tblock_desc) + TPACKET3_HDRLEN, packet, packet_len);
+*/
 
-    printf("(%d)(%d)\n",block_desc->version,block_desc->offset_to_priv);
-    printf("(%d)(%d)(%d)(%d)\n",block_desc->hdr.bh1.block_status, block_desc->hdr.bh1.num_pkts, block_desc->hdr.bh1.offset_to_first_pkt, block_desc->hdr.bh1.blk_len);
-
-    struct tpacket3_hdr *packet_hdr = (struct tpacket3_hdr *)(map[1] + block_desc->hdr.bh1.offset_to_first_pkt);
-
-
+  for(int i=0; i < frame_nr; i++ ) {
+    struct tpacket3_hdr *hdr = (void*)(map[1] + (frame_size * i));
+    uint8_t *data = (uint8_t*)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
+    if (hdr->tp_status == TP_STATUS_AVAILABLE) {
+      memcpy(data, packet, packet_len);
+      hdr->tp_len = packet_len;
+      hdr->tp_status = TP_STATUS_SEND_REQUEST;
+    }
+  }
 
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
@@ -172,7 +170,7 @@ https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
 
       tosend = true;
     }
-
+/*
     if (pfd.revents & POLLIN) {
       struct tpacket3_hdr * rx_header = ((struct tpacket3_hdr *)((void *)map[0] + (block_size * rx_block_nr)));
       struct block_desc_t *rx_pbd = (struct block_desc_t *) rx_header;
@@ -182,7 +180,7 @@ https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
         rx_block_nr = (rx_block_nr + 1) % block_nr;
       }
     }
-
+*/
     if (tosend) {
       tosend = false;
       ec_send = sendto( sockfd, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll) );
