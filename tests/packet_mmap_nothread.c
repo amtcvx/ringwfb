@@ -74,17 +74,20 @@ void main(int argc, char **argv) {
 
   /*---------------------------------------------------------------------*/
   uint8_t packet[PAY_MTU];
+
   int i=0;
-  //for(int i=0; i < block_nr; i++ ) {
+  for(int i=0; i < block_nr; i++ ) {
     struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
 
-      uint16_t packet_len = PAY_MTU;
-      tx_header->tp_snaplen = packet_len;
-      tx_header->tp_len = packet_len;
-      tx_header->tp_next_offset = 0;
-      tx_header->tp_status = TP_STATUS_SEND_REQUEST; // TP_STATUS_KERNEL
+    uint16_t packet_len = PAY_MTU;
+    tx_header->tp_snaplen = packet_len;
+    tx_header->tp_len = packet_len;
+    tx_header->tp_next_offset = 0;
+    tx_header->tp_status = TP_STATUS_SEND_REQUEST; // TP_STATUS_KERNEL
 
-      memcpy((uint8_t *)tx_header + TPACKET3_HDRLEN - sizeof(struct sockaddr_ll), packet, packet_len);
+    memcpy((uint8_t *)tx_header + TPACKET3_HDRLEN - sizeof(struct sockaddr_ll), packet, packet_len);
+  }
+
 
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
