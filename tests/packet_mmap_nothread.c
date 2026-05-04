@@ -90,8 +90,54 @@ void main(int argc, char **argv) {
     else tx_header->tp_next_offset = 0;
   }
 */
+/*
+https://csulrong.github.io/blogs/2022/03/10/linux-afpacket/
+     
+
+   [..................................................... tpackset_bloc_desc ........................................................... ]
+                                [ ............................................ packet_hdr_v1 ............................................]
+ block                       block_hdr
+   |                            |
+   [ version ][ offset_to_priv ][ bloc_status ][ num_pkts ][ offset_to_first_pkts ][ block_len ][ seq_num ][ ts_first_pkt ][ ts_last_pkt ]
+                                                                      |
+                                                                    - [ tp_next_offset ] -> (*)
+					                            |    [ tp_sec ]
+								    |       [ tp_nsec ]
+								    |	    [ tp_snaplen ]
+								    |	      [ tp_len ]
+						      tpacket3_hdr  |            [ tp_status ]
+								    |	          [ tp_mac ]
+								    |		    [ tp_net ]
+								    |		      [ tp_rxhash ]
+							            |	                [ tp_vlan_tci ] 
+								    ...................................| ... TPACKET_ALIGNMENT ...[ struct sockaddrl_ll ][ packet data ]
+
+			            TPACKET3_HDRLEN = tpacket3_hdr + TPACKET_ALIGNMENT + [ struct sockaddrl_ll ]
+
+                                                               (*)  - [ tp_next_offset ] 
+					                            |    [ tp_sec ]
+								    |       [ tp_nsec ]
+								    |	    [ tp_snaplen ]
+								    |	      [ tp_len ]
+						      tpacket3_hdr  |            [ tp_status ]
+								    |	          [ tp_mac ]
+								    |		    [ tp_net ]
+								    |		      [ tp_rxhash ]
+							            |	                [ tp_vlan_tci ] 
+								    ...................................| ... TPACKET_ALIGNMENT ...[ struct sockaddrl_ll ][ packet data ]
+
+*/
+
+
+
     struct tpacket_block_desc *block_desc = (struct tpacket_block_desc*)map[1];
+
+    printf("(%d)(%d)\n",block_desc->version,block_desc->offset_to_priv);
+    printf("(%d)(%d)(%d)(%d)\n",block_desc->hdr.bh1.block_status, block_desc->hdr.bh1.num_pkts, block_desc->hdr.bh1.offset_to_first_pkt, block_desc->hdr.bh1.blk_len);
+
     struct tpacket3_hdr *packet_hdr = (struct tpacket3_hdr *)(map[1] + block_desc->hdr.bh1.offset_to_first_pkt);
+
+
 
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
