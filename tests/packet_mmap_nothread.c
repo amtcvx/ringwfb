@@ -69,23 +69,6 @@ void main(int argc, char **argv) {
   map[1] = map[0] + map_size;
 
   /*---------------------------------------------------------------------*/
-/*
-https://github.com/DPDK/dpdk/blob/main/drivers/net/af_packet/rte_eth_af_packet.c
-
-		 * poll() will almost always return POLLOUT, even if there
-		 * are no extra buffers available
-		 *
-		 * This happens, because packet_poll() calls datagram_poll()
-		 * which checks the space left in the socket buffer and,
-		 * in the case of packet_mmap, the default socket buffer length
-		 * doesn't match the requested size for the tx_ring.
-		 * As such, there is almost always space left in socket buffer,
-		 * which doesn't seem to be correlated to the requested size
-		 * for the tx_ring in packet_mmap.
-		 *
-		 * This results in poll() returning POLLOUT.
-*/
-
   const int c_packet_sz = 200;
   int i=0;
   //for(int i=0; i < block_nr; i++ ) {
@@ -113,7 +96,7 @@ https://github.com/DPDK/dpdk/blob/main/drivers/net/af_packet/rte_eth_af_packet.c
 
   struct pollfd pfd = {
     .fd = sockfd,
-    .events = POLLIN | POLLOUT | POLLERR,
+    .events = POLLIN | POLLERR, // no passthrough POLLOUT
     .revents = 0
   };
 
@@ -133,6 +116,8 @@ https://github.com/DPDK/dpdk/blob/main/drivers/net/af_packet/rte_eth_af_packet.c
     if (curms >= stoms) { // SYNCHRONOUS
       stoms = curms + intms - ((curms - stoms) % intms);
       printf("TIC\n"); fflush(stdout);
+
+      tosend = true;
     }
 
     if (pfd.revents & POLLIN) {
@@ -145,12 +130,10 @@ https://github.com/DPDK/dpdk/blob/main/drivers/net/af_packet/rte_eth_af_packet.c
       }
     }
 
-    if (pfd.revents & POLLOUT) {
-      struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1]));
+    if (tosend) {
+      tosend = false;
       ec_send = sendto( sockfd, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll) );
-
-      printf("HELLO (%d)\n",ec_send);
-      memset(map[1],1,map_size);
+      printf("sendto (%d)\n",ec_send);
     }
   }
 
