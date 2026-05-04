@@ -63,7 +63,7 @@ void main(int argc, char **argv) {
     .tp_frame_nr = frame_nr
   }};
 
-  printf("block_size(%d) frame_size(%d) frame_nr(%d)\n",block_size,frame_size,frame_nr);
+  printf("block_nr(%d) block_size(%d) frame_nr(%d) frame_size(%d)\n",block_nr,block_size,frame_nr,frame_size);
 
   if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_RX_RING, &packet_req[0], sizeof(struct tpacket_req3))) exit(-1); // FIRST
   if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_TX_RING, &packet_req[1], sizeof(struct tpacket_req3))) exit(-1); // SECOND
@@ -73,21 +73,25 @@ void main(int argc, char **argv) {
   map[1] = map[0] + map_size;
 
   /*---------------------------------------------------------------------*/
+/*
+  https://projectzero.google/2017/05/exploiting-linux-kernel-via-packet.html
+
   uint8_t packet[PAY_MTU];
 
-  int i=0;
   for(int i=0; i < block_nr; i++ ) {
     struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
-
     uint16_t packet_len = PAY_MTU;
     tx_header->tp_snaplen = packet_len;
     tx_header->tp_len = packet_len;
     tx_header->tp_next_offset = 0;
     tx_header->tp_status = TP_STATUS_SEND_REQUEST; // TP_STATUS_KERNEL
-
     memcpy((uint8_t *)tx_header + TPACKET3_HDRLEN - sizeof(struct sockaddr_ll), packet, packet_len);
+    if (i == 0) tx_header->tp_next_offset = 0;
+    else tx_header->tp_next_offset = 0;
   }
-
+*/
+    struct tpacket_block_desc *block_desc = (struct tpacket_block_desc*)map[1];
+    struct tpacket3_hdr *packet_hdr = (struct tpacket3_hdr *)(map[1] + block_desc->hdr.bh1.offset_to_first_pkt);
 
   /*---------------------------------------------------------------------*/
   struct sockaddr_ll sockaddr;
