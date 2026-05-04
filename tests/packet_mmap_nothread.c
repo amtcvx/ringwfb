@@ -18,6 +18,7 @@ gcc -g packet_mmap_nothread.c -o packet_mmap_nothread
 #include <errno.h>
 #include <stdbool.h>
 
+/******************************************************************************/
 #define PAY_MTU	1500
 
 /******************************************************************************/
@@ -72,31 +73,12 @@ void main(int argc, char **argv) {
   map[1] = map[0] + map_size;
 
   /*---------------------------------------------------------------------*/
-//#define 	TPACKET3_HDRLEN   (TPACKET_ALIGN(sizeof(struct tpacket3_hdr)) + sizeof(struct sockaddr_ll))
-/*
-  const int c_packet_sz = 200;
-  int i=0;
-  for(int i=0; i < block_nr; i++ ) {
-    struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
-
-    struct block_desc_t *tx_pbd = (struct block_desc_t *) tx_header;
-    tx_pbd->h1.block_status = TP_STATUS_AVAILABLE;
-
-    #define my_TPACKET_ALIGN(x)     (((x)+(uint64_t)(TPACKET_ALIGNMENT-1))&~((uint64_t)(TPACKET_ALIGNMENT-1)))
-    char * pkt_ptr = ((void*) tx_header) + my_TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
-
-    for(int j=0; j < PAY_MTU; j++ ) pkt_ptr[j] = j; 
-    tx_header->tp_len = (uint32_t)200;
-    tx_header->tp_next_offset = 0;
-    tx_header->tp_status = TP_STATUS_SEND_REQUEST; // TP_STATUS_KERNEL
-  }
-*/
-  int packet_len = 200;
-  uint8_t packet[200];
+  uint8_t packet[PAY_MTU];
   int i=0;
   //for(int i=0; i < block_nr; i++ ) {
     struct tpacket3_hdr * tx_header = ((struct tpacket3_hdr *)((void *)map[1] + (block_size*i)));
 
+      uint16_t packet_len = PAY_MTU;
       tx_header->tp_snaplen = packet_len;
       tx_header->tp_len = packet_len;
       tx_header->tp_next_offset = 0;
