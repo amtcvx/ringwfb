@@ -1,10 +1,10 @@
 /*
 
-gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c multiraw.c -o multiraw.o
+gcc -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 -c multiraw_mmap.c -o multiraw_mmap.o
 
-cc multiraw.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw
+cc multiraw_mmap.o -g -lnl-route-3 -lnl-genl-3 -lnl-3 -o exe_multiraw_mmap
 
-sudo ./exe_multiraw
+sudo ./exe_multiraw_mmap
 
 */
 
@@ -31,6 +31,7 @@ sudo ./exe_multiraw
 #include <netlink/genl/family.h>
 #include <netlink/genl/ctrl.h>
 
+#include <signal.h>
 
 #include <linux/nl80211.h>
 
@@ -40,6 +41,8 @@ sudo ./exe_multiraw
 #include <dirent.h>
 
 #include <time.h>
+
+#include <sys/mman.h>
 
 #include <errno.h>
 
@@ -71,6 +74,16 @@ sudo ./exe_multiraw
 #define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI | (IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT))
 
 #define MCS_INDEX  2
+
+/******************************************************************************/
+#ifndef likely
+# define likely(x)              __builtin_expect(!!(x), 1)
+#endif
+#ifndef unlikely
+# define unlikely(x)            __builtin_expect(!!(x), 0)
+#endif
+static sig_atomic_t sigint = 0;
+static void sighandler(int num) { sigint = 1; }
 
 /************************************************************************************************/
 typedef struct {
@@ -288,44 +301,32 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
   nl_cb_put(cb);
 }
 
-/******************************************************************************/
-/*  sudo tcpdump not ether src 3c:7c:3f:a9:bd:ca and not ether dst 3c:7c:3f:a9:bd:ca and not ether src 24:4b:fe:b7:26:18 and not ether dst 24:4b:fe:b7:26:18 -dd
- *
-https://docs.kernel.org/6.2/networking/filter.html
-https://docs.kernel.org/6.2/networking/packet_mmap.html
-    
-void setmacfilter(uint8_t fd, uint8_t macsrc[12]) {
-  struct sock_filter arr[] = {
-    { 0x06, 0, 0, 0x00000000 }
-  };
-
-  struct sock_filter arr[] = {
-    { 0x20, 0, 0, 0x00000008 },
-    { 0x15, 0, 2, 0x3fa9bdca },
-    { 0x28, 0, 0, 0x00000006 },
-    { 0x15, 12, 0, 0x00003c7c },
-    { 0x20, 0, 0, 0x00000002 },
-    { 0x15, 0, 2, 0x3fa9bdca },
-    { 0x28, 0, 0, 0x00000000 },
-    { 0x15, 8, 0, 0x00003c7c },
-    { 0x20, 0, 0, 0x00000008 },
-    { 0x15, 0, 2, 0xfeb72618 },
-    { 0x28, 0, 0, 0x00000006 },
-    { 0x15, 4, 0, 0x0000244b },
-    { 0x20, 0, 0, 0x00000002 },
-    { 0x15, 0, 3, 0xfeb72618 },
-    { 0x28, 0, 0, 0x00000000 },
-    { 0x15, 0, 1, 0x0000244b },
-    { 0x6, 0, 0, 0x00000000 },
-    { 0x6, 0, 0, 0x00040000 },
-  };
-
-  struct sock_fprog notmacsrc_program = { .len = (sizeof(arr) / sizeof((arr)[0])), .filter = arr};
-  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &notmacsrc_program, sizeof(notmacsrc_program));
-}   
-*/
 /*****************************************************************************/
-void  setsock(uint8_t *fd, uint32_t index, uint8_t macsrc[12]) {
+void  mapraw(uint8_t fd, uint8_t *map[2]) {
+
+  unsigned int block_size = 1<<12, frame_size = 1<<11, block_nr = 1;
+
+  unsigned int frame_nr = (block_size * block_nr) / frame_size;
+  struct tpacket_req3 packet_req[2] = { [0 ... 1] = {
+    .tp_block_size = block_size,
+    .tp_frame_size = frame_size,
+    .tp_block_nr = block_nr,
+    .tp_frame_nr = frame_nr
+  }};
+
+  printf("block_nr(%d) block_size(%d) frame_nr(%d) frame_size(%d)\n",block_nr,block_size,frame_nr,frame_size);
+
+  if (-1 == setsockopt (fd, SOL_PACKET, PACKET_RX_RING, &packet_req[0], sizeof(struct tpacket_req3))) exit(-1); // FIRST
+  if (-1 == setsockopt (fd, SOL_PACKET, PACKET_TX_RING, &packet_req[1], sizeof(struct tpacket_req3))) exit(-1); // SECOND
+
+  size_t map_size = block_size * block_nr;
+
+  if (MAP_FAILED == (map[0] = mmap(0, map_size * 2, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0))) exit(-1);
+  map[1] = map[0] + map_size;
+}
+
+/*****************************************************************************/
+void  setsock(uint8_t *fd, uint32_t index, uint8_t *map[2]) {
 
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW, protocol))) exit(-1);
@@ -338,10 +339,12 @@ void  setsock(uint8_t *fd, uint32_t index, uint8_t macsrc[12]) {
   if (-1 == bind(*fd, (struct sockaddr *)&sll, sizeof(sll))) exit(-1); // must be AFTER wifi setting
   drain(*fd);
 
+  int tpver = TPACKET_V3;
+  if (-1 == (setsockopt(*fd, SOL_PACKET, PACKET_VERSION,  &tpver, sizeof(tpver)))) exit(-1);
   const int32_t sock_qdisc_bypass = 1;
   if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
 
-//  setmacfilter(*fd, macsrc);
+  mapraw(*fd, map);
 }
 
 /******************************************************************************/
@@ -381,6 +384,8 @@ uint64_t get_time_ms(void) {
 /*****************************************************************************/
 int main(int argc, char **argv) {
 
+  signal(SIGINT, sighandler);
+
   char ifnames[MAXRAWDEV][50];
   uint8_t nbraws = getwifi(ifnames);
   if (nbraws == 0) exit(-1);
@@ -401,11 +406,11 @@ int main(int argc, char **argv) {
   rawdev_t rawdevs[nbraws];
   memset(rawdevs, 0, sizeof(rawdevs));
 
-  uint8_t macsrc[2][12] = { { 0x3c,0x7c,0x3f,0xa9,0xbd,0xca }, {0x24,0x4b,0xfe,0xb7,0x26,0x18} };
+  uint8_t *rawmap[nbraws][2];
 
   for (uint8_t i = 0; i <  nbraws; i++) {
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
-    setsock( &rawfds[i], index[i], &macsrc[i][0]);
+    setsock( &rawfds[i], index[i], &rawmap[i][2]);
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
 
@@ -458,7 +463,7 @@ int main(int argc, char **argv) {
   uint64_t curms,  stoms, intms = 1000;
   clock_gettime(CLOCK_MONOTONIC, &ts); stoms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
-  while (true) {
+  while (likely(!sigint)) {
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
     poll(readsets, nbfds, stoms > curms ? stoms - curms : 0);
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
@@ -545,4 +550,8 @@ int main(int argc, char **argv) {
       //memset(&txbuf[sync_first][0], 0, txpaylen);
     }
   }
+
+  printf("THE END\n");
+//  munmap(map[0], map_size);
+//  close(sockfd);
 }
