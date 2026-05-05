@@ -111,7 +111,14 @@ typedef struct {
   uint8_t *pmmap[2];
   struct tpacket_req3 packet_req[2];
   size_t map_size;
+  unsigned int rx_block_cur; 
 } trawmmap;
+
+struct tblock_desc {
+  uint32_t version;
+  uint32_t offset_to_priv;
+  struct tpacket_hdr_v1 h1;
+};
 
 /******************************************************************************/
 int finish_callback(struct nl_msg *nlmsg, void *arg) {
@@ -412,6 +419,7 @@ int main(int argc, char **argv) {
     .tp_block_nr = block_nr,
     .tp_frame_nr = frame_nr
     }};
+    rawmmap[i].rx_block_cur = 0;
     rawmmap[i].map_size = block_size * block_nr;
     memcpy(&rawmmap[i].packet_req, packet_req, sizeof(rawmmap[i].packet_req));
 
@@ -420,7 +428,7 @@ int main(int argc, char **argv) {
     setsock( &rawfds[i], index[i], &rawmmap[i]);
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
-
+/*
   uint8_t radiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
         0x0d, 0x00, // <- radiotap header length
@@ -448,18 +456,11 @@ int main(int argc, char **argv) {
     memset(&txbuf[i][offset], 0, 4); offset += 4;
     memset(&txbuf[i][offset], 0, PAY_MTU);
   }
-
-#define ONLINE_MTU 2000
-#define IEE_LLC_OFFSET 24 + 4
-#define FCS_OFFSET 4
-#define RXLOG 2
-  uint8_t rxbuf[RXLOG][ONLINE_MTU];
-
-  bool send_first = false;
+*/
+  bool send_first = false, tosend = false;
   int8_t sync_first = -1, sync_scan = -1;
   uint8_t sync_cpt[nbraws], sync_ack[nbraws];
-  size_t rawlen[nbraws];
-  for (uint8_t i = 0; i < nbraws; i++) { sync_cpt[i] = 1; sync_ack[i] = 1; rawlen[i] = 0; }
+  for (uint8_t i = 0; i < nbraws; i++) { sync_cpt[i] = 1; sync_ack[i] = 1; }
 
   for (uint8_t i = 0; i < nbraws; i++) {
     rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
@@ -470,6 +471,7 @@ int main(int argc, char **argv) {
   uint64_t curms,  stoms, intms = 1000;
   clock_gettime(CLOCK_MONOTONIC, &ts); stoms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
+  /***************************************************************************/
   while (likely(!sigint)) {
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
     poll(readsets, nbfds, stoms > curms ? stoms - curms : 0);
@@ -480,9 +482,7 @@ int main(int argc, char **argv) {
 
       printf("(%d)(%d) cpt(%d)(%d) ack(%d)(%d)  freq (%d)(%d)\n",sync_first, sync_scan, sync_cpt[0], sync_cpt[1], sync_ack[0], sync_ack[1],
         rawdevs[0].freqs[rawdevs[0].cptfreq], rawdevs[1].freqs[rawdevs[1].cptfreq]); fflush(stdout);
-
-      rawlen[0] = 0; rawlen[1] = 0;
-
+/*
       if (sync_scan >= 0) {
         if (sync_ack[sync_scan] > 1) { upfreq(sockid, socknl, sync_scan, index[sync_scan], nbraws, rawdevs ); sync_ack[sync_scan] = 0; }
         if (sync_ack[sync_scan] < 2) sync_ack[sync_scan]++;
@@ -502,83 +502,48 @@ int main(int argc, char **argv) {
           setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
 	}
       }
+
+      if (send_first) {
+        tosend = true;
+        for(int i=0; i < rawmmap[sync_first].packet_req[1].tp_frame_nr; i++ ) {
+          struct tpacket3_hdr *hdr = (void*)(rawmmap[sync_first].pmmap[1] + ( rawmmap[sync_first].packet_req[1].tp_frame_size * i));
+          uint8_t *data = (uint8_t*)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
+          if (hdr->tp_status == TP_STATUS_AVAILABLE) {
+            memset(data, 0, PAY_MTU);
+            hdr->tp_len = PAY_MTU;
+            hdr->tp_status = TP_STATUS_SEND_REQUEST;
+	  }
+        }
+      }
+*/
     }
 
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) { // ASYNCHRONOUS RECV
       if (readsets[cpt].revents & POLLIN) {
-
         struct tpacket3_hdr * rx_header = 
 	  ((struct tpacket3_hdr *)((void *)rawmmap[cpt].pmmap[0] + 
 		  (rawmmap[cpt].packet_req[0].tp_block_size * rawmmap[cpt].packet_req[0].tp_block_nr)));
-
         struct tblock_desc *rx_pbd = (struct tblock_desc *) rx_header;
         if ((rx_header->tp_status & TP_STATUS_USER) == 0) { 
+          sync_cpt[cpt] = 0;
           rx_pbd->h1.block_status = TP_STATUS_KERNEL;
-          rx_block_nr = (rx_block_nr + 1) % block_nr;
-          int num_pkts = rx_pbd->h1.num_pkts, i;
+          rawmmap[cpt].rx_block_cur = (rawmmap[cpt].rx_block_cur + 1) % rawmmap[cpt].packet_req[0].tp_block_nr;
+          int num_pkts = rx_pbd->h1.num_pkts;
           unsigned long bytes = 0;
           struct tpacket3_hdr *ppd = (struct tpacket3_hdr *) ((uint8_t *) rx_pbd + rx_pbd->h1.offset_to_first_pkt);
-          for (i = 0; i < num_pkts; ++i) {
+          for (int i = 0; i < num_pkts; ++i) {
             bytes += ppd->tp_snaplen;
-	    printf("(%d)(%d)RECV(%ld)\n",rx_block_nr,i,bytes);
+	    printf("(%d)(%d)RECV(%ld)\n",rawmmap[cpt].rx_block_cur,i,bytes);fflush(stdout);
             ppd = (struct tpacket3_hdr *) ((uint8_t *) ppd + ppd->tp_next_offset);
           }
-          total_pkts += num_pkts;
-          total_bytes += bytes;
 	}
-      }
-
-/*
-	sync_cpt[cpt] = 0;
-	int32_t tmp = 0; uint16_t payoffset = 0; uint8_t pos = 0; 
-        while (tmp >= 0) {
-          tmp = recv(rawfds[cpt], &rxbuf[pos][0], ONLINE_MTU, MSG_DONTWAIT); rawlen[cpt] += tmp;
-          if (tmp > 4) {
-	    uint16_t tmppayoffset =  (uint16_t)rxbuf[pos][2] + IEE_LLC_OFFSET; // radiotapsize + ...
-	    if ((tmp -= tmppayoffset) > 0) {
-	      if ((tmp -= (sizeof(payhd_t) + ((payhd_t *)&rxbuf[pos][tmppayoffset])->msglen + FCS_OFFSET )) == 0) {
-		if (pos < RXLOG) { pos++; payoffset = tmppayoffset; }
-	      }
-	    }
-	  }
-	}
-	if (pos > 0) {
-	  payhd_t *ptrrx = (payhd_t *)&rxbuf[0][payoffset]; 
-	  printf("recv droneid(%d) msglen(%d) cptraw(%d)\n",ptrrx->droneid,ptrrx->msglen,cpt); 
-          for (uint8_t k=39; k < (39+18); k++) printf(" %2X ",rxbuf[0][k]); printf("\n");
-          //for (uint8_t k=0; k < ptrrx->msglen; k++) printf(" %2X ",rxbuf[0][k + sizeof(payhd_t) + payoffset]); printf("\n");
-	  sync_ack[cpt] = 0;
-	} else {
-          //printf("rawlen (%d)(%ld)\n",cpt,rawlen[cpt]); fflush(stdout);
-	}
-*/
-
       }
     }
 
-    if (send_first) { // SYNCHRONOUS AND ASYNCHRONOUS SEND
-
-      uint8_t droneid = DRONEID;
-      uint64_t seq = 2;
-      uint16_t msglen = 1;
-      int32_t backfreq = 2484;
-
-      ((payhd_t *)(&txbuf[sync_first][txpaylen]))->droneid = droneid;
-      ((payhd_t *)(&txbuf[sync_first][txpaylen]))->seq = seq;
-      ((payhd_t *)(&txbuf[sync_first][txpaylen]))->msglen = msglen;
-      ((payhd_t *)(&txbuf[sync_first][txpaylen]))->backfreq = backfreq;
-
-      size_t len = send(rawfds[sync_first], &txbuf[sync_first][0], txpaylen + sizeof(payhd_t) + msglen,  MSG_DONTWAIT);
-
-      payhd_t *ptrtx = (payhd_t *)(&txbuf[sync_first][txpaylen]);
-      printf("send droneid(%d) msglen(%d) cptraw(%d)\n",ptrtx->droneid,ptrtx->msglen,sync_first); 
-      for (uint8_t k=17; k < (17+18); k++) printf(" %2X ",txbuf[sync_first][k]); printf("\n");
-//      printf("send ret(%ld) droneid(%d) seq(%ld) msglen(%d) backfreq(%d)   sync_first(%d)  freq(%d) \n",
-//        len, ptrtx->droneid, ptrtx->seq, ptrtx->msglen, ptrtx->backfreq, sync_first, rawdevs[sync_first].freqs[rawdevs[sync_first].cptfreq]); fflush(stdout);
-
-      send_first = false;
-      // NEED TO RESET TX TO AVOID SPARK DUPLICATION IN RX !!
-      //memset(&txbuf[sync_first][0], 0, txpaylen);
+    if (tosend) { // SYNCHRONOUS AND ASYNCHRONOUS SEND
+      tosend = false;
+      ssize_t ec_send = sendto( rawfds[sync_first], NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll) );
+      printf("sendto (%ld)\n",ec_send);
     }
   }
 
