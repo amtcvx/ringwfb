@@ -18,6 +18,8 @@ sudo ./exe_multiraw_mmap
 #include <poll.h>
 #include <sys/uio.h>
 
+#include <linux/if_packet.h>
+
 #include <net/ethernet.h>
 #include <net/if.h>
 #include <linux/if_packet.h>
@@ -104,6 +106,12 @@ typedef struct {
   uint32_t freqs[NBFREQS];
   uint32_t chans[NBFREQS];
 } rawdev_t;
+
+typedef struct {
+  uint8_t *pmmap[2];
+  struct tpacket_req3 packet_req[2];
+  size_t map_size;
+} trawmmap;
 
 /******************************************************************************/
 int finish_callback(struct nl_msg *nlmsg, void *arg) {
@@ -302,31 +310,17 @@ void  setraw(uint8_t sockid, struct nl_sock *socknl, struct nl_sock *sockrt, cha
 }
 
 /*****************************************************************************/
-void  mapraw(uint8_t fd, uint8_t *map[2]) {
+void  mapraw(uint8_t fd, trawmmap *praw) {
 
-  unsigned int block_size = 1<<12, frame_size = 1<<11, block_nr = 1;
+  if (-1 == setsockopt (fd, SOL_PACKET, PACKET_RX_RING, &praw->packet_req[0], sizeof(struct tpacket_req3))) exit(-1); // FIRST
+  if (-1 == setsockopt (fd, SOL_PACKET, PACKET_TX_RING, &praw->packet_req[1], sizeof(struct tpacket_req3))) exit(-1); // SECOND
 
-  unsigned int frame_nr = (block_size * block_nr) / frame_size;
-  struct tpacket_req3 packet_req[2] = { [0 ... 1] = {
-    .tp_block_size = block_size,
-    .tp_frame_size = frame_size,
-    .tp_block_nr = block_nr,
-    .tp_frame_nr = frame_nr
-  }};
-
-  printf("block_nr(%d) block_size(%d) frame_nr(%d) frame_size(%d)\n",block_nr,block_size,frame_nr,frame_size);
-
-  if (-1 == setsockopt (fd, SOL_PACKET, PACKET_RX_RING, &packet_req[0], sizeof(struct tpacket_req3))) exit(-1); // FIRST
-  if (-1 == setsockopt (fd, SOL_PACKET, PACKET_TX_RING, &packet_req[1], sizeof(struct tpacket_req3))) exit(-1); // SECOND
-
-  size_t map_size = block_size * block_nr;
-
-  if (MAP_FAILED == (map[0] = mmap(0, map_size * 2, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0))) exit(-1);
-  map[1] = map[0] + map_size;
+  if (MAP_FAILED == (praw->pmmap[0] = mmap(0, praw->map_size * 2, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0))) exit(-1);
+  praw->pmmap[1] = praw->pmmap[0] + praw->map_size;
 }
 
 /*****************************************************************************/
-void  setsock(uint8_t *fd, uint32_t index, uint8_t *map[2]) {
+void  setsock(uint8_t *fd, uint32_t index,  trawmmap *praw) {
 
   uint16_t protocol = htons(ETH_P_ALL);
   if (-1 == (*fd = socket(AF_PACKET,SOCK_RAW, protocol))) exit(-1);
@@ -344,7 +338,7 @@ void  setsock(uint8_t *fd, uint32_t index, uint8_t *map[2]) {
   const int32_t sock_qdisc_bypass = 1;
   if (-1 == setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &sock_qdisc_bypass, sizeof(sock_qdisc_bypass))) exit(-1);
 
-  mapraw(*fd, map);
+  mapraw(*fd, praw);
 }
 
 /******************************************************************************/
@@ -406,11 +400,24 @@ int main(int argc, char **argv) {
   rawdev_t rawdevs[nbraws];
   memset(rawdevs, 0, sizeof(rawdevs));
 
-  uint8_t *rawmap[nbraws][2];
-
+  trawmmap rawmmap[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
-    setsock( &rawfds[i], index[i], &rawmap[i][2]);
+
+    unsigned int block_size = 1<<12, frame_size = 1<<11, block_nr = 1;
+    unsigned int frame_nr = (block_size * block_nr) / frame_size;
+    struct tpacket_req3 packet_req[2] = { [0 ... 1] = {
+    .tp_block_size = block_size,
+    .tp_frame_size = frame_size,
+    .tp_block_nr = block_nr,
+    .tp_frame_nr = frame_nr
+    }};
+    rawmmap[i].map_size = block_size * block_nr;
+    memcpy(&rawmmap[i].packet_req, packet_req, sizeof(rawmmap[i].packet_req));
+
+    printf("block_nr(%d) block_size(%d) frame_nr(%d) frame_size(%d)\n",block_nr,block_size,frame_nr,frame_size);
+
+    setsock( &rawfds[i], index[i], &rawmmap[i]);
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
 
@@ -499,8 +506,30 @@ int main(int argc, char **argv) {
 
     for (uint8_t cpt = 0; cpt < nbfds; cpt++) { // ASYNCHRONOUS RECV
       if (readsets[cpt].revents & POLLIN) {
-	sync_cpt[cpt] = 0;
 
+        struct tpacket3_hdr * rx_header = 
+	  ((struct tpacket3_hdr *)((void *)rawmmap[cpt].pmmap[0] + 
+		  (rawmmap[cpt].packet_req[0].tp_block_size * rawmmap[cpt].packet_req[0].tp_block_nr)));
+
+        struct tblock_desc *rx_pbd = (struct tblock_desc *) rx_header;
+        if ((rx_header->tp_status & TP_STATUS_USER) == 0) { 
+          rx_pbd->h1.block_status = TP_STATUS_KERNEL;
+          rx_block_nr = (rx_block_nr + 1) % block_nr;
+          int num_pkts = rx_pbd->h1.num_pkts, i;
+          unsigned long bytes = 0;
+          struct tpacket3_hdr *ppd = (struct tpacket3_hdr *) ((uint8_t *) rx_pbd + rx_pbd->h1.offset_to_first_pkt);
+          for (i = 0; i < num_pkts; ++i) {
+            bytes += ppd->tp_snaplen;
+	    printf("(%d)(%d)RECV(%ld)\n",rx_block_nr,i,bytes);
+            ppd = (struct tpacket3_hdr *) ((uint8_t *) ppd + ppd->tp_next_offset);
+          }
+          total_pkts += num_pkts;
+          total_bytes += bytes;
+	}
+      }
+
+/*
+	sync_cpt[cpt] = 0;
 	int32_t tmp = 0; uint16_t payoffset = 0; uint8_t pos = 0; 
         while (tmp >= 0) {
           tmp = recv(rawfds[cpt], &rxbuf[pos][0], ONLINE_MTU, MSG_DONTWAIT); rawlen[cpt] += tmp;
@@ -522,6 +551,8 @@ int main(int argc, char **argv) {
 	} else {
           //printf("rawlen (%d)(%ld)\n",cpt,rawlen[cpt]); fflush(stdout);
 	}
+*/
+
       }
     }
 
@@ -552,6 +583,8 @@ int main(int argc, char **argv) {
   }
 
   printf("THE END\n");
-//  munmap(map[0], map_size);
-//  close(sockfd);
+  for (uint8_t i=0; i<nbraws; i++) {
+    munmap(rawmmap[i].pmmap, rawmmap[i].map_size);
+    printf("(%ld)\n",rawmmap[i].map_size);
+  }
 }
