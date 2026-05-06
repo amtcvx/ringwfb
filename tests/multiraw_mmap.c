@@ -63,13 +63,31 @@ sudo ./exe_multiraw_map
 
 #define MCS_INDEX  2
 
-/************************************************************************************************/
+uint8_t radiotaphd[] = {
+        0x00, 0x00, // <-- radiotap version
+        0x0d, 0x00, // <- radiotap header length
+        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
+        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
+        MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
+};
+uint8_t ieeehd[] = {
+        0x08, 0x01,                         // Frame Control : Data frame from STA to DS
+        0x00, 0x00,                         // Duration
+        0x36, 0x35, 0x34, 0x33, 0x32, 0x31, // Receiver MAC
+        0x26, 0x25, 0x24, 0x23, 0x22, 0x21, // Transmitter MAC
+        0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
+        0x10, 0x86                          // Sequence control
+};
+uint8_t spare[4];
+
 typedef struct {
   uint8_t droneid;
   uint64_t seq;
   uint16_t msglen;
   int32_t backfreq;
-} __attribute__((packed)) payhd_t;
+} __attribute__((packed)) tpayhd;
+
+uint8_t paybuf[PAY_MTU];
 
 /*****************************************************************************/
 #define NBFREQS 65
@@ -394,8 +412,6 @@ int main(int argc, char **argv) {
   }
 
   /*---------------------------------------------------------------------*/
-  uint8_t packet[PAY_MTU]; memset(packet,0,PAY_MTU);uint16_t packet_len = PAY_MTU;
-
   struct tblock_desc {
     uint32_t version;
     uint32_t offset_to_priv;
@@ -421,14 +437,24 @@ int main(int argc, char **argv) {
       printf("TIC\n"); fflush(stdout);
 
       for (uint8_t cpt=0; cpt<nbraws; cpt++) {
-        for(int i=0; i < frnr; i++ ) {
-          struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)((void *)rawmmap[cpt].ptrmmap + mmapsize + (frsz * i));
-          uint8_t *data = (uint8_t *)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
-          if (hdr->tp_status == TP_STATUS_AVAILABLE) {
-            memcpy(data, packet, packet_len);
-            hdr->tp_len = packet_len;
-            hdr->tp_status = TP_STATUS_SEND_REQUEST;
-          }
+        int i = 0;
+//        for(int i=0; i < frnr; i++ ) {
+        struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)((void *)rawmmap[cpt].ptrmmap + mmapsize + (frsz * i));
+        uint8_t *data = (uint8_t *)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
+        if (hdr->tp_status == TP_STATUS_AVAILABLE) {
+
+	  uint8_t pos = 0, offset = 0;
+          offset = sizeof(radiotaphd);    memcpy(data + pos, radiotaphd, offset); pos += offset;
+          offset = sizeof(ieeehd);        memcpy(data + pos, ieeehd,     offset); pos += offset;
+          offset = sizeof(spare);         memcpy(data + pos, spare,      offset); pos += offset;
+	  uint16_t paylen = 1500;
+	  tpayhd payhd = { .droneid = DRONEID, .seq = 0, .msglen = paylen, .backfreq = 0 };
+          offset = sizeof(tpayhd); memcpy(data + pos, (uint8_t *)&payhd, offset); pos += offset;
+	  memset(data + pos, 1, paylen);
+          hdr->tp_len = pos + paylen;
+          hdr->tp_status = TP_STATUS_SEND_REQUEST;
+
+          printf("hdr->tp_len(%d)\n",hdr->tp_len);fflush(stdout);
         }
         tosend[cpt] = true;
       }
