@@ -1,6 +1,7 @@
 /*
 
 gcc -o exe_multiraw_map  -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 multiraw_mmap.c -lnl-route-3 -lnl-genl-3 -lnl-3
+sudo ./exe_multiraw_map
 
 */
 
@@ -84,6 +85,7 @@ typedef struct {
 typedef struct {
   struct tpacket_req3 packet_req[2]; 
   uint8_t *ptrmap;
+  unsigned int rx_block_nr;
 } trawmmap;
 
 /******************************************************************************/
@@ -318,9 +320,17 @@ void  setsock(uint8_t *fd, uint32_t index, trawmmap *rawmmap) {
 
   if (-1 == setsockopt (*fd, SOL_PACKET, PACKET_RX_RING, &rawmmap->packet_req[0], sizeof(struct tpacket_req3))) exit(-1); // FIRST
   if (-1 == setsockopt (*fd, SOL_PACKET, PACKET_TX_RING, &rawmmap->packet_req[1], sizeof(struct tpacket_req3))) exit(-1); // SECOND
-
-  if (MAP_FAILED == (rawmmap->ptrmap = mmap(0,  2 * (rawmmap->packet_req[0].tp_block_size * rawmmap->packet_req[0].tp_block_nr), 
-    PROT_READ|PROT_WRITE, MAP_SHARED, *fd, 0))) exit(-1);
+/*
+  if (MAP_FAILED == (rawmmap->ptrmap = (uint8_t *)mmap(0,
+    2*(rawmmap->packet_req[0].tp_block_size * rawmmap->packet_req[0].tp_block_nr),PROT_READ|PROT_WRITE, MAP_SHARED, *fd, 0))) exit(-1);
+*/
+  struct sockaddr_ll sockaddr;
+  memset(&sockaddr, 0, sizeof(sockaddr));
+  sockaddr.sll_family = AF_PACKET;
+  sockaddr.sll_protocol = htons(ETH_P_ALL);
+  sockaddr.sll_ifindex = index;
+  if (-1 == (bind(*fd, (const struct sockaddr*)&sockaddr, sizeof(sockaddr)))) exit(-1);
+  drain(*fd);
 }
 
 /*****************************************************************************/
@@ -373,37 +383,25 @@ int main(int argc, char **argv) {
     .tp_block_size = blsz, .tp_frame_size = frsz, .tp_block_nr = blnr, .tp_frame_nr = frnr }};
   unsigned int mmapsize = blsz * blnr;
 
+  bool tosend[nbraws];
   trawmmap rawmmap[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
+    memset(&rawmmap[i], 0, sizeof(rawmmap[i]));
     memcpy(&rawmmap[i].packet_req, packet_req, sizeof(rawmmap[i].packet_req));
-
     setsock( &rawfds[i], index[i], &rawmmap[i] );
-//    readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
+    readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN; // no passthrough POLLOUT
+    tosend[i] = false;							
   }
 
+  uint8_t *map[2]; if (MAP_FAILED == (map[0] = mmap(0, mmapsize * 2, PROT_READ|PROT_WRITE, MAP_SHARED, rawfds[0], 0))) exit(-1);
+  map[1] = map[0] + mmapsize;
+
+/*
   uint8_t sockfd = rawfds[0];
   uint8_t cpt=0;
-  /*---------------------------------------------------------------------*/
-/*
-  unsigned int block_size = 1<<12, frame_size = 1<<11, block_nr = 1;
-  unsigned int frame_nr = (block_size * block_nr) / frame_size;
-
-  struct tpacket_req3 packet_req[2] = { [0 ... 1] = {
-    .tp_block_size = block_size,
-    .tp_frame_size = frame_size,
-    .tp_block_nr = block_nr,
-    .tp_frame_nr = frame_nr
-  }};
-  printf("block_nr(%d) block_size(%d) frame_nr(%d) frame_size(%d)\n",block_nr,block_size,frame_nr,frame_size);
-  if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_RX_RING, &packet_req[0], sizeof(struct tpacket_req3))) exit(-1); // FIRST
-  if (-1 == setsockopt (sockfd, SOL_PACKET, PACKET_TX_RING, &packet_req[1], sizeof(struct tpacket_req3))) exit(-1); // SECOND
-
-  size_t map_size = block_size * block_nr;
-  uint8_t *map[2]; if (MAP_FAILED == (map[0] = mmap(0, map_size * 2, PROT_READ|PROT_WRITE, MAP_SHARED, sockfd, 0))) exit(-1);
-  map[1] = map[0] + map_size;
 */
-
+  /*---------------------------------------------------------------------*/
   uint8_t packet[PAY_MTU]; memset(packet,0,PAY_MTU);uint16_t packet_len = PAY_MTU;
 
   struct tblock_desc {
@@ -413,14 +411,7 @@ int main(int argc, char **argv) {
   };
 
   /*---------------------------------------------------------------------*/
-  struct sockaddr_ll sockaddr;
-  memset(&sockaddr, 0, sizeof(sockaddr));
-  sockaddr.sll_family = AF_PACKET;
-  sockaddr.sll_protocol = htons(ETH_P_ALL);
-//  sockaddr.sll_ifindex = if_nametoindex(argv[1]);
-  sockaddr.sll_ifindex = index[0];
-  if (-1 == (bind(sockfd, (const struct sockaddr*)&sockaddr, sizeof(sockaddr)))) exit(-1);
-
+/*
   struct pollfd pfd = {
     .fd = sockfd,
     .events = POLLIN | POLLERR, // no passthrough POLLOUT
@@ -429,7 +420,7 @@ int main(int argc, char **argv) {
 
   unsigned int rx_block_nr = 0; 
   int total_pkts = 0, ec_send, total_bytes = 0;
-  bool tosend = false;
+*/
 
   struct timespec ts;
   uint64_t curms,  stoms, intms = 1000;
@@ -437,62 +428,67 @@ int main(int argc, char **argv) {
 
   while (likely(!sigint)) {
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
-    poll(&pfd, 1, stoms > curms ? stoms - curms : 0);
+    poll(readsets, nbfds, stoms > curms ? stoms - curms : 0);
     clock_gettime(CLOCK_MONOTONIC, &ts); curms = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
     if (curms >= stoms) { // SYNCHRONOUS
       stoms = curms + intms - ((curms - stoms) % intms);
       printf("TIC\n"); fflush(stdout);
 
-
-      for(int i=0; i < frnr; i++ ) {
-        struct tpacket3_hdr *hdr = (void*)((rawmmap[cpt].ptrmap + mmapsize) + (frsz * i));
-        uint8_t *data = (uint8_t*)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
-        if (hdr->tp_status == TP_STATUS_AVAILABLE) {
-          memcpy(data, packet, packet_len);
-          hdr->tp_len = packet_len;
-          hdr->tp_status = TP_STATUS_SEND_REQUEST;
+      for (uint8_t cpt=0; cpt<nbraws; cpt++) {
+        for(int i=0; i < frnr; i++ ) {
+          struct tpacket3_hdr *hdr = (void*)(map[1] + (frsz * i));
+//          struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)(rawmmap[cpt].ptrmap + mmapsize + (frsz * i));
+          uint8_t *data = (uint8_t *)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
+          if (hdr->tp_status == TP_STATUS_AVAILABLE) {
+            memcpy(data, packet, packet_len);
+            hdr->tp_len = packet_len;
+            hdr->tp_status = TP_STATUS_SEND_REQUEST;
+          }
         }
-      }
-      tosend = true;
-    }
-
-    if (pfd.revents & POLLIN) {
-      struct tpacket3_hdr * rx_header = ((struct tpacket3_hdr *)((void *)(rawmmap[cpt].ptrmap) + (blsz * rx_block_nr)));
-      struct tblock_desc *rx_pbd = (struct tblock_desc *) rx_header;
-      if ((rx_header->tp_status & TP_STATUS_USER) == 0) { 
-        rx_pbd->h1.block_status = TP_STATUS_KERNEL;
-        rx_block_nr = (rx_block_nr + 1) % blnr;
-        int num_pkts = rx_pbd->h1.num_pkts, i;
-        unsigned long bytes = 0;
-        struct tpacket3_hdr *ppd = (struct tpacket3_hdr *) ((uint8_t *) rx_pbd + rx_pbd->h1.offset_to_first_pkt);
-        for (i = 0; i < num_pkts; ++i) {
-          bytes += ppd->tp_snaplen;
-	  printf("(%d)(%d)RECV(%ld)\n",rx_block_nr,i,bytes);
-//                display(ppd);
-          ppd = (struct tpacket3_hdr *) ((uint8_t *) ppd + ppd->tp_next_offset);
-        }
-        total_pkts += num_pkts;
-        total_bytes += bytes;
+        tosend[cpt] = true;
       }
     }
 
-    if (tosend) {
-      tosend = false;
-      ec_send = sendto( sockfd, NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll) );
-      printf("sendto (%d)\n",ec_send);
+    for (uint8_t cpt=0; cpt<nbraws; cpt++) {
+      if (readsets[cpt].revents & POLLIN) {
+        struct tpacket3_hdr * rx_header = ((struct tpacket3_hdr *)((void *)map[0] + (blsz * rawmmap[cpt].rx_block_nr)));
+//        struct tpacket3_hdr * rx_header = (struct tpacket3_hdr *)(rawmmap[cpt].ptrmap + (blsz * rawmmap[cpt].rx_block_nr));
+        struct tblock_desc *rx_pbd = (struct tblock_desc *) rx_header;
+        if ((rx_header->tp_status & TP_STATUS_USER) == 0) { 
+          rx_pbd->h1.block_status = TP_STATUS_KERNEL;
+          rawmmap[cpt].rx_block_nr = (rawmmap[cpt].rx_block_nr + 1) % blnr;
+          int num_pkts = rx_pbd->h1.num_pkts, i;
+          unsigned long bytes = 0;
+          struct tpacket3_hdr *ppd = (struct tpacket3_hdr *) ((uint8_t *)rx_pbd + rx_pbd->h1.offset_to_first_pkt);
+          for (i = 0; i < num_pkts; ++i) {
+            bytes += ppd->tp_snaplen;
+  	    printf("(%d)(%d)RECV(%ld)\n",rawmmap[cpt].rx_block_nr,i,bytes);
+  //        display(ppd);
+            ppd = (struct tpacket3_hdr *) ((uint8_t *)ppd + ppd->tp_next_offset);
+          }
+        }
+      }
+    }
+
+    for (uint8_t cpt=0; cpt<nbraws; cpt++) {
+      if (tosend[cpt]) {
+        tosend[cpt] = false;
+        ssize_t ec_send = sendto( rawfds[cpt], NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll) );
+        printf("sendto (%d)(%ld)\n",cpt,ec_send);
+      }
     }
   }
 
-  struct tpacket_stats_v3 stats;
-  socklen_t len = sizeof(stats);
-  if (getsockopt(sockfd, SOL_PACKET, PACKET_STATISTICS, &stats, &len) < 0) exit(-1);
-  printf("\nReceived %u packets, %u dropped, freeze_q_cnt: %u\n",
+  for (uint8_t i=0; i<nbraws; i++) {
+    struct tpacket_stats_v3 stats;
+    socklen_t len = sizeof(stats);
+    if (getsockopt(rawfds[i], SOL_PACKET, PACKET_STATISTICS, &stats, &len) < 0) exit(-1);
+    printf("\nReceived %u packets, %u dropped, freeze_q_cnt: %u\n",
     stats.tp_packets, stats.tp_drops, stats.tp_freeze_q_cnt);
 
-  for (uint8_t i=0; i<nbraws; i++) {
     munmap( rawmmap[i].ptrmap, 2 * mmapsize);
-    close(sockfd);
+    close(rawfds[i]);
   }
   return(0);
 }
