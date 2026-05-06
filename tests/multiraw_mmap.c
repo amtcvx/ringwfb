@@ -303,6 +303,16 @@ uint8_t getwifi(char ifnames[MAXRAWDEV][50]) {
 }
 
 /*****************************************************************************/
+void  setsock(uint8_t *fd, uint32_t index) {
+
+  if (-1 == (*fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
+  int tpver = TPACKET_V3;
+  if (-1 == (setsockopt(*fd, SOL_PACKET, PACKET_VERSION,  &tpver, sizeof(tpver)))) exit(-1);
+  int on = 1;
+  if (-1 == (setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &on, sizeof(on)))) exit(-1);
+}
+
+/*****************************************************************************/
 uint64_t get_time_ms(void) {
 
   struct timespec ts;
@@ -341,23 +351,18 @@ int main(int argc, char **argv) {
   uint8_t nbfds = nbraws;
   struct pollfd readsets[nbfds];
   memset(readsets, 0, sizeof(readsets));
-//  uint8_t rawfds[nbraws];
+  uint8_t rawfds[nbraws];
   uint32_t index[nbraws];
   rawdev_t rawdevs[nbraws];
   memset(rawdevs, 0, sizeof(rawdevs));
 
   for (uint8_t i = 0; i <  nbraws; i++) {
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
+    setsock( &rawfds[i], index[i] );
 //    readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN;
   }
 
-  int sockfd;
-  if (-1 == (sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL)))) exit(-1);
-  int tpver = TPACKET_V3;
-  if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_VERSION,  &tpver, sizeof(tpver)))) exit(-1);
-  int on = 1;
-  if (-1 == (setsockopt(sockfd, SOL_PACKET, PACKET_QDISC_BYPASS, &on, sizeof(on)))) exit(-1);
-
+  uint8_t sockfd = rawfds[0];
   /*---------------------------------------------------------------------*/
   unsigned int block_size = 1<<12, frame_size = 1<<11, block_nr = 1;
 
