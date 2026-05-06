@@ -437,29 +437,32 @@ int main(int argc, char **argv) {
       printf("TIC\n"); fflush(stdout);
 
       for (uint8_t cpt=0; cpt<nbraws; cpt++) {
-        int i = 0;
-//        for(int i=0; i < frnr; i++ ) {
-        struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)((void *)rawmmap[cpt].ptrmmap + mmapsize + (frsz * i));
-        uint8_t *data = (uint8_t *)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
-        if (hdr->tp_status == TP_STATUS_AVAILABLE) {
+        for(int i=0; i < frnr; i++ ) {
+          struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)((void *)rawmmap[cpt].ptrmmap + mmapsize + (frsz * i));
+          uint8_t *data = (uint8_t *)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
 
-	  uint8_t pos = 0, offset = 0;
-          offset = sizeof(radiotaphd);    memcpy(data + pos, radiotaphd, offset); pos += offset;
-          offset = sizeof(ieeehd);        memcpy(data + pos, ieeehd,     offset); pos += offset;
-          offset = sizeof(spare);         memcpy(data + pos, spare,      offset); pos += offset;
-	  uint16_t paylen = 1500;
-	  tpayhd payhd = { .droneid = DRONEID, .seq = 0, .msglen = paylen, .backfreq = 0 };
-          offset = sizeof(tpayhd); memcpy(data + pos, (uint8_t *)&payhd, offset); pos += offset;
-	  memset(data + pos, 1, paylen);
-          hdr->tp_len = pos + paylen;
-          hdr->tp_status = TP_STATUS_SEND_REQUEST;
+	  printf("frame(%d) (%d)\n", i, hdr->tp_status);
 
-          printf("hdr->tp_len(%d)\n",hdr->tp_len);fflush(stdout);
-        }
+          if (hdr->tp_status == TP_STATUS_AVAILABLE) {
+              
+  	    uint8_t pos = 0, offset = 0;
+            offset = sizeof(radiotaphd);    memcpy(data + pos, radiotaphd, offset); pos += offset;
+            offset = sizeof(ieeehd);        memcpy(data + pos, ieeehd,     offset); pos += offset;
+            offset = sizeof(spare);         memcpy(data + pos, spare,      offset); pos += offset;
+  	    uint16_t paylen = 1500;
+  	    tpayhd payhd = { .droneid = DRONEID, .seq = 0, .msglen = paylen, .backfreq = 0 };
+            offset = sizeof(tpayhd); memcpy(data + pos, (uint8_t *)&payhd, offset); pos += offset;
+  	    memset(data + pos, 1, paylen);
+            hdr->tp_len = pos + paylen;
+            hdr->tp_status = TP_STATUS_SEND_REQUEST;
+  
+            printf("(%d)hdr->tp_len(%d)(%d)\n",i,hdr->tp_len, hdr->tp_status);fflush(stdout);
+          }
+	}
         tosend[cpt] = true;
       }
     }
-
+/*
     for (uint8_t cpt=0; cpt<nbraws; cpt++) {
       if (readsets[cpt].revents & POLLIN) {
         struct tpacket3_hdr * rx_header = (struct tpacket3_hdr *)((void *)rawmmap[cpt].ptrmmap + (blsz * rawmmap[cpt].rx_block_nr));
@@ -482,7 +485,7 @@ int main(int argc, char **argv) {
         }
       }
     }
-
+*/
     for (uint8_t cpt=0; cpt<nbraws; cpt++) {
       if (tosend[cpt]) {
         tosend[cpt] = false;
