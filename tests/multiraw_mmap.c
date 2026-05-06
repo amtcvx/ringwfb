@@ -1,4 +1,5 @@
 /*
+gcc -fsanitize=address,undefined  -o exe_multiraw_map  -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 multiraw_mmap.c -lnl-route-3 -lnl-genl-3 -lnl-3
 
 gcc -o exe_multiraw_map  -g -O2 -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -DCONFIG_LIBNL30 -I/usr/include/libnl3 multiraw_mmap.c -lnl-route-3 -lnl-genl-3 -lnl-3
 sudo ./exe_multiraw_map
@@ -442,9 +443,15 @@ int main(int argc, char **argv) {
           rawmmap[cpt].rx_block_nr = (rawmmap[cpt].rx_block_nr + 1) % blnr;
           int num_pkts = rx_pbd->h1.num_pkts, i;
           struct tpacket3_hdr *ppd = (struct tpacket3_hdr *) ((uint8_t *)rx_pbd + rx_pbd->h1.offset_to_first_pkt);
+
+	  // misaligned address 0x7a0b5cd6a3ba for type 'struct tpacket3_hdr', which requires 4 byte alignment
+          //#define my_TPACKET_ALIGN(x) (((x)+(uint64_t)(TPACKET_ALIGNMENT-1))&~((uint64_t)(TPACKET_ALIGNMENT-1)))
+          //struct tpacket3_hdr *ppda = ((void*) ppd) + my_TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
+          struct tpacket3_hdr *ppda = ((void*) ppd);
+
           for (i = 0; i < num_pkts; ++i) {
-  	    printf("(%d)(%d)RECV(%d)\n",rawmmap[cpt].rx_block_nr,i,ppd->tp_snaplen);
-            ppd = (struct tpacket3_hdr *) ((uint8_t *)ppd + ppd->tp_next_offset);
+  	    printf("(%d)(%d)RECV(%d)\n",rawmmap[cpt].rx_block_nr,i,ppda->tp_snaplen);
+            ppd = (struct tpacket3_hdr *) ((uint8_t *)ppda + ppda->tp_next_offset);
           }
         }
       }
