@@ -85,7 +85,7 @@ typedef struct {
 typedef struct {
   struct tpacket_req3 packet_req[2]; 
   unsigned int rx_block_nr;
-  uint8_t *ptrmmap;
+  void *ptrmmap;
 } trawmmap;
 
 /******************************************************************************/
@@ -320,7 +320,7 @@ void  setsock(uint8_t *fd, uint32_t index, trawmmap *rawmmap) {
   if (-1 == setsockopt (*fd, SOL_PACKET, PACKET_RX_RING, &rawmmap->packet_req[0], sizeof(struct tpacket_req3))) exit(-1); // FIRST
   if (-1 == setsockopt (*fd, SOL_PACKET, PACKET_TX_RING, &rawmmap->packet_req[1], sizeof(struct tpacket_req3))) exit(-1); // SECOND
 															  
-  if (MAP_FAILED == (rawmmap->ptrmmap = (uint8_t *)mmap(0, 
+  if (MAP_FAILED == (rawmmap->ptrmmap = mmap(0, 
     2*(rawmmap->packet_req->tp_block_nr * rawmmap->packet_req->tp_block_size), PROT_READ|PROT_WRITE, MAP_SHARED, *fd, 0))) exit(-1);
 
   struct sockaddr_ll sockaddr;
@@ -386,8 +386,7 @@ int main(int argc, char **argv) {
   trawmmap rawmmap[nbraws];
   for (uint8_t i = 0; i <  nbraws; i++) {
     setraw(sockid, socknl, sockrt, ifnames[i], &index[i], &rawdevs[i]);
-    memset(&rawmmap[i], 0, sizeof(rawmmap[i]));
-    memcpy(&rawmmap[i].packet_req, packet_req, sizeof(rawmmap[i].packet_req));
+    memset(&rawmmap[i], 0, sizeof(rawmmap[i])); memcpy(&rawmmap[i].packet_req, packet_req, sizeof(rawmmap[i].packet_req));
     setsock( &rawfds[i], index[i], &rawmmap[i] );
     readsets[i].fd = rawfds[i]; readsets[i].events = POLLIN; // no passthrough POLLOUT
     tosend[i] = false;							
@@ -402,6 +401,10 @@ int main(int argc, char **argv) {
     struct tpacket_hdr_v1 h1;
   };
   /*---------------------------------------------------------------------*/
+  for (uint8_t i = 0; i < nbraws; i++) {
+    rawdevs[i].cptfreq = (nbraws - i -1) * (rawdevs[i].nbfreqs / nbraws);
+    setfreq(sockid, socknl, index[i], rawdevs[i].freqs[rawdevs[i].cptfreq]);
+  }
 
   struct timespec ts;
   uint64_t curms,  stoms, intms = 1000;
@@ -418,7 +421,7 @@ int main(int argc, char **argv) {
 
       for (uint8_t cpt=0; cpt<nbraws; cpt++) {
         for(int i=0; i < frnr; i++ ) {
-          struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)(rawmmap[cpt].ptrmmap + mmapsize + (frsz * i));
+          struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)((void *)rawmmap[cpt].ptrmmap + mmapsize + (frsz * i));
           uint8_t *data = (uint8_t *)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
           if (hdr->tp_status == TP_STATUS_AVAILABLE) {
             memcpy(data, packet, packet_len);
@@ -432,7 +435,7 @@ int main(int argc, char **argv) {
 
     for (uint8_t cpt=0; cpt<nbraws; cpt++) {
       if (readsets[cpt].revents & POLLIN) {
-        struct tpacket3_hdr * rx_header = (struct tpacket3_hdr *)(rawmmap[cpt].ptrmmap + (blsz * rawmmap[cpt].rx_block_nr));
+        struct tpacket3_hdr * rx_header = (struct tpacket3_hdr *)((void *)rawmmap[cpt].ptrmmap + (blsz * rawmmap[cpt].rx_block_nr));
         struct tblock_desc *rx_pbd = (struct tblock_desc *) rx_header;
         if ((rx_header->tp_status & TP_STATUS_USER) == 0) { 
           rx_pbd->h1.block_status = TP_STATUS_KERNEL;
