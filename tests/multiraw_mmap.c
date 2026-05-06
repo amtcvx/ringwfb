@@ -84,8 +84,8 @@ typedef struct {
 
 typedef struct {
   struct tpacket_req3 packet_req[2]; 
-  uint8_t *ptrmap;
   unsigned int rx_block_nr;
+  uint8_t *ptrmmap;
 } trawmmap;
 
 /******************************************************************************/
@@ -317,13 +317,12 @@ void  setsock(uint8_t *fd, uint32_t index, trawmmap *rawmmap) {
   if (-1 == (setsockopt(*fd, SOL_PACKET, PACKET_VERSION,  &tpver, sizeof(tpver)))) exit(-1);
   int on = 1;
   if (-1 == (setsockopt(*fd, SOL_PACKET, PACKET_QDISC_BYPASS, &on, sizeof(on)))) exit(-1);
-
   if (-1 == setsockopt (*fd, SOL_PACKET, PACKET_RX_RING, &rawmmap->packet_req[0], sizeof(struct tpacket_req3))) exit(-1); // FIRST
   if (-1 == setsockopt (*fd, SOL_PACKET, PACKET_TX_RING, &rawmmap->packet_req[1], sizeof(struct tpacket_req3))) exit(-1); // SECOND
-/*
-  if (MAP_FAILED == (rawmmap->ptrmap = (uint8_t *)mmap(0,
-    2*(rawmmap->packet_req[0].tp_block_size * rawmmap->packet_req[0].tp_block_nr),PROT_READ|PROT_WRITE, MAP_SHARED, *fd, 0))) exit(-1);
-*/
+															  
+  if (MAP_FAILED == (rawmmap->ptrmmap = (uint8_t *)mmap(0, 
+    2*(rawmmap->packet_req->tp_block_nr * rawmmap->packet_req->tp_block_size), PROT_READ|PROT_WRITE, MAP_SHARED, *fd, 0))) exit(-1);
+
   struct sockaddr_ll sockaddr;
   memset(&sockaddr, 0, sizeof(sockaddr));
   sockaddr.sll_family = AF_PACKET;
@@ -394,13 +393,6 @@ int main(int argc, char **argv) {
     tosend[i] = false;							
   }
 
-  uint8_t *map[2]; if (MAP_FAILED == (map[0] = mmap(0, mmapsize * 2, PROT_READ|PROT_WRITE, MAP_SHARED, rawfds[0], 0))) exit(-1);
-  map[1] = map[0] + mmapsize;
-
-/*
-  uint8_t sockfd = rawfds[0];
-  uint8_t cpt=0;
-*/
   /*---------------------------------------------------------------------*/
   uint8_t packet[PAY_MTU]; memset(packet,0,PAY_MTU);uint16_t packet_len = PAY_MTU;
 
@@ -409,18 +401,7 @@ int main(int argc, char **argv) {
     uint32_t offset_to_priv;
     struct tpacket_hdr_v1 h1;
   };
-
   /*---------------------------------------------------------------------*/
-/*
-  struct pollfd pfd = {
-    .fd = sockfd,
-    .events = POLLIN | POLLERR, // no passthrough POLLOUT
-    .revents = 0
-  };
-
-  unsigned int rx_block_nr = 0; 
-  int total_pkts = 0, ec_send, total_bytes = 0;
-*/
 
   struct timespec ts;
   uint64_t curms,  stoms, intms = 1000;
@@ -437,8 +418,7 @@ int main(int argc, char **argv) {
 
       for (uint8_t cpt=0; cpt<nbraws; cpt++) {
         for(int i=0; i < frnr; i++ ) {
-          struct tpacket3_hdr *hdr = (void*)(map[1] + (frsz * i));
-//          struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)(rawmmap[cpt].ptrmap + mmapsize + (frsz * i));
+          struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)(rawmmap[cpt].ptrmmap + mmapsize + (frsz * i));
           uint8_t *data = (uint8_t *)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
           if (hdr->tp_status == TP_STATUS_AVAILABLE) {
             memcpy(data, packet, packet_len);
@@ -452,19 +432,15 @@ int main(int argc, char **argv) {
 
     for (uint8_t cpt=0; cpt<nbraws; cpt++) {
       if (readsets[cpt].revents & POLLIN) {
-        struct tpacket3_hdr * rx_header = ((struct tpacket3_hdr *)((void *)map[0] + (blsz * rawmmap[cpt].rx_block_nr)));
-//        struct tpacket3_hdr * rx_header = (struct tpacket3_hdr *)(rawmmap[cpt].ptrmap + (blsz * rawmmap[cpt].rx_block_nr));
+        struct tpacket3_hdr * rx_header = (struct tpacket3_hdr *)(rawmmap[cpt].ptrmmap + (blsz * rawmmap[cpt].rx_block_nr));
         struct tblock_desc *rx_pbd = (struct tblock_desc *) rx_header;
         if ((rx_header->tp_status & TP_STATUS_USER) == 0) { 
           rx_pbd->h1.block_status = TP_STATUS_KERNEL;
           rawmmap[cpt].rx_block_nr = (rawmmap[cpt].rx_block_nr + 1) % blnr;
           int num_pkts = rx_pbd->h1.num_pkts, i;
-          unsigned long bytes = 0;
           struct tpacket3_hdr *ppd = (struct tpacket3_hdr *) ((uint8_t *)rx_pbd + rx_pbd->h1.offset_to_first_pkt);
           for (i = 0; i < num_pkts; ++i) {
-            bytes += ppd->tp_snaplen;
-  	    printf("(%d)(%d)RECV(%ld)\n",rawmmap[cpt].rx_block_nr,i,bytes);
-  //        display(ppd);
+  	    printf("(%d)(%d)RECV(%d)\n",rawmmap[cpt].rx_block_nr,i,ppd->tp_snaplen);
             ppd = (struct tpacket3_hdr *) ((uint8_t *)ppd + ppd->tp_next_offset);
           }
         }
@@ -487,7 +463,7 @@ int main(int argc, char **argv) {
     printf("\nReceived %u packets, %u dropped, freeze_q_cnt: %u\n",
     stats.tp_packets, stats.tp_drops, stats.tp_freeze_q_cnt);
 
-    munmap( rawmmap[i].ptrmap, 2 * mmapsize);
+    munmap( rawmmap[i].ptrmmap, 2 * mmapsize);
     close(rawfds[i]);
   }
   return(0);
