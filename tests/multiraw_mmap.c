@@ -436,8 +436,41 @@ int main(int argc, char **argv) {
       stoms = curms + intms - ((curms - stoms) % intms);
       printf("TIC\n"); fflush(stdout);
 
+      printf("[0] (%d)(%d)  [1] (%d)(%d)\n",
+			((struct tpacket3_hdr *)((uint8_t *)rawmmap[0].ptrmmap + mmapsize ))->tp_next_offset,
+			((struct tpacket3_hdr *)((uint8_t *)rawmmap[0].ptrmmap + mmapsize + frsz))->tp_next_offset,
+			((struct tpacket3_hdr *)((uint8_t *)rawmmap[1].ptrmmap + mmapsize ))->tp_next_offset,
+			((struct tpacket3_hdr *)((uint8_t *)rawmmap[1].ptrmmap + mmapsize + frsz))->tp_next_offset);
+
+
       for (uint8_t cpt=0; cpt<nbraws; cpt++) {
-        for(int i=0; i < frnr; i++ ) {
+
+	tosend[cpt] = false;
+
+	for (uint8_t i=0; i<frnr; i++) {
+
+          struct tpacket3_hdr *tx_header = (struct tpacket3_hdr *)((uint8_t *)rawmmap[cpt].ptrmmap + mmapsize + (i * frsz));
+          tx_header->tp_next_offset = 0;
+
+	  if (tx_header->tp_status == TP_STATUS_AVAILABLE) {
+
+	    int16_t tx_len  = 1500;
+//            memset((uint8_t*)packet_hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr)),0,tx_len);
+
+	    tx_header->tp_snaplen = tx_header->tp_len = tx_len;
+	    tx_header->tp_next_offset = 1;
+	    tx_header->tp_status = TP_STATUS_SEND_REQUEST;
+	   
+	    printf("set (%d)(%d)\n", cpt,i);
+            break;
+	  }
+	}
+
+	tosend[cpt] = true;
+      }
+    }
+
+/*
           struct tpacket3_hdr *hdr = (struct tpacket3_hdr *)((void *)rawmmap[cpt].ptrmmap + mmapsize + (frsz * i));
           uint8_t *data = (uint8_t *)hdr + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
 
@@ -462,7 +495,7 @@ int main(int argc, char **argv) {
         tosend[cpt] = true;
       }
     }
-/*
+
     for (uint8_t cpt=0; cpt<nbraws; cpt++) {
       if (readsets[cpt].revents & POLLIN) {
         struct tpacket3_hdr * rx_header = (struct tpacket3_hdr *)((void *)rawmmap[cpt].ptrmmap + (blsz * rawmmap[cpt].rx_block_nr));
