@@ -466,11 +466,19 @@ int main(int argc, char **argv) {
 
     if (curms >= stoms) { // SYNCHRONOUS
       stoms = curms + intms - ((curms - stoms) % intms);
-      printf("TIC\n"); fflush(stdout);
+      struct tpacket_stats_v3 stats;
+      socklen_t len = sizeof(stats);
+
+      for (uint8_t cpt=0; cpt<nbraws; cpt++) {
+        if (getsockopt(rawfds[cpt], SOL_PACKET, PACKET_STATISTICS, &stats, &len) < 0) exit(-1);
+        printf("[%d] rcv %u packets, %u dropped, freeze_q_cnt: %u\n",
+          cpt, stats.tp_packets, stats.tp_drops, stats.tp_freeze_q_cnt);
+      }
 
       for (uint8_t cpt=0; cpt<nbraws; cpt++) {
 	tosend[cpt] = false;
-        struct tpacket3_hdr *tx_header = (struct tpacket3_hdr *)((uint8_t *)rawmmap[cpt].ptrmmap + mmapsize + (rawmmap[cpt].cursto[1] * frsz));
+        struct tpacket3_hdr *tx_header = 
+	  (struct tpacket3_hdr *)((uint8_t *)rawmmap[cpt].ptrmmap + mmapsize + (rawmmap[cpt].cursto[1] * frsz));
 	if (tx_header->tp_status == TP_STATUS_AVAILABLE) {
           uint8_t pos = 0, offset = 0;
 	  uint8_t *tx_data = (uint8_t *)tx_header + TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
@@ -507,7 +515,7 @@ int main(int argc, char **argv) {
           struct tpacket3_hdr *ppda = ((void*) ppd);
 
           for (i = 0; i < num_pkts; ++i) {
-  	    printf("%d << recv (%d)\n",cpt,ppda->tp_snaplen);
+//  	    printf("%d << recv (%d)\n",cpt,ppda->tp_snaplen);
             ppd = (struct tpacket3_hdr *) ((uint8_t *)ppda + ppda->tp_next_offset);
           }
         }
@@ -518,7 +526,7 @@ int main(int argc, char **argv) {
       if (tosend[cpt]) {
         tosend[cpt] = false;
         ssize_t ec_send = sendto( rawfds[cpt], NULL, 0, MSG_DONTWAIT, NULL, sizeof(struct sockaddr_ll) );
-        printf("%d >> send (%ld)\n",cpt,ec_send);
+ //       printf("%d >> send (%ld)\n",cpt,ec_send);
       }
     }
   }
