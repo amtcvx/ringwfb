@@ -179,116 +179,38 @@ void drain(uint8_t fd) {
   struct sock_fprog full_program = { 1, &full_bytecode};
   setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &full_program, sizeof(full_program));
 
-  /*
- * we post-process the filter code later and rewrite
- * this to the offset to the last instruction
- */
-#define PASS	0xFF
-#define FAIL	0xFE
-
-static struct sock_filter msock_filter_insns[] = {
-  	/*
-	 * do a little-endian load of the radiotap length field
-	 */
-	/* load lower byte into A */
-	BPF_STMT(BPF_LD  | BPF_B | BPF_ABS, 2),
-	/* put it into X (== index register) */
-	BPF_STMT(BPF_MISC| BPF_TAX, 0),
-	/* load upper byte into A */
-	BPF_STMT(BPF_LD  | BPF_B | BPF_ABS, 3),
-	/* left-shift it by 8 */
-	BPF_STMT(BPF_ALU | BPF_LSH | BPF_K, 8),
-	/* or with X */
-	BPF_STMT(BPF_ALU | BPF_OR | BPF_X, 0),
-	/* put result into X */
-	BPF_STMT(BPF_MISC| BPF_TAX, 0),
-
-	/*
-	 * Allow management frames through, this also gives us those
-	 * management frames that we sent ourselves with status
-	 */
-	/* load the lower byte of the IEEE 802.11 frame control field */
-	BPF_STMT(BPF_LD  | BPF_B | BPF_IND, 0),
-	/* mask off frame type and version */
-	BPF_STMT(BPF_ALU | BPF_AND | BPF_K, 0xF),
-	/* accept frame if it's both 0, fall through otherwise */
-	BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, 0, PASS, 0),
-
-	/*
-	 * TODO: add a bit to radiotap RX flags that indicates
-	 * that the sending station is not associated, then
-	 * add a filter here that filters on our DA and that flag
-	 * to allow us to deauth frames to that bad station.
-	 *
-	 * For now allow all To DS data frames through.
-	 */
-	/* load the IEEE 802.11 frame control field */
-	BPF_STMT(BPF_LD  | BPF_H | BPF_IND, 0),
-	/* mask off frame type, version and DS status */
-	BPF_STMT(BPF_ALU | BPF_AND | BPF_K, 0x0F03),
-	/* accept frame if version 0, type 2 and To DS, fall through otherwise
-	 */
-	BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, 0x0801, PASS, 0),
-
-#if 0
-	/*
-	 * drop non-data frames
-	 */
-	/* load the lower byte of the frame control field */
-	BPF_STMT(BPF_LD   | BPF_B | BPF_IND, 0),
-	/* mask off QoS bit */
-	BPF_STMT(BPF_ALU  | BPF_AND | BPF_K, 0x0c),
-	/* drop non-data frames */
-	BPF_JUMP(BPF_JMP  | BPF_JEQ | BPF_K, 8, 0, FAIL),
-#endif
-	/* load the upper byte of the frame control field */
-	BPF_STMT(BPF_LD   | BPF_B | BPF_IND, 1),
-	/* mask off toDS/fromDS */
-	BPF_STMT(BPF_ALU  | BPF_AND | BPF_K, 0x03),
-	/* accept WDS frames */
-	BPF_JUMP(BPF_JMP  | BPF_JEQ | BPF_K, 3, PASS, 0),
-
-	/*
-	 * add header length to index
-	 */
-	/* load the lower byte of the frame control field */
-	BPF_STMT(BPF_LD   | BPF_B | BPF_IND, 0),
-	/* mask off QoS bit */
-	BPF_STMT(BPF_ALU  | BPF_AND | BPF_K, 0x80),
-	/* right shift it by 6 to give 0 or 2 */
-	BPF_STMT(BPF_ALU  | BPF_RSH | BPF_K, 6),
-	/* add data frame header length */
-	BPF_STMT(BPF_ALU  | BPF_ADD | BPF_K, 24),
-	/* add index, was start of 802.11 header */
-	BPF_STMT(BPF_ALU  | BPF_ADD | BPF_X, 0),
-	/* move to index, now start of LL header */
-	BPF_STMT(BPF_MISC | BPF_TAX, 0),
-
-	/*
-	 * Accept empty data frames, we use those for
-	 * polling activity.
-	 */
-	BPF_STMT(BPF_LD  | BPF_W | BPF_LEN, 0),
-	BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_X, 0, PASS, 0),
-
-	/*
-	 * Accept EAPOL frames
-	 */
-	BPF_STMT(BPF_LD  | BPF_W | BPF_IND, 0),
-	BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, 0xAAAA0300, 0, FAIL),
-	BPF_STMT(BPF_LD  | BPF_W | BPF_IND, 4),
-	BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, 0x0000888E, PASS, FAIL),
-
-	/* keep these last two statements or change the code below */
-	/* return 0 == "DROP" */
-	BPF_STMT(BPF_RET | BPF_K, 0),
-	/* return ~0 == "keep all" */
-	BPF_STMT(BPF_RET | BPF_K, ~0),
+  // sudo tcpdump -i wlx3c7c3fa9bdc6 'not wlan addr1 36:35:34:33:32:31 or not wlan addr2 26:25:24:23:22:21' -dd
+  struct sock_filter mac_bytecode[] = {
+    { 0x30, 0, 0, 0x00000003 },
+    { 0x64, 0, 0, 0x00000008 },
+    { 0x7, 0, 0, 0x00000000 },
+    { 0x30, 0, 0, 0x00000002 },
+    { 0x4c, 0, 0, 0x00000000 },
+    { 0x2, 0, 0, 0x00000000 },
+    { 0x7, 0, 0, 0x00000000 },
+    { 0x40, 0, 0, 0x00000006 },
+    { 0x15, 0, 16, 0x34333231 },
+    { 0x48, 0, 0, 0x00000004 },
+    { 0x15, 0, 14, 0x00003635 },
+    { 0x50, 0, 0, 0x00000000 },
+    { 0x54, 0, 0, 0x0000000c },
+    { 0x15, 0, 6, 0x00000004 },
+    { 0x50, 0, 0, 0x00000000 },
+    { 0x54, 0, 0, 0x000000f0 },
+    { 0x15, 8, 0, 0x000000c0 },
+    { 0x50, 0, 0, 0x00000000 },
+    { 0x54, 0, 0, 0x000000f0 },
+    { 0x15, 5, 0, 0x000000d0 },
+    { 0x40, 0, 0, 0x0000000c },
+    { 0x15, 0, 3, 0x24232221 },
+    { 0x48, 0, 0, 0x0000000a },
+    { 0x15, 0, 1, 0x00002625 },
+    { 0x6, 0, 0, 0x00000000 },
+    { 0x6, 0, 0, 0x00040000 },
   };
-
-  struct sock_fprog msock_filter = { 1, msock_filter_insns};
-  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &msock_filter, sizeof(msock_filter));
-
+  struct sock_fprog mac_program = { .len = (sizeof(mac_bytecode) / sizeof(mac_bytecode[0])), 
+	                            .filter = mac_bytecode};
+  setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &mac_program, sizeof(mac_program));
 }   
 
 /*****************************************************************************/
