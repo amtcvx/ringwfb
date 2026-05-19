@@ -8,6 +8,12 @@ https://www.codeembedded.com/blog/journey_of_packet_tcp_ip_vol_2/
 https://olegkutkov.me/2019/10/17/printing-sk_buff-data
 
 https://www.networkacademy.io/ccna/wireless/802-11-frame-format
+      
+https://bootlin.com/pub/conferences/2025/elce/lothore-80211.pdf     
+     
+https://android.googlesource.com/kernel/msm/+/android-7.1.1_r0.25/net/mac80211/rx.c      
+      
+https://github.com/dmytroshytyi/KERNEL-sk_buff-helloWorld/blob/master/lkm.c 
 */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -37,6 +43,9 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
     //pr_info("source port : %hu | dest port : %hu\n", ntohs(udph->source),ntohs(udph->dest));
     if ((localhost_IntIP == iph->saddr) && (localhost_IntIP == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
       pr_info("len : %hu\n", ntohs(udph->len));
+
+      struct ieee80211_hdr *whdr = NULL;
+      struct ieee80211_radiotap_header *rthdr = NULL;
     }
   }
   return NF_ACCEPT;
