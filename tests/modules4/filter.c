@@ -62,7 +62,6 @@ uint8_t ieeehd[] = {
 
 /******************************************************************************/
 static struct nf_hook_ops *nf_filter_ops = NULL;
-static struct net_device *wifidev = NULL;
 
 /******************************************************************************/
 static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
@@ -77,31 +76,20 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
     if ((localhost_IntIP == iph->saddr) && (localhost_IntIP == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
       //pr_info("len : %hu\n", ntohs(udph->len));
 
-      struct ieee80211_hdr *whdr = NULL;
-      struct ieee80211_radiotap_header *rthdr = NULL;
+//      struct ieee80211_hdr *whdr = NULL;
+//      struct ieee80211_radiotap_header *rthdr = NULL;
 
- //     if (skb_shared(skb) || skb_cloned(skb)) {
-
+      struct net_device *wifidev = dev_get_by_name(&init_net,wifiname);
+      if (wifidev!=NULL) {
         struct sk_buff *nskb;
         nskb = skb_copy(skb, GFP_ATOMIC);
-        if (!nskb) return NF_DROP;
-
-	wifidev = dev_get_by_name(&init_net,wifiname);
-        if (wifidev!=NULL) {
-          pr_info("[%s]\n",wifiname);
-        }
-
 //	nskb->dev = wifidev;
 	nskb->pkt_type = PACKET_OUTGOING;
 
 	int ret = dev_queue_xmit(nskb);
 	kfree_skb(nskb);
         pr_info("(%d) len : %hu\n", ret,ntohs(udph->len));
-/*
-        if ((skb)->sk) skb_set_owner_w(nskb, (skb)->sk);
-        kfree_skb(skb);
-        skb = nskb;
-*/
+      }
     }
   }
   return NF_ACCEPT;
