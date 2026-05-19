@@ -46,6 +46,17 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 
       struct ieee80211_hdr *whdr = NULL;
       struct ieee80211_radiotap_header *rthdr = NULL;
+/*
+      if (skb_shared(skb) || skb_cloned(skb)) {
+        struct sk_buff *nskb;
+        nskb = skb_copy(skb, GFP_ATOMIC);
+        if (!nskb) return NF_DROP;
+        if ((skb)->sk) skb_set_owner_w(nskb, (skb)->sk);
+        kfree_skb(skb);
+        skb = nskb;
+        pr_info("len : %hu\n", ntohs(udph->len));
+      }
+*/
     }
   }
   return NF_ACCEPT;
