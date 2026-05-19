@@ -15,21 +15,18 @@ https://android.googlesource.com/kernel/msm/+/android-7.1.1_r0.25/net/mac80211/r
       
 https://github.com/dmytroshytyi/KERNEL-sk_buff-helloWorld/blob/master/lkm.c 
 */
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/netfilter.h>
+
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
-#include <linux/tcp.h>
 #include <linux/udp.h>
-#include <linux/string.h>
-#include <linux/byteorder/generic.h>
 
+uint8_t *wifiname = "wlx3c7c3fa9bdca";
 uint32_t localhost_IntIP = 16777343; // "127.0.0.1"
 uint16_t destport = 5600;
 
 struct sk_buff *sock_buff;                              
 static struct nf_hook_ops *nf_filter_ops = NULL;
+static struct net_device *wifidev;
 
 /******************************************************************************/
 static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
@@ -42,20 +39,26 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
     struct udphdr *udph = udp_hdr(skb); 
     //pr_info("source port : %hu | dest port : %hu\n", ntohs(udph->source),ntohs(udph->dest));
     if ((localhost_IntIP == iph->saddr) && (localhost_IntIP == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
-      pr_info("len : %hu\n", ntohs(udph->len));
+      //pr_info("len : %hu\n", ntohs(udph->len));
 
       struct ieee80211_hdr *whdr = NULL;
       struct ieee80211_radiotap_header *rthdr = NULL;
-/*
-      if (skb_shared(skb) || skb_cloned(skb)) {
+
+ //     if (skb_shared(skb) || skb_cloned(skb)) {
+
         struct sk_buff *nskb;
         nskb = skb_copy(skb, GFP_ATOMIC);
         if (!nskb) return NF_DROP;
+
+	nskb->pkt_type = PACKET_OUTGOING;
+
+	int ret = dev_queue_xmit(nskb);
+	kfree_skb(nskb);
+        pr_info("(%d) len : %hu\n", ret,ntohs(udph->len));
+/*
         if ((skb)->sk) skb_set_owner_w(nskb, (skb)->sk);
         kfree_skb(skb);
         skb = nskb;
-        pr_info("len : %hu\n", ntohs(udph->len));
-      }
 */
     }
   }
@@ -64,6 +67,8 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 
 /******************************************************************************/
 static int __init nf_filter_init(void) {
+
+  wifidev = dev_get_by_name(&init_net,wifiname);
 
   nf_filter_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(nf_filter_ops!=NULL) {
