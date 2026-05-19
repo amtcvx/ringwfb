@@ -16,6 +16,13 @@ https://android.googlesource.com/kernel/msm/+/android-7.1.1_r0.25/net/mac80211/r
 https://github.com/dmytroshytyi/KERNEL-sk_buff-helloWorld/blob/master/lkm.c 
 */
 
+/*
+export DEVICE=wlx3c7c3fa9bdca
+sudo ip link set $DEVICE down
+sudo iw dev $DEVICE set type monitor
+sudo ip link set $DEVICE up
+sudo iw dev $DEVICE set channel 3
+*/
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
@@ -83,12 +90,12 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
       if (wifidev!=NULL) {
         struct sk_buff *nskb;
         nskb = skb_copy(skb, GFP_ATOMIC);
-//	nskb->dev = wifidev;
+	//nskb->dev = wifidev;
 	nskb->pkt_type = PACKET_OUTGOING;
 
 	int ret = dev_queue_xmit(nskb);
 	kfree_skb(nskb);
-        pr_info("(%d) len : %hu\n", ret,ntohs(udph->len));
+        pr_info("[%s](%d) len : %hu\n",wifidev->name,ret,ntohs(udph->len));
       }
     }
   }
