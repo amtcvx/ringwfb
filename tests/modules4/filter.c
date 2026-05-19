@@ -1,3 +1,14 @@
+/*
+https://emmanuelbashorun.medium.com/lifecycle-of-a-packet-through-the-linux-kernel-51301793df5d
+
+https://gist.github.com/jonhoo/7780260?permalink_comment_id=3438455
+
+https://www.codeembedded.com/blog/journey_of_packet_tcp_ip_vol_2/
+    
+https://olegkutkov.me/2019/10/17/printing-sk_buff-data
+
+https://www.networkacademy.io/ccna/wireless/802-11-frame-format
+*/
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/netfilter.h>
