@@ -50,7 +50,6 @@ uint16_t destport = 5600;
 
 #define MCS_INDEX  2
 
-
 uint8_t radiotaphd[] = {
         0x00, 0x00, // <-- radiotap version
         0x0d, 0x00, // <- radiotap header length
@@ -67,16 +66,27 @@ uint8_t ieeehd[] = {
         0x10, 0x86                          // Sequence control
 };
 
+#define WFB_PAY_MTU 1500
+
 /******************************************************************************/
 static struct nf_hook_ops *nf_filter_ops = NULL;
 
 /******************************************************************************/
-static unsigned short csum(unsigned short *buf, int nwords) {
+/*
+static unsigned short my_csum(unsigned short *buf, int nwords) {
   unsigned long sum;
   for(sum=0; nwords>0; nwords--) sum += *buf++;
   sum = (sum >> 16) + (sum &0xffff);
   sum += (sum >> 16);
   return (unsigned short)(~sum);
+}
+*/
+static unsigned int my_inet_addr(char *str) {
+  int a, b, c, d;
+  char arr[4];
+  sscanf(str, "%d.%d.%d.%d", &a, &b, &c, &d);
+  arr[0] = a; arr[1] = b; arr[2] = c; arr[3] = d;
+  return *(unsigned int *)arr;
 }
 
 /******************************************************************************/
@@ -98,57 +108,50 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
       struct net_device *wifidev = dev_get_by_name(&init_net,wifiname);
       if ((wifidev!=NULL)&&(wifidev->flags & IFF_UP)) {
 
-        uint8_t sendbuf[1500]; uint16_t tx_len = 0;
-	memset(sendbuf, 0, sizeof(sendbuf));
+        struct sk_buff* nskb = alloc_skb(WFB_PAY_MTU, GFP_ATOMIC);
+        skb_reserve(nskb, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));//adjust headroom
+										
+	uint16_t tx_len = sizeof (struct ethhdr);
 
-	struct ethhdr *eh = (struct ethhdr *) (sendbuf + tx_len);
-        eh->h_source[0] = 0x00; //MY_SRC_MAC0;
-        eh->h_source[1] = 0x00; //MY_SRC_MAC1;
-        eh->h_source[2] = 0x00; //MY_SRC_MAC2;
-        eh->h_source[3] = 0x00; //MY_SRC_MAC3;
-        eh->h_source[4] = 0x00; //MY_SRC_MAC4;
-        eh->h_source[5] = 0x00; //MY_SRC_MAC5;
-        eh->h_dest[0] = 0x00; //MY_DEST_MAC0;
-        eh->h_dest[1] = 0x00; //MY_DEST_MAC1;
-        eh->h_dest[2] = 0x00; //MY_DEST_MAC2;
-        eh->h_dest[3] = 0x00; //MY_DEST_MAC3;
-        eh->h_dest[4] = 0x00; //MY_DEST_MAC4;
-        eh->h_dest[5] = 0x00; //MY_DEST_MAC5;
-        eh->h_proto = htons(ETH_P_IP);
-        tx_len += sizeof(struct ethhdr);
-	struct iphdr *iph = (struct iphdr *) (sendbuf + tx_len);
-        iph->ihl = 5;
-        iph->version = 4;
-        iph->tos = 16; // Low delay
-        iph->id = htons(54321);
-//        iph->ttl = ttl; // hops
-        iph->protocol = 17; // UDP
-//        iph->saddr = inet_addr("127.0.0.1");
-//        iph->daddr = inet_addr("192.168.0.111");
+        struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
+        nskb->protocol = neth->h_proto = htons(ETH_P_IP);
+        nskb->no_fcs = 1;
+        memcpy(neth->h_dest, wifidev->dev_addr, ETH_ALEN);
+        memset(neth->h_source, 0, ETH_ALEN);
+
         tx_len += sizeof(struct iphdr);
-	struct udphdr *udph = (struct udphdr *) (sendbuf + tx_len);
-        udph->source = htons(3423);
-        udph->dest = htons(5342);
-        udph->check = 0; // skip
-        tx_len += sizeof(struct udphdr);
+        struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
+	long unsigned int dum = sizeof(struct iphdr);
+        niph->ihl = dum;
+        niph->version = 4; // IPv4u
+        niph->tos = 0;
+        niph->frag_off = 0;
+        niph->ttl = 64;
+        niph->protocol = IPPROTO_UDP;
+        niph->check = 0;
+        niph->saddr = my_inet_addr("192.168.0.1");
+        niph->daddr = my_inet_addr("192.168.0.2");
 
-	memcpy((sendbuf + tx_len), radiotaphd, sizeof(radiotaphd));
-        tx_len += sizeof(radiotaphd);
-	memcpy((sendbuf + tx_len), ieeehd, sizeof(ieeehd));
-        tx_len += sizeof(ieeehd);
+	tx_len += sizeof(struct udphdr);
+        struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
+        nuh->source = htons(15934);
+        nuh->dest = htons(15904);
 
-        udph->len = htons(tx_len - sizeof(struct ethhdr) - sizeof(struct iphdr));
-        iph->tot_len = htons(tx_len - sizeof(struct ethhdr));
-	iph->check = csum((unsigned short *)(sendbuf+sizeof(struct ethhdr)), sizeof(struct iphdr)/2);
+	uint8_t *data_buf="HELLO"; uint16_t data_len = 5;
+        memcpy(skb_put(nskb,data_len), data_buf, data_len);
+	tx_len += data_len;
 
-        struct sk_buff *nskb;
-        nskb = skb_copy(skb, GFP_ATOMIC);
-	//nskb->dev = wifidev;
-	nskb->pkt_type = PACKET_OUTGOING;
+	nuh->len = htons(tx_len - sizeof(struct ethhdr) - sizeof(struct iphdr));
+	niph->tot_len=htons(tx_len - sizeof(struct ethhdr));
+/*
+        nskb->dev = wifidev;
+        nskb->pkt_type = PACKET_OUTGOING;
+	uint8_t ret = dev_queue_xmit(nskb);
+*/
+        kfree_skb(nskb);
 
-	int ret = dev_queue_xmit(nskb);
-	kfree_skb(nskb);
-        pr_info("[%s](%d) len : %hu\n",wifidev->name,ret,ntohs(udph->len));
+        struct udphdr* uh = (struct udphdr *)skb_pull(skb, sizeof(struct udphdr));
+        pr_info("len : %hu\n",ntohs(udph->len));
       }
     }
   }
