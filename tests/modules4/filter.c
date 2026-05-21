@@ -70,6 +70,7 @@ uint8_t ieeehd[] = {
 
 /******************************************************************************/
 static struct nf_hook_ops *nf_filter_ops = NULL;
+static struct net_device *wifidev;
 
 /******************************************************************************/
 /*
@@ -80,7 +81,7 @@ static unsigned short my_csum(unsigned short *buf, int nwords) {
   sum += (sum >> 16);
   return (unsigned short)(~sum);
 }
-*/
+
 static unsigned int my_inet_addr(char *str) {
   int a, b, c, d;
   char arr[4];
@@ -88,7 +89,7 @@ static unsigned int my_inet_addr(char *str) {
   arr[0] = a; arr[1] = b; arr[2] = c; arr[3] = d;
   return *(unsigned int *)arr;
 }
-
+*/
 /******************************************************************************/
 static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
@@ -105,53 +106,31 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 //      struct ieee80211_hdr *whdr = NULL;
 //      struct ieee80211_radiotap_header *rthdr = NULL;
 
-      struct net_device *wifidev = dev_get_by_name(&init_net,wifiname);
       if ((wifidev!=NULL)&&(wifidev->flags & IFF_UP)) {
 
-        struct sk_buff* nskb = alloc_skb(WFB_PAY_MTU, GFP_ATOMIC);
-        skb_reserve(nskb, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));//adjust headroom
-										
-	uint16_t tx_len = sizeof (struct ethhdr);
+        unsigned char* data;
 
-        struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
-        nskb->protocol = neth->h_proto = htons(ETH_P_IP);
-        nskb->no_fcs = 1;
-        memcpy(neth->h_dest, wifidev->dev_addr, ETH_ALEN);
-        memset(neth->h_source, 0, ETH_ALEN);
+        char *hello_world = ">>> KERNEL sk_buff Hello World <<< by Dmytro Shytyi";
+        int data_len = 51;
 
-        tx_len += sizeof(struct iphdr);
-        struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
-	long unsigned int dum = sizeof(struct iphdr);
-        niph->ihl = dum;
-        niph->version = 4; // IPv4u
-        niph->tos = 0;
-        niph->frag_off = 0;
-        niph->ttl = 64;
-        niph->protocol = IPPROTO_UDP;
-        niph->check = 0;
-        niph->saddr = my_inet_addr("192.168.0.1");
-        niph->daddr = my_inet_addr("192.168.0.2");
+        struct sk_buff* skb = alloc_skb(sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr), GFP_ATOMIC);
+        skb->dev = wifidev;
+        skb->pkt_type = PACKET_OUTGOING;
+        skb_reserve(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));//adjust headroom
+        data = skb_put(skb,data_len);
+        memcpy(data, hello_world, data_len);
+        struct udphdr* uh = (struct udphdr*)skb_push(skb,sizeof(struct udphdr));
+        uh->len = htons(data_len + sizeof(struct udphdr));
+        struct iphdr* iph = (struct iphdr*)skb_push(skb,sizeof(struct iphdr));
+	long unsigned int dum = sizeof(struct iphdr) / 4;
+        iph->ihl = dum;
+        iph->version = 4;
+        iph->protocol = IPPROTO_UDP;
+        struct ethhdr* eth = (struct ethhdr*)skb_push(skb, sizeof (struct ethhdr));//add data to the start of a buffer
+        skb->protocol = eth->h_proto = htons(ETH_P_IP);
+        int ret = dev_queue_xmit(skb);
+        pr_info("ret(%d)\n",ret);
 
-	tx_len += sizeof(struct udphdr);
-        struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
-        nuh->source = htons(15934);
-        nuh->dest = htons(15904);
-
-	uint8_t *data_buf="HELLO"; uint16_t data_len = 5;
-        memcpy(skb_put(nskb,data_len), data_buf, data_len);
-	tx_len += data_len;
-
-	nuh->len = htons(tx_len - sizeof(struct ethhdr) - sizeof(struct iphdr));
-	niph->tot_len=htons(tx_len - sizeof(struct ethhdr));
-/*
-        nskb->dev = wifidev;
-        nskb->pkt_type = PACKET_OUTGOING;
-	uint8_t ret = dev_queue_xmit(nskb);
-*/
-        kfree_skb(nskb);
-
-        struct udphdr* uh = (struct udphdr *)skb_pull(skb, sizeof(struct udphdr));
-        pr_info("len : %hu\n",ntohs(udph->len));
       }
     }
   }
@@ -160,6 +139,8 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 
 /******************************************************************************/
 static int __init nf_filter_init(void) {
+
+    wifidev = dev_get_by_name(&init_net,"eno1");
 
     nf_filter_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
     if(nf_filter_ops!=NULL) {
