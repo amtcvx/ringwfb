@@ -14,6 +14,10 @@ https://bootlin.com/pub/conferences/2025/elce/lothore-80211.pdf
 https://android.googlesource.com/kernel/msm/+/android-7.1.1_r0.25/net/mac80211/rx.c      
       
 https://github.com/dmytroshytyi/KERNEL-sk_buff-helloWorld/blob/master/lkm.c 
+
+https://github.com/bloomark/kernel-sniffer/tree/master
+
+https://github.com/ptpt52/hstshack/tree/master
 */
 
 /*
@@ -71,25 +75,8 @@ uint8_t ieeehd[] = {
 /******************************************************************************/
 static struct nf_hook_ops *nf_filter_ops = NULL;
 static struct net_device *wifidev;
+struct my_head_t { int a; };
 
-/******************************************************************************/
-/*
-static unsigned short my_csum(unsigned short *buf, int nwords) {
-  unsigned long sum;
-  for(sum=0; nwords>0; nwords--) sum += *buf++;
-  sum = (sum >> 16) + (sum &0xffff);
-  sum += (sum >> 16);
-  return (unsigned short)(~sum);
-}
-
-static unsigned int my_inet_addr(char *str) {
-  int a, b, c, d;
-  char arr[4];
-  sscanf(str, "%d.%d.%d.%d", &a, &b, &c, &d);
-  arr[0] = a; arr[1] = b; arr[2] = c; arr[3] = d;
-  return *(unsigned int *)arr;
-}
-*/
 /******************************************************************************/
 static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
@@ -128,9 +115,13 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
         iph->protocol = IPPROTO_UDP;
         struct ethhdr* eth = (struct ethhdr*)skb_push(skb, sizeof (struct ethhdr));//add data to the start of a buffer
         skb->protocol = eth->h_proto = htons(ETH_P_IP);
-        int ret = dev_queue_xmit(skb);
-        pr_info("ret(%d)\n",ret);
 
+	struct sk_buff *copy_skb = skb_copy_expand(skb, sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(struct my_head_t), 0, GFP_KERNEL);
+	int ret = dev_queue_xmit(copy_skb);
+
+	kfree(skb);
+
+        pr_info("ret(%d)\n",ret);
       }
     }
   }
@@ -140,7 +131,7 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 /******************************************************************************/
 static int __init nf_filter_init(void) {
 
-    wifidev = dev_get_by_name(&init_net,"eno1");
+    wifidev = dev_get_by_name(&init_net,"enp5s0");
 
     nf_filter_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
     if(nf_filter_ops!=NULL) {
