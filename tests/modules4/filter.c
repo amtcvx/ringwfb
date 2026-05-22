@@ -78,6 +78,19 @@ static struct net_device *wifidev;
 struct my_head_t { int a; };
 
 /******************************************************************************/
+void buildhead(struct sk_buff * skb);
+void buildhead(struct sk_buff * skb) {
+
+  struct iphdr* iph = (struct iphdr*)skb_push(skb, sizeof(struct iphdr));
+  long unsigned int dum = sizeof(struct iphdr) / 4;
+  iph->ihl = dum;
+  iph->version = 4;
+  iph->protocol = IPPROTO_UDP;
+  struct ethhdr* eth = (struct ethhdr*)skb_push(skb, sizeof (struct ethhdr));//add data to the start of a buffer
+  skb->protocol = eth->h_proto = htons(ETH_P_IP);
+ }
+
+/******************************************************************************/
 static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
   if(skb==NULL) return NF_ACCEPT;
@@ -90,38 +103,34 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
     if ((localhost_IntIP == iph->saddr) && (localhost_IntIP == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
       //pr_info("len : %hu\n", ntohs(udph->len));
 
-//      struct ieee80211_hdr *whdr = NULL;
-//      struct ieee80211_radiotap_header *rthdr = NULL;
-
       if ((wifidev!=NULL)&&(wifidev->flags & IFF_UP)) {
+        pr_info("len : %hu\n", ntohs(udph->len));
 
-        unsigned char* data;
+	uint16_t datalen = ntohs(udph->len);
+	if (datalen > 0) {
+  
+          struct sk_buff * nskb = alloc_skb(sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr), GFP_ATOMIC);
+          skb_reserve(nskb,  sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));//adjust headroom
 
         char *hello_world = ">>> KERNEL sk_buff Hello World <<< by Dmytro Shytyi";
-        int data_len = 51;
+        datalen = 51;
 
-        struct sk_buff* skb = alloc_skb(sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr), GFP_ATOMIC);
-        skb->dev = wifidev;
-        skb->pkt_type = PACKET_OUTGOING;
-        skb_reserve(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));//adjust headroom
-        data = skb_put(skb,data_len);
-        memcpy(data, hello_world, data_len);
-        struct udphdr* uh = (struct udphdr*)skb_push(skb,sizeof(struct udphdr));
-        uh->len = htons(data_len + sizeof(struct udphdr));
-        struct iphdr* iph = (struct iphdr*)skb_push(skb,sizeof(struct iphdr));
-	long unsigned int dum = sizeof(struct iphdr) / 4;
-        iph->ihl = dum;
-        iph->version = 4;
-        iph->protocol = IPPROTO_UDP;
-        struct ethhdr* eth = (struct ethhdr*)skb_push(skb, sizeof (struct ethhdr));//add data to the start of a buffer
-        skb->protocol = eth->h_proto = htons(ETH_P_IP);
+	  uint8_t *dst,*src;
+          dst = skb_put(nskb ,datalen);
+//          src = skb_push(skb ,sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));
+//          memcpy(dst, src, datalen);
+          memcpy(dst, hello_world, datalen);
 
-	struct sk_buff *copy_skb = skb_copy_expand(skb, sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(struct my_head_t), 0, GFP_KERNEL);
-	int ret = dev_queue_xmit(copy_skb);
+          struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
+          nuh->len = htons(datalen + sizeof(struct udphdr));
 
-	kfree(skb);
-
-        pr_info("ret(%d)\n",ret);
+          buildhead(nskb);
+          nskb->dev = wifidev;
+          nskb->pkt_type = PACKET_OUTGOING;
+          int ret = dev_queue_xmit(nskb);
+  
+          pr_info("ret(%d)\n",ret);
+        }
       }
     }
   }
