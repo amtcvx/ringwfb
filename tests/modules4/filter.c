@@ -31,7 +31,7 @@ sudo iw dev $DEVICE set channel 3
 #include <linux/ip.h>
 #include <linux/udp.h>
 
-uint8_t *wifiname = "wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
 uint32_t localhost_IntIP = 16777343; // "127.0.0.1"
 uint16_t destport = 5600;
 
@@ -109,17 +109,10 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 	uint16_t datalen = ntohs(udph->len);
 	if (datalen > 0) {
   
-          struct sk_buff * nskb = alloc_skb(sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr), GFP_ATOMIC);
-          skb_reserve(nskb,  sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));//adjust headroom
-
-        char *hello_world = ">>> KERNEL sk_buff Hello World <<< by Dmytro Shytyi";
-        datalen = 51;
-
-	  uint8_t *dst,*src;
-          dst = skb_put(nskb ,datalen);
-//          src = skb_push(skb ,sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));
-//          memcpy(dst, src, datalen);
-          memcpy(dst, hello_world, datalen);
+          struct sk_buff * nskb = alloc_skb(WFB_PAY_MTU, GFP_ATOMIC);
+	  uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
+          skb_reserve(nskb, offset);//adjust headroom
+	  skb_copy_bits(skb, offset, skb_put(nskb ,datalen), datalen);
 
           struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
           nuh->len = htons(datalen + sizeof(struct udphdr));
@@ -140,7 +133,7 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 /******************************************************************************/
 static int __init nf_filter_init(void) {
 
-    wifidev = dev_get_by_name(&init_net,"enp5s0");
+    wifidev = dev_get_by_name(&init_net,wifiname);
 
     nf_filter_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
     if(nf_filter_ops!=NULL) {
