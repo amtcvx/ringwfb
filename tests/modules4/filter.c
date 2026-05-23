@@ -30,8 +30,9 @@ sudo iw dev $DEVICE set channel 3
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
+#include <linux/inet.h>
 
-uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
 uint32_t localhost_IntIP = 16777343; // "127.0.0.1"
 uint16_t destport = 5600;
 
@@ -86,6 +87,8 @@ void buildhead(struct sk_buff * skb) {
   iph->ihl = dum;
   iph->version = 4;
   iph->protocol = IPPROTO_UDP;
+  in4_pton("127.0.0.1", 10, (u8 *)&iph->daddr, '\n', NULL);
+
   struct ethhdr* eth = (struct ethhdr*)skb_push(skb, sizeof (struct ethhdr));//add data to the start of a buffer
   skb->protocol = eth->h_proto = htons(ETH_P_IP);
  }
@@ -116,6 +119,7 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 
           struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
           nuh->len = htons(datalen + sizeof(struct udphdr));
+          nuh->dest = htons(15904);
 
           buildhead(nskb);
           nskb->dev = wifidev;
