@@ -32,7 +32,7 @@ sudo iw dev $DEVICE set channel 3
 #include <linux/udp.h>
 #include <linux/inet.h>
 
-uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 /************************************************************************************************/
@@ -75,7 +75,7 @@ uint8_t ieeehd[] = {
 /******************************************************************************/
 static struct nf_hook_ops *nf_filter_ops = NULL;
 static struct net_device *wifidev;
-static uint32_t localhost_IntIP; 
+static uint32_t localhost_IntIP, ip1,ip2; 
 
 /******************************************************************************/
 static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
@@ -101,19 +101,24 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 
           struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
           nuh->len = htons(datalen + sizeof(struct udphdr));
-          nuh->dest = htons(15904);
+          nuh->source = htons(59976);
+          nuh->dest = htons(5600);
 
           struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
           long unsigned int dum = sizeof(struct iphdr) / 4;
           niph->ihl = dum;
           niph->version = 4;
           niph->protocol = IPPROTO_UDP;
-          niph->daddr = localhost_IntIP;
+          niph->saddr = ip1;
+          niph->daddr = ip2;
+
+          nskb->dev = wifidev;
 
           struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));//add data to the start of a buffer
           nskb->protocol = neth->h_proto = htons(ETH_P_IP);
+	  memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
+	  memcpy(neth->h_dest, nskb->dev->dev_addr, ETH_ALEN);
 
-          nskb->dev = wifidev;
           nskb->pkt_type = PACKET_OUTGOING;
           int ret = dev_queue_xmit(nskb);
 
@@ -129,6 +134,8 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 static int __init nf_filter_init(void) {
 
     in4_pton("127.0.0.1", 10, (u8 *)&localhost_IntIP, '\n', NULL);
+    in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
+    in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
     wifidev = dev_get_by_name(&init_net,wifiname);
 
     nf_filter_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
