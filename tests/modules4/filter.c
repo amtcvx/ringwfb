@@ -95,11 +95,9 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 
 	uint16_t datalen = ntohs(udph->len);
 	if (datalen > 0) {
-  
-          struct sk_buff * nskb = alloc_skb(WFB_PAY_MTU, GFP_ATOMIC);
-	  uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
-          skb_reserve(nskb, offset);//adjust headroom
-	  skb_copy_bits(skb, offset, skb_put(nskb ,datalen), datalen);
+
+          uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
+          struct sk_buff * nskb = skb_copy_expand(skb, offset, 0,  GFP_KERNEL);
 
           struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
           nuh->len = htons(datalen + sizeof(struct udphdr));
@@ -118,7 +116,7 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
           nskb->dev = wifidev;
           nskb->pkt_type = PACKET_OUTGOING;
           int ret = dev_queue_xmit(nskb);
-  
+
           pr_info("ret(%d)\n",ret);
         }
       }
