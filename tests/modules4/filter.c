@@ -98,11 +98,25 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 	uint16_t datalen = ntohs(udph->len);
 	if (datalen > 0) {
 
-          struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
+          uint8_t ch, *p;
 
-          uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
-          pskb_expand_head(nskb, offset, 0, GFP_ATOMIC);
+          pr_info("In len(%d)\n",skb->len);
+          p = skb->data;
+          for (uint16_t i = 0; i < skb->len; i++) {
+            if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
+            ch = p[i];
+	    printk(KERN_CONT "%02x ", (uint32_t) ch);
+	  }
+          printk(KERN_CONT "\n");
 
+          struct sk_buff * nskb = skb_clone(skb, GFP_ATOMIC); // GFP_KERNEL);
+//          uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
+
+//          pskb_expand_head(nskb, offset, 0, GFP_ATOMIC);
+/*
+	  => udp payload start +28  end +16
+	  
+*/
           nskb->pkt_type = PACKET_OUTGOING;
           nskb->dev = wifidev;
 /*
@@ -111,10 +125,11 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 				   
 https://egeeks.github.io/kernal/networking/ch01s02.html
 */
-          struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
-          nskb->protocol = neth->h_proto = htons(ETH_P_IP);
-	  memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-	  memcpy(neth->h_dest, nskb->dev->dev_addr, ETH_ALEN);
+/*
+          struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
+          nuh->len = htons(datalen + sizeof(struct udphdr));
+          nuh->source = htons(59976);
+          nuh->dest = htons(5600);
 
           struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
           long unsigned int dum = sizeof(struct iphdr) / 4;
@@ -124,15 +139,32 @@ https://egeeks.github.io/kernal/networking/ch01s02.html
           niph->saddr = ip1;
           niph->daddr = ip2;
 
-          struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
-          nuh->len = htons(datalen + sizeof(struct udphdr));
-          nuh->source = htons(59976);
-          nuh->dest = htons(5600);
-
-          int ret = dev_queue_xmit(nskb);
+          struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
+          nskb->protocol = neth->h_proto = htons(ETH_P_IP);
+	  memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
+	  memcpy(neth->h_dest, nskb->dev->dev_addr, ETH_ALEN);
+*/
 /*
+c4 65 16 13 83 60 c4 65 16 13 83 60 08 00 45 00 00 00 00 00 00 00 00 11 00 00 c0 a8
+*/
+          struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
+          nskb->protocol = neth->h_proto = htons(ETH_P_IP);
+          memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
+          memcpy(neth->h_dest, nskb->dev->dev_addr, ETH_ALEN);
+
+          pr_info("Out len(%d)\n",nskb->len);
+          p = nskb->data;
+          for (uint16_t i = 0; i < skb->len; i++) {
+            if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
+            ch = p[i];
+	    printk(KERN_CONT "%02x ", (uint32_t) ch);
+	  }
+          printk(KERN_CONT "\n");
+
+//          int ret = dev_queue_xmit(nskb);
 
 
+/*
           uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
           struct sk_buff * nskb = skb_copy_expand(skb, offset, 0,  GFP_KERNEL);
 
@@ -158,8 +190,9 @@ https://egeeks.github.io/kernal/networking/ch01s02.html
 
           nskb->pkt_type = PACKET_OUTGOING;
           int ret = dev_queue_xmit(nskb);
-*/
+
           pr_info("ret(%d)\n",ret);
+*/
         }
       }
     }
