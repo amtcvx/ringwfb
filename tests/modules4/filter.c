@@ -108,92 +108,50 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 	    printk(KERN_CONT "%02x ", (uint32_t) ch);
 	  }
           printk(KERN_CONT "\n");
-/*
-          struct sk_buff * nskb = skb_clone(skb, GFP_ATOMIC); // GFP_KERNEL);
-//          uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
-//          pskb_expand_head(nskb, offset, 0, GFP_ATOMIC);
 
- => udp payload start +28  end +16
-	  
+// ethhdr:14, iphdr:20, udphdr:8,   skb_headroom:16 skb_tailroom: variable
 
+          uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) - skb_headroom(skb);
+//          struct sk_buff * nskb = skb_copy_expand(skb, offset, 0,  GFP_KERNEL);
+
+          struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
+          pskb_expand_head(nskb, offset, 0, GFP_KERNEL);
+
+          struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
+          nuh->len = htons(datalen + sizeof(struct udphdr));
+          nuh->source = htons(59976);
+          nuh->dest = htons(5600);
+
+          struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
+          long unsigned int dum = sizeof(struct iphdr) / 4;
+          niph->ihl = dum;
+          niph->version = 4;
+          niph->protocol = IPPROTO_UDP;
+          niph->saddr = ip1;
+          niph->daddr = ip2;
+
+          nskb->dev = wifidev;
           nskb->pkt_type = PACKET_OUTGOING;
-          nskb->dev = wifidev;
-
-	  int ret = 0;
-	  ret = skb_headroom(nskb); // ethhdr:14, iphdr:20, udphdr:8,   skb_headroom:16 skb_tailroom: variable
-				   
-https://egeeks.github.io/kernal/networking/ch01s02.html
-*/
-/*
-          struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
-          nuh->len = htons(datalen + sizeof(struct udphdr));
-          nuh->source = htons(59976);
-          nuh->dest = htons(5600);
-
-          struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
-          long unsigned int dum = sizeof(struct iphdr) / 4;
-          niph->ihl = dum;
-          niph->version = 4;
-          niph->protocol = IPPROTO_UDP;
-          niph->saddr = ip1;
-          niph->daddr = ip2;
-
-          struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
-          nskb->protocol = neth->h_proto = htons(ETH_P_IP);
-	  memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-	  memcpy(neth->h_dest, nskb->dev->dev_addr, ETH_ALEN);
-*/
-/*
-c4 65 16 13 83 60 c4 65 16 13 83 60 08 00 45 00 00 00 00 00 00 00 00 11 00 00 c0 a8
-*/
-	  //uint8_t *phd = skb_network_header(skb);
-/*
-          struct ethhdr* eth = (struct ethhdr*)phd;
-          skb->protocol = eth->h_proto = htons(ETH_P_IP);
-          memcpy(eth->h_source, skb->dev->dev_addr, ETH_ALEN);
-          memcpy(eth->h_dest, skb->dev->dev_addr, ETH_ALEN);
-*/
-          pr_info("Out len(%d)\n",skb->len);
-          p = skb->data;
-          for (uint16_t i = 0; i < skb->len; i++) {
-            if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
-            ch = p[i];
-	    printk(KERN_CONT "%02x ", (uint32_t) ch);
-	  }
-          printk(KERN_CONT "\n");
-
-//          int ret = dev_queue_xmit(nskb);
-
-
-/*
-          uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
-          struct sk_buff * nskb = skb_copy_expand(skb, offset, 0,  GFP_KERNEL);
-
-          struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
-          nuh->len = htons(datalen + sizeof(struct udphdr));
-          nuh->source = htons(59976);
-          nuh->dest = htons(5600);
-
-          struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
-          long unsigned int dum = sizeof(struct iphdr) / 4;
-          niph->ihl = dum;
-          niph->version = 4;
-          niph->protocol = IPPROTO_UDP;
-          niph->saddr = ip1;
-          niph->daddr = ip2;
-
-          nskb->dev = wifidev;
 
           struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));//add data to the start of a buffer
           nskb->protocol = neth->h_proto = htons(ETH_P_IP);
 	  memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
 	  memcpy(neth->h_dest, nskb->dev->dev_addr, ETH_ALEN);
 
-          nskb->pkt_type = PACKET_OUTGOING;
+          pr_info("Out len(%d)\n",nskb->len);
+          p = nskb->data;
+          for (uint16_t i = 0; i < nskb->len; i++) {
+            if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "Out pay\n");
+            ch = p[i];
+	    printk(KERN_CONT "%02x ", (uint32_t) ch);
+	  }
+          printk(KERN_CONT "\n");
+
+
           int ret = dev_queue_xmit(nskb);
 
           pr_info("ret(%d)\n",ret);
-*/
+
         }
       }
     }
