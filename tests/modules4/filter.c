@@ -109,18 +109,14 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 	  }
           printk(KERN_CONT "\n");
 
-// ethhdr:14, iphdr:20, udphdr:8,   skb_headroom:16 skb_tailroom: variable
-
-          uint16_t offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) - skb_headroom(skb);
-//          struct sk_buff * nskb = skb_copy_expand(skb, offset, 0,  GFP_KERNEL);
+//          struct sk_buff * nskb = skb_copy_expand(skb, sizeof(struct ethhdr), 0,  GFP_KERNEL);
 
           struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
           pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
-     
+    
 	  uint8_t *ptr = skb_pull_data(nskb,28);
 
           struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
-          nuh->len = htons(datalen + sizeof(struct udphdr));
           nuh->source = htons(59976);
           nuh->dest = htons(5600);
 
