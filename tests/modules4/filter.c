@@ -34,7 +34,7 @@ sudo iw dev $DEVICE set channel 3
 #include <linux/udp.h>
 #include <linux/inet.h>
 
-uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 /************************************************************************************************/
@@ -115,7 +115,9 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 //          struct sk_buff * nskb = skb_copy_expand(skb, offset, 0,  GFP_KERNEL);
 
           struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
-          pskb_expand_head(nskb, offset, 0, GFP_KERNEL);
+          pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+     
+	  uint8_t *ptr = skb_pull_data(nskb,28);
 
           struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
           nuh->len = htons(datalen + sizeof(struct udphdr));
@@ -147,11 +149,8 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 	  }
           printk(KERN_CONT "\n");
 
-
           int ret = dev_queue_xmit(nskb);
-
           pr_info("ret(%d)\n",ret);
-
         }
       }
     }
