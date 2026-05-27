@@ -20,6 +20,9 @@ https://github.com/bloomark/kernel-sniffer/tree/master
 https://github.com/ptpt52/hstshack/tree/master
      
 https://github.com/jelaas/egetty/blob/master/skbuff.c
+
+   
+https://medium.com/@dipakkrdas/netfilter-and-iptables-f8a946bb83af
 */
 
 /*
@@ -34,7 +37,7 @@ sudo iw dev $DEVICE set channel 3
 #include <linux/udp.h>
 #include <linux/inet.h>
 
-uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 /************************************************************************************************/
@@ -86,7 +89,7 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
   struct iphdr * iph;
   iph = ip_hdr(skb);
   if(iph && iph->protocol == IPPROTO_UDP) {
-    //pr_info("source : %pI4 | dest : %pI4 | %d  ", &(iph->saddr),&(iph->daddr),iph->saddr);
+    pr_info("source : %pI4 | dest : %pI4 | %d  ", &(iph->saddr),&(iph->daddr),iph->saddr);
     struct udphdr *udph = udp_hdr(skb); 
     //pr_info("source port : %hu | dest port : %hu\n", ntohs(udph->source),ntohs(udph->dest));
     if ((localhost_IntIP == iph->saddr) && (localhost_IntIP == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
@@ -159,13 +162,14 @@ static int __init nf_filter_init(void) {
 
     in4_pton("127.0.0.1", 10, (u8 *)&localhost_IntIP, '\n', NULL);
     in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
-    in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
+    //in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
+    in4_pton("127.0.0.1", 13, (u8 *)&ip2, '\n', NULL);
     wifidev = dev_get_by_name(&init_net,wifiname);
 
     nf_filter_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
     if(nf_filter_ops!=NULL) {
       nf_filter_ops->hook = (nf_hookfn*)nf_filter_handler;
-      nf_filter_ops->hooknum = NF_INET_PRE_ROUTING;
+      nf_filter_ops->hooknum = NF_INET_POST_ROUTING; // NF_INET_PRE_ROUTING;
       nf_filter_ops->pf = PF_INET; //NFPROTO_IPV4;
       nf_filter_ops->priority = NF_IP_PRI_FIRST;
       nf_register_net_hook(&init_net, nf_filter_ops);
