@@ -37,7 +37,7 @@ sudo iw dev $DEVICE set channel 3
 #include <linux/udp.h>
 #include <linux/inet.h>
 
-uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 /************************************************************************************************/
@@ -89,11 +89,49 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
   struct iphdr * iph;
   iph = ip_hdr(skb);
   if(iph && iph->protocol == IPPROTO_UDP) {
-    pr_info("source : %pI4 | dest : %pI4 | %d  ", &(iph->saddr),&(iph->daddr),iph->saddr);
+    //pr_info("source : %pI4 | dest : %pI4 | %d  ", &(iph->saddr),&(iph->daddr),iph->saddr);
     struct udphdr *udph = udp_hdr(skb); 
     //pr_info("source port : %hu | dest port : %hu\n", ntohs(udph->source),ntohs(udph->dest));
+    
+    if ((localhost_IntIP == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
+      pr_info("len : %hu\n", ntohs(udph->len));
+      uint16_t datalen = ntohs(udph->len);
+      if (datalen > 0) {
+
+        struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
+        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+    
+	skb_pull_data(nskb,28);
+
+        struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
+        nuh->source = htons(59976);
+        nuh->dest = htons(5600);
+
+        struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
+        long unsigned int dum = sizeof(struct iphdr) / 4;
+        niph->ihl = dum;
+        niph->version = 4;
+        niph->protocol = IPPROTO_UDP;
+        niph->saddr = ip1;
+        niph->daddr = localhost_IntIP;
+
+        nskb->dev = wifidev;
+        nskb->pkt_type = PACKET_HOST; // PACKET_OUTGOING;
+
+        struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));//add data to the start of a buffer
+        nskb->protocol = neth->h_proto = htons(ETH_P_IP);
+
+	char destaddr[ETH_ALEN] = {0x90,0x1b,0xe,0x61,0x39,0x4f};
+	memcpy(neth->h_dest, destaddr, ETH_ALEN);
+	memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
+
+        int ret = dev_queue_xmit(nskb);
+        pr_info("ret(%d)\n",ret);
+      }
+    }
+/*
     if ((localhost_IntIP == iph->saddr) && (localhost_IntIP == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
-      //pr_info("len : %hu\n", ntohs(udph->len));
+      pr_info("len : %hu\n", ntohs(udph->len));
 
       if ((wifidev!=NULL)&&(wifidev->flags & IFF_UP)) {
         pr_info("len : %hu\n", ntohs(udph->len));
@@ -155,6 +193,7 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
         }
       }
     }
+*/
   }
   return NF_ACCEPT;
 }
