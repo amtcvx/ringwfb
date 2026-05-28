@@ -80,7 +80,7 @@ uint8_t ieeehd[] = {
 /******************************************************************************/
 static struct nf_hook_ops *nf_filter_ops = NULL;
 static struct net_device *wifidev;
-static uint32_t localhost_IntIP, ip1,ip2; 
+static uint32_t localhost_IntIP, ip1;
 
 /******************************************************************************/
 static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
@@ -117,7 +117,7 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
           struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
           pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
     
-	  uint8_t *ptr = skb_pull_data(nskb,28);
+	  skb_pull_data(nskb,28);
 
           struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
           nuh->source = htons(59976);
@@ -129,7 +129,7 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
           niph->version = 4;
           niph->protocol = IPPROTO_UDP;
           niph->saddr = ip1;
-          niph->daddr = ip2;
+          niph->daddr = localhost_IntIP;
 
           nskb->dev = wifidev;
           nskb->pkt_type = PACKET_OUTGOING;
@@ -164,8 +164,6 @@ static int __init nf_filter_init(void) {
 
     in4_pton("127.0.0.1", 10, (u8 *)&localhost_IntIP, '\n', NULL);
     in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
-    in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
-    //in4_pton("127.0.0.1", 13, (u8 *)&ip2, '\n', NULL);
     wifidev = dev_get_by_name(&init_net,wifiname);
 
     nf_filter_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
