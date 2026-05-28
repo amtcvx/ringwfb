@@ -37,7 +37,7 @@ sudo iw dev $DEVICE set channel 3
 #include <linux/udp.h>
 #include <linux/inet.h>
 
-uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 /************************************************************************************************/
@@ -136,8 +136,10 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 
           struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));//add data to the start of a buffer
           nskb->protocol = neth->h_proto = htons(ETH_P_IP);
+
+	  char destaddr[ETH_ALEN] = {0x90,0x1b,0xe,0x61,0x39,0x4f};
+	  memcpy(neth->h_dest, destaddr, ETH_ALEN);
 	  memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-	  memcpy(neth->h_dest, nskb->dev->dev_addr, ETH_ALEN);
 
           pr_info("Out len(%d)\n",nskb->len);
           p = nskb->data;
@@ -161,15 +163,15 @@ static unsigned int nf_filter_handler(void *priv, struct sk_buff *skb, const str
 static int __init nf_filter_init(void) {
 
     in4_pton("127.0.0.1", 10, (u8 *)&localhost_IntIP, '\n', NULL);
-    in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
-    //in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
-    in4_pton("127.0.0.1", 13, (u8 *)&ip2, '\n', NULL);
+    in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
+    in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
+    //in4_pton("127.0.0.1", 13, (u8 *)&ip2, '\n', NULL);
     wifidev = dev_get_by_name(&init_net,wifiname);
 
     nf_filter_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
     if(nf_filter_ops!=NULL) {
       nf_filter_ops->hook = (nf_hookfn*)nf_filter_handler;
-      nf_filter_ops->hooknum = NF_INET_POST_ROUTING; // NF_INET_PRE_ROUTING;
+      nf_filter_ops->hooknum = NF_INET_PRE_ROUTING; // NF_INET_POST_ROUTING;
       nf_filter_ops->pf = PF_INET; //NFPROTO_IPV4;
       nf_filter_ops->priority = NF_IP_PRI_FIRST;
       nf_register_net_hook(&init_net, nf_filter_ops);
