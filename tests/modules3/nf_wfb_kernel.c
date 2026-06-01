@@ -6,6 +6,8 @@
 #include <net/dst_metadata.h>
 
 uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
+uint16_t destport = 5600;
+
 
 /******************************************************************************/
 static struct nf_hook_ops *nf_wfb_hook_pre_routing = NULL;
@@ -15,7 +17,7 @@ static struct nf_hook_ops *nf_wfb_hook_local_out = NULL;
 static struct nf_hook_ops *nf_wfb_hook_post_routing = NULL;
 i*/
 typedef struct {
-  struct in_addr localipint;
+  uint32_t localipint;
   struct net_device *localdev;
 } priv_t;
 
@@ -29,16 +31,21 @@ static unsigned int nf_wfb_handler_pre_routing(void *priv, struct sk_buff *skb, 
     iph = ip_hdr(skb);
     if(iph && iph->protocol == IPPROTO_UDP) {
       struct udphdr *udph = udp_hdr(skb);
-      pr_info("PRE len(%d)(%d)  %pI4 |  %pI4 | %hu | %hu \n",
+      if ((mypriv.localipint == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
+
+        pr_info("PRE len(%d)(%d)  %pI4 |  %pI4 | %hu | %hu \n",
 		   skb->len, ntohs(udph->len),
 		   &(iph->saddr),&(iph->daddr),
 		   ntohs(udph->source),ntohs(udph->dest));
 
-      struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
-      skb_dst_set(skb, &(rt->dst));
+        struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
+        skb_dst_set(skb, &(rt->dst));
+
+	return NF_ACCEPT;
+      }
     }
   }
-  return NF_ACCEPT;
+  return NF_DROP;
 }
 
 /******************************************************************************/
