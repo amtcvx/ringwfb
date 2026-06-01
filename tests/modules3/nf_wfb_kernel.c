@@ -5,6 +5,14 @@
 
 #include <net/dst_metadata.h>
 
+typedef struct {
+  uint8_t droneid;
+  uint64_t seq;
+  uint16_t msglen;
+  int32_t backfreq;
+} __attribute__((packed)) payhd_t;
+
+/******************************************************************************/
 uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
@@ -94,9 +102,17 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
       struct udphdr *udph = udp_hdr(skb);
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
         struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
-        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+        //pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+        pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(payhd_t), 0, GFP_KERNEL);
 
-        skb_pull_data(nskb,28);
+        //skb_pull_data(nskb,28);
+        skb_pull_data(nskb,28 + sizeof(payhd_t));
+
+        payhd_t* pah = (payhd_t*)skb_push(nskb, sizeof(payhd_t));
+        pah->droneid = 1;
+        pah->seq =2;
+        pah->msglen = 3;
+        pah->backfreq = 2484;
 
         struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
         nuh->source = htons(59976);
