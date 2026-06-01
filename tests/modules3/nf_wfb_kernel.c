@@ -34,7 +34,8 @@ static unsigned int nf_wfb_handler_pre_routing(void *priv, struct sk_buff *skb, 
 		   &(iph->saddr),&(iph->daddr),
 		   ntohs(udph->source),ntohs(udph->dest));
 
-      ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
+      struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
+      skb_dst_set(skb, &(rt->dst));
     }
   }
   return NF_ACCEPT;
