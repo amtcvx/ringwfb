@@ -1,89 +1,80 @@
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/netfilter.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
+#include <linux/tcp.h>
 #include <linux/udp.h>
-#include <linux/inet.h>
-
-uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
+#include <linux/string.h>
+#include <linux/byteorder/generic.h>
 
 static struct nf_hook_ops *nf_tracer_ops = NULL;
 static struct nf_hook_ops *nf_tracer_out_ops = NULL;
 
-typedef struct {
-  struct in_addr ipint;
-} priv_t;
-
-static priv_t mypriv;
-
 static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+    if(skb==NULL) {
+        return NF_ACCEPT;
+    }
 
-  if(skb==NULL) return NF_ACCEPT;
+    struct iphdr * iph;
+    iph = ip_hdr(skb);
 
-  struct iphdr * iph;
-  iph = ip_hdr(skb);
+    if(iph && iph->protocol == IPPROTO_UDP) {
+      struct udphdr *udph = udp_hdr(skb);
+      pr_info("IN len(%d)(%d)  %pI4 |  %pI4 | %hu | %hu \n",
+                   skb->len, ntohs(udph->len),
+                   &(iph->saddr),&(iph->daddr),
+                   ntohs(udph->source),ntohs(udph->dest));
+/*
+    if(iph && iph->protocol == IPPROTO_TCP) {
+        struct tcphdr *tcph = tcp_hdr(skb);
 
- if(iph && iph->protocol == IPPROTO_UDP) {
-   struct udphdr *udph = udp_hdr(skb);
+        pr_info("source : %pI4:%hu | dest : %pI4:%hu | seq : %u | ack_seq : %u | window : %hu | csum : 0x%hx | urg_ptr %hu\n", &(iph->saddr),ntohs(tcph->source),&(iph->saddr),ntohs(tcph->dest), ntohl(tcph->seq), ntohl(tcph->ack_seq), ntohs(tcph->window), ntohs(tcph->check), ntohs(tcph->urg_ptr));
+*/
+    }
 
-//   if (iph->daddr == ((priv_t *)priv)->ip) {
-
-
-//     priv = (void *)&mypriv;
-
-//     pr_info("%pI4 In len(%d)(%d)  %pI4 |  %pI4 | %hu | %hu \n",(priv_t *)priv->ipint,
-     pr_info("In len(%d)(%d)  %pI4 |  %pI4 | %hu | %hu \n",
-		   skb->len, ntohs(udph->len),
-		   &(iph->saddr),&(iph->daddr),
-		   ntohs(udph->source),ntohs(udph->dest));
- //  }
- }
-
-  return NF_ACCEPT;
+    return NF_ACCEPT;
 }
 
 
 static int __init nf_tracer_init(void) {
 
-  struct net_device *wifidev = dev_get_by_name(&init_net,wifiname);
+    nf_tracer_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
 
-  in4_pton("192.168.3.200", 13, (u8 *)&(mypriv.ipint), '\n', NULL);
+    if(nf_tracer_ops!=NULL) {
+        nf_tracer_ops->hook = (nf_hookfn*)nf_tracer_handler;
+        nf_tracer_ops->hooknum = NF_INET_PRE_ROUTING;
+        nf_tracer_ops->pf = NFPROTO_IPV4;
+        nf_tracer_ops->priority = NF_IP_PRI_FIRST;
 
-  nf_tracer_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
-  if(nf_tracer_ops!=NULL) {
-    nf_tracer_ops->hook = (nf_hookfn*)nf_tracer_handler;
-//    nf_tracer_ops->priv = (void *)&mypriv;
-//    nf_tracer_ops->dev = wifidev;
-    nf_tracer_ops->hooknum = NF_INET_PRE_ROUTING;
-    nf_tracer_ops->pf = NFPROTO_IPV4;
-    nf_tracer_ops->priority = NF_IP_PRI_FIRST;
-    nf_register_net_hook(&init_net, nf_tracer_ops);
-  }
+        nf_register_net_hook(&init_net, nf_tracer_ops);
+    }
 
-  nf_tracer_out_ops = (struct nf_hook_ops*)kcalloc(1, sizeof(struct nf_hook_ops), GFP_KERNEL);
-  if(nf_tracer_out_ops!=NULL) {
-    nf_tracer_out_ops->hook = (nf_hookfn*)nf_tracer_handler;
-//    nf_tracer_ops->priv = (void *)&mypriv;
-//    nf_tracer_ops->dev = wifidev;
-    nf_tracer_out_ops->hooknum = NF_INET_LOCAL_OUT;
-    nf_tracer_out_ops->pf = NFPROTO_IPV4;
-    nf_tracer_out_ops->priority = NF_IP_PRI_FIRST;
-    nf_register_net_hook(&init_net, nf_tracer_out_ops);
-  }
+    nf_tracer_out_ops = (struct nf_hook_ops*)kcalloc(1, sizeof(struct nf_hook_ops), GFP_KERNEL);
 
-  return 0;
+    if(nf_tracer_out_ops!=NULL) {
+        nf_tracer_out_ops->hook = (nf_hookfn*)nf_tracer_handler;
+        nf_tracer_out_ops->hooknum = NF_INET_LOCAL_OUT;
+        nf_tracer_out_ops->pf = NFPROTO_IPV4;
+        nf_tracer_out_ops->priority = NF_IP_PRI_FIRST;
+
+        nf_register_net_hook(&init_net, nf_tracer_out_ops);
+    }
+
+    return 0;
 }
 
 static void __exit nf_tracer_exit(void) {
 
-  if(nf_tracer_ops != NULL) {
-    nf_unregister_net_hook(&init_net, nf_tracer_ops);
-    kfree(nf_tracer_ops);
-  }
+    if(nf_tracer_ops != NULL) {
+        nf_unregister_net_hook(&init_net, nf_tracer_ops);
+        kfree(nf_tracer_ops);
+    }
 
-  if(nf_tracer_out_ops != NULL) {
-    nf_unregister_net_hook(&init_net, nf_tracer_out_ops);
-    kfree(nf_tracer_out_ops);
-  }
-
+    if(nf_tracer_out_ops != NULL) {
+        nf_unregister_net_hook(&init_net, nf_tracer_out_ops);
+        kfree(nf_tracer_out_ops);
+    }
 }
 
 module_init(nf_tracer_init);
