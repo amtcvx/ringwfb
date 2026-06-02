@@ -7,9 +7,9 @@
 
 typedef struct {
   uint8_t droneid;
-  uint64_t seq;
-  uint16_t msglen;
-  int32_t backfreq;
+  uint8_t seq; // uint64_t seq;
+  uint8_t msglen; //uint16_t msglen;
+  uint8_t backfreq; //int32_t backfreq;
 } __attribute__((packed)) payhd_t;
 
 /******************************************************************************/
@@ -101,27 +101,51 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
     if(iph && iph->protocol == IPPROTO_UDP) {
       struct udphdr *udph = udp_hdr(skb);
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
+
+
+        uint8_t ch, *p;
+        pr_info("In len(%d)\n",skb->len);
+        p = skb->data;
+        for (uint16_t i = 0; i < skb->len; i++) {
+          if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
+          ch = p[i];
+          printk(KERN_CONT "%02x ", (uint32_t) ch);
+        }
+        printk(KERN_CONT "\n");
+
+        struct udphdr* uh = udp_hdr(skb);
+	struct iphdr* iph = ip_hdr(skb);
+
         struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
         //pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
         pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(payhd_t), 0, GFP_KERNEL);
 
+	//skb_pull_data(nskb,sizeof(struct iphdr)+sizeof(struct udphdr));
         //skb_pull_data(nskb,28);
-        skb_pull_data(nskb,28 + sizeof(payhd_t));
+        //skb_pull_data(nskb,28 + sizeof(payhd_t));
+	skb_pull_data(nskb, sizeof(payhd_t)+sizeof(struct iphdr)+sizeof(struct udphdr)); // 
+//or 
+//	skb_pull_data(nskb,sizeof(struct iphdr)+sizeof(struct udphdr)); //
 
         payhd_t* pah = (payhd_t*)skb_push(nskb, sizeof(payhd_t));
         pah->droneid = 1;
         pah->seq =2;
         pah->msglen = 3;
-        pah->backfreq = 2484;
+        pah->backfreq = 4;
 
         struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
         nuh->source = htons(59976);
         nuh->dest = htons(5600);
 
+	nuh->len = uh->len; 
+
         struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
         long unsigned int dum = sizeof(struct iphdr) / 4;
         niph->ihl = dum;
         niph->version = 4;
+
+        niph->tot_len = iph->tot_len; 
+
         niph->protocol = IPPROTO_UDP;
         niph->saddr = ip1;
         niph->daddr = mypriv.localipint;
@@ -135,6 +159,19 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
         char destaddr[ETH_ALEN] = {0x90,0x1b,0xe,0x61,0x39,0x4f};
         memcpy(neth->h_dest, destaddr, ETH_ALEN);
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
+
+	
+	
+	pr_info("OUT len(%d)\n",nskb->len);
+        p = nskb->data;
+        for (uint16_t i = 0; i < nskb->len; i++) {
+          if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
+          ch = p[i];
+          printk(KERN_CONT "%02x ", (uint32_t) ch);
+        }
+        printk(KERN_CONT "\n");
+
+
 
         int ret = dev_queue_xmit(nskb);
         pr_info("ret(%d)\n",ret);
