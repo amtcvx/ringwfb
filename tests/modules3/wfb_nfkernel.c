@@ -105,7 +105,7 @@ static int __init wfb_nfkernel_init(void) {
     wfb_nfkernel_hook_pre->hook     = (nf_hookfn*)wfb_nfkernel_handler_pre;
     wfb_nfkernel_hook_pre->hooknum  = NF_INET_PRE_ROUTING;
     wfb_nfkernel_hook_pre->pf       = NFPROTO_IPV4;
-    wfb_nfkernel_hook_pre->priority = NF_IP_PRI_FIRST;
+    wfb_nfkernel_hook_pre->priority = NF_IP_PRI_FIRST + 1;
     nf_register_net_hook(&init_net, wfb_nfkernel_hook_pre);
   }
 
