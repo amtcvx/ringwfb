@@ -1,4 +1,6 @@
-obj-m+=nf_wfb_kernel.o
+obj-m+=wfb_nfkernel.o
+
+#obj-m+=nf_wfb_kernel.o
 
 #obj-m+=nf_tracer.o
  

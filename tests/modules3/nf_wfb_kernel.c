@@ -13,7 +13,7 @@ typedef struct {
 } __attribute__((packed)) payhd_t;
 
 /******************************************************************************/
-uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 static uint32_t ip1,ip2;
@@ -205,8 +205,8 @@ static int __init nf_wfb_kernel_init(void) {
   mypriv.wifidev = dev_get_by_name(&init_net, wifiname);
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
-  in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
+  in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
+  in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
 
   nf_wfb_hook_pre_routing = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(nf_wfb_hook_pre_routing != NULL) {
