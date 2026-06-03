@@ -49,6 +49,12 @@ static unsigned int nf_wfb_handler_pre_routing(void *priv, struct sk_buff *skb, 
 		   &(iph->saddr),&(iph->daddr),
 		   ntohs(udph->source),ntohs(udph->dest));
 
+        skb_pull(skb, sizeof(struct iphdr));
+        skb_pull(skb, sizeof(struct udphdr));
+        payhd_t *ptrpay = (payhd_t *)skb->data;
+        pr_info("droneid(%d) seq(%d) msglen(i%d) backfreq(%d)\n", 
+	  ptrpay->droneid, ptrpay->seq, ptrpay->msglen, ptrpay->backfreq);
+
         struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
         skb_dst_set(skb, &(rt->dst));
 
