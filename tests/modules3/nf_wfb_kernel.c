@@ -16,7 +16,7 @@ typedef struct {
 uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
-static uint32_t ip1;
+static uint32_t ip1,ip2;
 
 /******************************************************************************/
 static struct nf_hook_ops *nf_wfb_hook_pre_routing = NULL;
@@ -57,12 +57,10 @@ static unsigned int nf_wfb_handler_pre_routing(void *priv, struct sk_buff *skb, 
 
         struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
         skb_dst_set(skb, &(rt->dst));
-
-	return NF_ACCEPT;
       }
     }
   }
-  return NF_DROP;
+  return NF_ACCEPT;
 }
 
 /******************************************************************************/
@@ -117,18 +115,18 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
           printk(KERN_CONT "%02x ", (uint32_t) ch);
         }
         printk(KERN_CONT "\n");
-
+/*
         struct udphdr* uh = udp_hdr(skb);
 	struct iphdr* iph = ip_hdr(skb);
-
+*/
         struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
-/*
+
         pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
-*/
-        pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(payhd_t), 0, GFP_KERNEL);
 /*
+        pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(payhd_t), 0, GFP_KERNEL);
+
 	skb_pull_data(nskb, sizeof(payhd_t)+sizeof(struct iphdr)+sizeof(struct udphdr)); // 
-*/
+
 	skb_pull_data(nskb,sizeof(struct iphdr)+sizeof(struct udphdr)); //
 
         payhd_t* pah = (payhd_t*)skb_push(nskb, sizeof(payhd_t));
@@ -138,22 +136,34 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
         pah->backfreq = 4;
 
         struct udphdr* nuh = (struct udphdr*)skb_push(nskb, sizeof(struct udphdr));
+
         nuh->source = htons(59976);
         nuh->dest = htons(5600);
 
-	nuh->len = uh->len + ntohs(sizeof(payhd_t));
+//	nuh->len = uh->len + ntohs(sizeof(payhd_t));
+	nuh->len = uh->len; 
 
         struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
+
         long unsigned int dum = sizeof(struct iphdr) / 4;
         niph->ihl = dum;
         niph->version = 4;
-
-        niph->tot_len = iph->tot_len + ntohs(sizeof(payhd_t));
-
+        niph->tos = 0;
+        niph->check = 0;
+        niph->frag_off = 0;
+        niph->ttl = 64; // Set a TTL.
         niph->protocol = IPPROTO_UDP;
+*/
+        struct udphdr* nuh = udp_hdr(nskb);
+	struct iphdr* niph = ip_hdr(nskb);
         niph->saddr = ip1;
-        niph->daddr = mypriv.localipint;
+        niph->daddr = ip2;
+/*
+//      niph->tot_len = iph->tot_len + ntohs(sizeof(payhd_t));
+        niph->tot_len = iph->tot_len;
 
+	nskb->no_fcs = 0;
+*/
         nskb->dev = mypriv.wifidev;
         nskb->pkt_type = PACKET_OUTGOING;
 
@@ -196,6 +206,7 @@ static int __init nf_wfb_kernel_init(void) {
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
   in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
+  in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
 
   nf_wfb_hook_pre_routing = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(nf_wfb_hook_pre_routing != NULL) {
