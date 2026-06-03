@@ -102,7 +102,6 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
       struct udphdr *udph = udp_hdr(skb);
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(udph->dest)== destport)) {
 
-
         uint8_t ch, *p;
         pr_info("In len(%d)\n",skb->len);
         p = skb->data;
@@ -117,15 +116,14 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
 	struct iphdr* iph = ip_hdr(skb);
 
         struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
-        //pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+/*
+        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+*/
         pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(payhd_t), 0, GFP_KERNEL);
-
-	//skb_pull_data(nskb,sizeof(struct iphdr)+sizeof(struct udphdr));
-        //skb_pull_data(nskb,28);
-        //skb_pull_data(nskb,28 + sizeof(payhd_t));
+/*
 	skb_pull_data(nskb, sizeof(payhd_t)+sizeof(struct iphdr)+sizeof(struct udphdr)); // 
-//or 
-//	skb_pull_data(nskb,sizeof(struct iphdr)+sizeof(struct udphdr)); //
+*/
+	skb_pull_data(nskb,sizeof(struct iphdr)+sizeof(struct udphdr)); //
 
         payhd_t* pah = (payhd_t*)skb_push(nskb, sizeof(payhd_t));
         pah->droneid = 1;
@@ -137,14 +135,14 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
         nuh->source = htons(59976);
         nuh->dest = htons(5600);
 
-	nuh->len = uh->len; 
+	nuh->len = uh->len + ntohs(sizeof(payhd_t));
 
         struct iphdr* niph = (struct iphdr*)skb_push(nskb, sizeof(struct iphdr));
         long unsigned int dum = sizeof(struct iphdr) / 4;
         niph->ihl = dum;
         niph->version = 4;
 
-        niph->tot_len = iph->tot_len; 
+        niph->tot_len = iph->tot_len + ntohs(sizeof(payhd_t));
 
         niph->protocol = IPPROTO_UDP;
         niph->saddr = ip1;
@@ -153,13 +151,12 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
         nskb->dev = mypriv.wifidev;
         nskb->pkt_type = PACKET_OUTGOING;
 
-        struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));//add data to the start of a buffer
+        struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
         nskb->protocol = neth->h_proto = htons(ETH_P_IP);
 
         char destaddr[ETH_ALEN] = {0x90,0x1b,0xe,0x61,0x39,0x4f};
         memcpy(neth->h_dest, destaddr, ETH_ALEN);
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-
 	
 	
 	pr_info("OUT len(%d)\n",nskb->len);
@@ -171,15 +168,14 @@ static unsigned int nf_wfb_handler_post_routing(void *priv, struct sk_buff *skb,
         }
         printk(KERN_CONT "\n");
 
-
-
         int ret = dev_queue_xmit(nskb);
         pr_info("ret(%d)\n",ret);
 
         pr_info("POST len(%d)(%d)  %pI4 |  %pI4 | %hu | %hu \n",
-		   skb->len, ntohs(udph->len),
-		   &(iph->saddr),&(iph->daddr),
-		   ntohs(udph->source),ntohs(udph->dest));
+		   nskb->len, ntohs(nuh->len),
+		   &(niph->saddr),&(niph->daddr),
+		   ntohs(nuh->source),ntohs(nuh->dest));
+
       }
     }
   }
