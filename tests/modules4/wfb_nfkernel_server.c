@@ -100,11 +100,11 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         int ret = dev_queue_xmit(nskb);
         pr_info("ret(%d)\n",ret);
 
-        pr_info("POST len(%d)(%d)  %pI4 |  %pI4 | %hu | %hu \n",
-		   nskb->len, ntohs(nuh->len),
-		   &(niph->saddr),&(niph->daddr),
-		   ntohs(nuh->source),ntohs(nuh->dest));
-
+        pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n", 
+			nskb->len, 
+			&(niph->saddr), &(niph->daddr),
+			ntohs(nuh->len),
+			ntohs(nuh->source), ntohs(nuh->dest));
       }
     }
   }

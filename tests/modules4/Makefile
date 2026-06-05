@@ -1,4 +1,6 @@
-obj-m+=filter.o
+obj-m+=wfb_nfkernel_server.o
+
+#obj-m+=filter.o
  
 all:
 	make -C /lib/modules/$(shell uname -r)/build/ M=$(PWD) modules
