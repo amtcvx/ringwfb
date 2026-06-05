@@ -6,7 +6,7 @@
 #include <net/dst_metadata.h>
 
 /******************************************************************************/
-uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 static uint32_t ip1,ip2;
@@ -118,10 +118,12 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 static int __init wfb_nfkernel_init(void) {
 
   mypriv.wifidev = dev_get_by_name(&init_net, wifiname);
+  dev_set_promiscuity(mypriv.wifidev,1);
+/*
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
-  in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
+  in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
+  in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
 
   wfb_nfkernel_hook_pre = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(wfb_nfkernel_hook_pre != NULL) {
@@ -158,12 +160,14 @@ static int __init wfb_nfkernel_init(void) {
     wfb_nfkernel_hook_locout->priority = NF_IP_PRI_FIRST + 3;
     nf_register_net_hook(&init_net, wfb_nfkernel_hook_locout);
   }
-
+*/
   return 0;
 }
 
 /******************************************************************************/
 static void __exit wfb_nfkernel_exit(void) {
+
+  dev_set_promiscuity(mypriv.wifidev,0);
 
   if(wfb_nfkernel_hook_pre != NULL) {
     nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_pre);
