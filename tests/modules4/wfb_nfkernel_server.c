@@ -6,7 +6,7 @@
 #include <net/dst_metadata.h>
 
 /******************************************************************************/
-uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 static uint32_t ip1,ip2;
@@ -100,8 +100,7 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         int ret = dev_queue_xmit(nskb);
         pr_info("ret(%d)\n",ret);
 
-        pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n", 
-			nskb->len, 
+        pr_info("POST ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n", 
 			&(niph->saddr), &(niph->daddr),
 			ntohs(nuh->len),
 			ntohs(nuh->source), ntohs(nuh->dest));
