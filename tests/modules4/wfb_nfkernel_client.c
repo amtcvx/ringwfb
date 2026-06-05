@@ -19,7 +19,7 @@ typedef struct {
 static priv_t mypriv;
 
 /******************************************************************************/
-
+/*
 static struct nf_hook_ops *wfb_nfkernel_hook_pre = NULL;
 static struct nf_hook_ops *wfb_nfkernel_hook_post = NULL;
 static struct nf_hook_ops *wfb_nfkernel_hook_locin = NULL;
@@ -57,7 +57,7 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
   }
   return NF_ACCEPT;
 }
-/*
+
     struct iphdr * iph;
     iph = ip_hdr(skb);
     if(iph && iph->protocol == IPPROTO_UDP) {
@@ -132,17 +132,29 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
   return RX_HANDLER_ANOTHER;
 */
+ 
   if(skb != NULL) {
-    pr_info("FRAME len(%d)",skb->len);
+//    pr_info("FRAME len(%d)",skb->len);
     if (skb->len > 0) {
       struct iphdr * iph;
       iph = ip_hdr(skb);
       if(iph && iph->protocol == IPPROTO_UDP) {
         struct udphdr *udph = udp_hdr(skb);
-        pr_info("(%d)(%d)  %pI4 |  %pI4 | %hu | %hu \n",
-                   ntohs(udph->len),
-                   &(iph->saddr),&(iph->daddr),
-                   ntohs(udph->source),ntohs(udph->dest));
+        pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n", 
+          skb->len, 
+	  &(iph->saddr), &(iph->daddr),
+	  ntohs(udph->len),
+	  ntohs(udph->source), ntohs(udph->dest));
+
+        uint8_t ch, *p;
+        p = skb->data;
+        for (uint16_t i = 0; i < skb->len; i++) {
+          if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
+          ch = p[i];
+          printk(KERN_CONT "%02x ", (uint32_t) ch);
+        }
+        printk(KERN_CONT "\n");
+
       }
     }
   }
@@ -161,7 +173,7 @@ static int __init wfb_nfkernel_init(void) {
 
   in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
   in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
-*/
+
   wfb_nfkernel_hook_pre = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(wfb_nfkernel_hook_pre != NULL) {
     wfb_nfkernel_hook_pre->hook     = (nf_hookfn*)wfb_nfkernel_handler_pre;
@@ -197,7 +209,7 @@ static int __init wfb_nfkernel_init(void) {
     wfb_nfkernel_hook_locout->priority = NF_IP_PRI_FIRST + 3;
     nf_register_net_hook(&init_net, wfb_nfkernel_hook_locout);
   }
-
+*/
   return 0;
 }
 
@@ -206,7 +218,7 @@ static void __exit wfb_nfkernel_exit(void) {
 
   dev_set_promiscuity(mypriv.wifidev,0);
   netdev_rx_handler_unregister(mypriv.wifidev);
-
+/*
   if(wfb_nfkernel_hook_pre != NULL) {
     nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_pre);
     kfree(wfb_nfkernel_hook_pre);
@@ -226,6 +238,7 @@ static void __exit wfb_nfkernel_exit(void) {
     nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_locout);
     kfree(wfb_nfkernel_hook_locout);
   }
+*/
 }
 
 /******************************************************************************/
