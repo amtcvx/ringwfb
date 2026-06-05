@@ -115,11 +115,35 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 }
 
 /******************************************************************************/
+static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
+
+  struct sk_buff *skb = *pskb;
+/*
+  struct net_device *whereto_dev;
+
+  skb = skb_share_check(skb, GFP_ATOMIC);
+  if (unlikely(!skb)) return RX_HANDLER_CONSUMED;
+  *pskb = skb;
+
+  whereto_dev = rcu_dereference(skb->dev->rx_handler_data);
+
+  skb->dev = whereto_dev;
+*/
+  if(skb != NULL) {
+    pr_info("FRAME len(%d)\n",skb->len);
+  }
+
+  return RX_HANDLER_ANOTHER; /* Do another round in receive path */
+}
+
+/******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
 
   mypriv.wifidev = dev_get_by_name(&init_net, wifiname);
   dev_set_promiscuity(mypriv.wifidev,1);
+  netdev_rx_handler_register(mypriv.wifidev, handle_frame, NULL);
 
+/*
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
   in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
@@ -160,7 +184,7 @@ static int __init wfb_nfkernel_init(void) {
     wfb_nfkernel_hook_locout->priority = NF_IP_PRI_FIRST + 3;
     nf_register_net_hook(&init_net, wfb_nfkernel_hook_locout);
   }
-
+*/
   return 0;
 }
 
