@@ -119,7 +119,7 @@ static int __init wfb_nfkernel_init(void) {
 
   mypriv.wifidev = dev_get_by_name(&init_net, wifiname);
   dev_set_promiscuity(mypriv.wifidev,1);
-/*
+
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
   in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
@@ -160,7 +160,7 @@ static int __init wfb_nfkernel_init(void) {
     wfb_nfkernel_hook_locout->priority = NF_IP_PRI_FIRST + 3;
     nf_register_net_hook(&init_net, wfb_nfkernel_hook_locout);
   }
-*/
+
   return 0;
 }
 
