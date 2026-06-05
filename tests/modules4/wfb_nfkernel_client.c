@@ -6,13 +6,14 @@
 #include <net/dst_metadata.h>
 
 /******************************************************************************/
-uint8_t *wifiname = "enx00e04c360616";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 static uint32_t ip1,ip2;
 
 typedef struct {
   uint32_t localipint;
+  struct net_device *localdev;
   struct net_device *wifidev;
 } priv_t;
 
@@ -138,33 +139,42 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
     if (skb->len > 0) {
       struct iphdr * iph;
       iph = ip_hdr(skb);
-      if(iph && iph->protocol == IPPROTO_UDP) {
-        struct udphdr *udph = udp_hdr(skb);
-        pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n", 
+
+      if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_PASS;
+
+      iph->daddr = mypriv.localipint;
+
+      struct udphdr *udph = udp_hdr(skb);
+      pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n", 
           skb->len, 
 	  &(iph->saddr), &(iph->daddr),
 	  ntohs(udph->len),
 	  ntohs(udph->source), ntohs(udph->dest));
 
-        uint8_t ch, *p;
-        p = skb->data;
-        for (uint16_t i = 0; i < skb->len; i++) {
-          if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
-          ch = p[i];
-          printk(KERN_CONT "%02x ", (uint32_t) ch);
-        }
-        printk(KERN_CONT "\n");
-
+      uint8_t ch, *p;
+      p = skb->data;
+      for (uint16_t i = 0; i < skb->len; i++) {
+        if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
+        ch = p[i];
+        printk(KERN_CONT "%02x ", (uint32_t) ch);
       }
+      printk(KERN_CONT "\n");
+
+      struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
+      skb_dst_set(skb, &(rt->dst));
     }
   }
-  return RX_HANDLER_CONSUMED;
+  return RX_HANDLER_PASS; // RX_HANDLER_CONSUMED; kfree_skb(pkt).
 }
 
 /******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
 
+  in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
+
+  mypriv.localdev = dev_get_by_name(&init_net, "lo");
   mypriv.wifidev = dev_get_by_name(&init_net, wifiname);
+
   dev_set_promiscuity(mypriv.wifidev,1);
   netdev_rx_handler_register(mypriv.wifidev, handle_frame, NULL);
 
