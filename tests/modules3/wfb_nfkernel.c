@@ -6,7 +6,7 @@
 #include <net/dst_metadata.h>
 
 /******************************************************************************/
-uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 static uint32_t ip1,ip2;
@@ -21,19 +21,42 @@ static priv_t mypriv;
 /******************************************************************************/
 static struct nf_hook_ops *wfb_nfkernel_hook_pre = NULL;
 static struct nf_hook_ops *wfb_nfkernel_hook_post = NULL;
+static struct nf_hook_ops *wfb_nfkernel_hook_locin = NULL;
+static struct nf_hook_ops *wfb_nfkernel_hook_locout = NULL;
+
+
+/******************************************************************************/
+static unsigned int wfb_nfkernel_handler_locin(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+
+  if(skb != NULL) {
+    pr_info("LOC_IN len(%d)\n",skb->len);
+  }
+  return NF_ACCEPT;
+}
+
+/******************************************************************************/
+static unsigned int wfb_nfkernel_handler_locout(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+
+  if(skb != NULL) {
+    pr_info("LOC_OUT len(%d)\n",skb->len);
+  }
+  return NF_ACCEPT;
+}
 
 /******************************************************************************/
 static unsigned int wfb_nfkernel_handler_pre(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
   if(skb != NULL) {
-    pr_info("len(%d)\n",skb->len);
+    pr_info("PRE len(%d)\n",skb->len);
   }
   return NF_ACCEPT;
 }
+
 /******************************************************************************/
 static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
   if(skb != NULL) {
+    pr_info("POST len(%d)\n",skb->len);
     struct iphdr * iph;
     iph = ip_hdr(skb);
     if(iph && iph->protocol == IPPROTO_UDP) {
@@ -112,10 +135,28 @@ static int __init wfb_nfkernel_init(void) {
   wfb_nfkernel_hook_post = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(wfb_nfkernel_hook_post != NULL) {
     wfb_nfkernel_hook_post->hook     = (nf_hookfn*)wfb_nfkernel_handler_post;
-    wfb_nfkernel_hook_post->hooknum  = NF_INET_PRE_ROUTING;
+    wfb_nfkernel_hook_post->hooknum  = NF_INET_POST_ROUTING;
     wfb_nfkernel_hook_post->pf       = NFPROTO_IPV4;
     wfb_nfkernel_hook_post->priority = NF_IP_PRI_FIRST;
     nf_register_net_hook(&init_net, wfb_nfkernel_hook_post);
+  }
+
+  wfb_nfkernel_hook_locin = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
+  if(wfb_nfkernel_hook_locin != NULL) {
+    wfb_nfkernel_hook_locin->hook     = (nf_hookfn*)wfb_nfkernel_handler_locin;
+    wfb_nfkernel_hook_locin->hooknum  = NF_INET_LOCAL_IN;
+    wfb_nfkernel_hook_locin->pf       = NFPROTO_IPV4;
+    wfb_nfkernel_hook_locin->priority = NF_IP_PRI_FIRST + 2;
+    nf_register_net_hook(&init_net, wfb_nfkernel_hook_locin);
+  }
+
+  wfb_nfkernel_hook_locout = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
+  if(wfb_nfkernel_hook_locout != NULL) {
+    wfb_nfkernel_hook_locout->hook     = (nf_hookfn*)wfb_nfkernel_handler_locout;
+    wfb_nfkernel_hook_locout->hooknum  = NF_INET_LOCAL_OUT;
+    wfb_nfkernel_hook_locout->pf       = NFPROTO_IPV4;
+    wfb_nfkernel_hook_locout->priority = NF_IP_PRI_FIRST + 3;
+    nf_register_net_hook(&init_net, wfb_nfkernel_hook_locout);
   }
 
   return 0;
@@ -132,6 +173,16 @@ static void __exit wfb_nfkernel_exit(void) {
   if(wfb_nfkernel_hook_post != NULL) {
     nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_post);
     kfree(wfb_nfkernel_hook_post);
+  }
+
+  if(wfb_nfkernel_hook_locin != NULL) {
+    nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_locin);
+    kfree(wfb_nfkernel_hook_locin);
+  }
+
+  if(wfb_nfkernel_hook_locout != NULL) {
+    nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_locout);
+    kfree(wfb_nfkernel_hook_locout);
   }
 }
 
