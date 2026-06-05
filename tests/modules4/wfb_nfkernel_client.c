@@ -160,8 +160,10 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
       }
       printk(KERN_CONT "\n");
 
-      struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
-      skb_dst_set(skb, &(rt->dst));
+      skb->pkt_type = PACKET_HOST;
+      return RX_HANDLER_PASS;
+      //struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
+      //skb_dst_set(skb, &(rt->dst));
     }
   }
   return RX_HANDLER_PASS; // RX_HANDLER_CONSUMED; kfree_skb(pkt).
