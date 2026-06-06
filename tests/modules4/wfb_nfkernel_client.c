@@ -1,3 +1,6 @@
+/*
+https://github.com/simonwunderlich/wifi_statistics
+*/
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
@@ -159,11 +162,20 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
         printk(KERN_CONT "%02x ", (uint32_t) ch);
       }
       printk(KERN_CONT "\n");
-
+/*
       skb->pkt_type = PACKET_HOST;
       return RX_HANDLER_PASS;
-      //struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
-      //skb_dst_set(skb, &(rt->dst));
+*/
+/*
+      struct rtable *rt = ip_route_output(dev_net(mypriv.localdev), iph->daddr, 0, RT_TOS(iph->tos), 0);
+      skb_dst_set(skb, &(rt->dst));
+*/
+/*      
+      skb->dev = mypriv.localdev;
+      skb->pkt_type = PACKET_HOST;
+      netif_rx(skb);
+      return RX_HANDLER_CONSUMED;
+*/
     }
   }
   return RX_HANDLER_PASS; // RX_HANDLER_CONSUMED; kfree_skb(pkt).
