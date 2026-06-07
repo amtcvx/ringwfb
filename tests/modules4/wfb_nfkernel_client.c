@@ -1,4 +1,5 @@
 /*
+https://bootlin.com/doc/training/networking/networking-slides.pdf
 https://github.com/a3f/mitm0/blob/master/mitm.c
 https://github.com/simonwunderlich/wifi_statistics
 https://maxnilz.com
@@ -26,11 +27,19 @@ static priv_t mypriv;
 
 /******************************************************************************/
 /*
+static struct nf_hook_ops *wfb_nfkernel_hook_ingress = NULL;
 static struct nf_hook_ops *wfb_nfkernel_hook_pre = NULL;
 static struct nf_hook_ops *wfb_nfkernel_hook_post = NULL;
 static struct nf_hook_ops *wfb_nfkernel_hook_locin = NULL;
 static struct nf_hook_ops *wfb_nfkernel_hook_locout = NULL;
 
+static unsigned int wfb_nfkernel_handler_ingress(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+
+  if(skb != NULL) {
+    pr_info("INGRESS len(%d)\n",skb->len);
+  }
+  return NF_ACCEPT;
+}
 
 static unsigned int wfb_nfkernel_handler_locin(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
@@ -205,6 +214,15 @@ static int __init wfb_nfkernel_init(void) {
   in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
   in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
 
+  wfb_nfkernel_hook_ingress = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
+  if(wfb_nfkernel_hook_ingress != NULL) {
+    wfb_nfkernel_hook_ingress->hook     = (nf_hookfn*)wfb_nfkernel_handler_ingress;
+    wfb_nfkernel_hook_ingress->hooknum  = NF_INET_INGRESS;
+    wfb_nfkernel_hook_ingress->pf       = NFPROTO_IPV4;
+    wfb_nfkernel_hook_ingress->priority = NF_IP_PRI_FIRST;
+    nf_register_net_hook(&init_net, wfb_nfkernel_hook_ingress);
+  }
+
   wfb_nfkernel_hook_pre = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(wfb_nfkernel_hook_pre != NULL) {
     wfb_nfkernel_hook_pre->hook     = (nf_hookfn*)wfb_nfkernel_handler_pre;
@@ -249,7 +267,13 @@ static void __exit wfb_nfkernel_exit(void) {
 
   dev_set_promiscuity(mypriv.wifidev,0);
   netdev_rx_handler_unregister(mypriv.wifidev);
+
 /*
+  if(wfb_nfkernel_hook_ingress != NULL) {
+    nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_ingress);
+    kfree(wfb_nfkernel_hook_ingress);
+  }
+
   if(wfb_nfkernel_hook_pre != NULL) {
     nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_pre);
     kfree(wfb_nfkernel_hook_pre);
