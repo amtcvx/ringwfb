@@ -173,7 +173,10 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
         printk(KERN_CONT "%02x ", (uint32_t) ch);
       }
       printk(KERN_CONT "\n");
-
+/*
+      skb->dev = mypriv.localdev;
+      return RX_HANDLER_ANOTHER;
+*/
 /*
       skb->pkt_type = PACKET_HOST;
       dev_forward_skb(mypriv.localdev, skb);
