@@ -1,6 +1,7 @@
 /*
+https://github.com/a3f/mitm0/blob/master/mitm.c
 https://github.com/simonwunderlich/wifi_statistics
-https://maxnilz.com/docs/004-network/005-linux-rx
+https://maxnilz.com
 */
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
@@ -163,6 +164,11 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
         printk(KERN_CONT "%02x ", (uint32_t) ch);
       }
       printk(KERN_CONT "\n");
+
+/*
+      skb->pkt_type = PACKET_HOST;
+      dev_forward_skb(mypriv.localdev, skb);
+*/
 /*
       skb->pkt_type = PACKET_HOST;
       return RX_HANDLER_PASS;
