@@ -1,6 +1,7 @@
 /*
 https://bootlin.com/doc/training/networking/networking-slides.pdf
 https://github.com/a3f/mitm0/blob/master/mitm.c
+https://elixir.bootlin.com/linux/v7.0.11/source/drivers/net/bonding/bond_main.c 
 https://github.com/simonwunderlich/wifi_statistics
 https://maxnilz.com
 */
@@ -12,7 +13,7 @@ https://maxnilz.com
 #include <net/dst_metadata.h>
 
 /******************************************************************************/
-uint8_t *wifiname = "eno1";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
 uint16_t destport = 5600;
 
 static uint32_t ip1,ip2;
@@ -154,9 +155,7 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
       struct iphdr * iph;
       iph = ip_hdr(skb);
 
-      if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_PASS;
-
-      iph->daddr = mypriv.localipint;
+      if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
 
       struct udphdr *udph = udp_hdr(skb);
       pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n", 
@@ -173,10 +172,15 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
         printk(KERN_CONT "%02x ", (uint32_t) ch);
       }
       printk(KERN_CONT "\n");
-/*
+
+      *pskb = skb;
       skb->dev = mypriv.localdev;
       return RX_HANDLER_ANOTHER;
-*/
+    }
+  }
+  return RX_HANDLER_CONSUMED;
+}
+
 /*
       skb->pkt_type = PACKET_HOST;
       dev_forward_skb(mypriv.localdev, skb);
@@ -194,12 +198,11 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
       skb->pkt_type = PACKET_HOST;
       netif_rx(skb);
       return RX_HANDLER_CONSUMED;
-*/
     }
   }
   return RX_HANDLER_PASS; // RX_HANDLER_CONSUMED; kfree_skb(pkt).
 }
-
+*/
 /******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
 
@@ -214,8 +217,8 @@ static int __init wfb_nfkernel_init(void) {
 /*
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
-  in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
+  in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
+  in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
 
   wfb_nfkernel_hook_ingress = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(wfb_nfkernel_hook_ingress != NULL) {
