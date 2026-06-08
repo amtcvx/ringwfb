@@ -14,7 +14,7 @@ gst-launch-1.0 udpsrc port=5600 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "enx00e04c360616";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
 uint16_t outdestport = 5600, indestport = 5700;
 
 static uint32_t ip1,ip2;
@@ -76,7 +76,8 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
       if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
 
-      struct udphdr *udph = udp_hdr(skb);
+      uint8_t *ptr = skb_network_header(skb);
+      struct udphdr *udph = (struct udphdr *)(ptr + sizeof(struct iphdr));// udp_hdr(skb);
 
       pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           skb->len,
@@ -96,7 +97,7 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
       *pskb = skb;
       skb->dev = mypriv.localdev;
-      //udph->dest = htons(indestport);
+      udph->dest = htons(indestport);
 
       return RX_HANDLER_ANOTHER;
     }
@@ -112,8 +113,8 @@ static int __init wfb_nfkernel_init(void) {
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
-  in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
+  in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
+  in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
 
   dev_set_promiscuity(mypriv.wifidev,1);
   netdev_rx_handler_register(mypriv.wifidev, handle_frame, NULL);
