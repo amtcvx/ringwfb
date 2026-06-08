@@ -76,10 +76,27 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
       if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
 
+      struct udphdr *udph = udp_hdr(skb);
+
+      pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          skb->len,
+          &(iph->saddr), &(iph->daddr),
+          ntohs(udph->len),
+          ntohs(udph->source), ntohs(udph->dest));
+
+      uint8_t ch, *p;
+      p = skb->data;
+      for (uint16_t i = 0; i < skb->len; i++) {
+        if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
+        ch = p[i];
+        printk(KERN_CONT "%02x ", (uint32_t) ch);
+      }
+      printk(KERN_CONT "\n");
+
+
       *pskb = skb;
       skb->dev = mypriv.localdev;
-      struct udphdr *udph = udp_hdr(skb);
-      udph->dest = htons(indestport);
+      //udph->dest = htons(indestport);
 
       return RX_HANDLER_ANOTHER;
     }
