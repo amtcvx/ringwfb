@@ -175,6 +175,7 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
       *pskb = skb;
       skb->dev = mypriv.localdev;
+      udph->dest = htons(5700);
       return RX_HANDLER_ANOTHER;
     }
   }
