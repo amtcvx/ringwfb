@@ -42,7 +42,6 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
 
         pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
-        struct udphdr* nuh = udp_hdr(nskb);
         struct iphdr* niph = ip_hdr(nskb);
         niph->saddr = ip1;
         niph->daddr = ip2;
@@ -56,7 +55,7 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         memcpy(neth->h_dest, destaddr, ETH_ALEN);
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
 
-        int ret = dev_queue_xmit(nskb);
+        dev_queue_xmit(nskb);
       }
     }
   }
