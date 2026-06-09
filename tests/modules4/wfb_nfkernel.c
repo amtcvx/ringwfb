@@ -78,6 +78,8 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
       uint8_t *ptr = skb_network_header(skb);
       struct udphdr *udph = (struct udphdr *)(ptr + sizeof(struct iphdr));// udp_hdr(skb);
 
+      if ((ntohs(udph->dest) != outdestport)) return RX_HANDLER_CONSUMED;
+
       pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           skb->len,
           &(iph->saddr), &(iph->daddr),
