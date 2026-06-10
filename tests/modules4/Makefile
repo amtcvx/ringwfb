@@ -1,4 +1,4 @@
-obj-m+=wfb_nfkernel.o
+obj-m+=wfb_nfkernel_server.o
 
 #obj-m+=filter.o
  

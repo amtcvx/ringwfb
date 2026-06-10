@@ -14,7 +14,7 @@ gst-launch-1.0 udpsrc port=5600 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "enx00e04c360616";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
 uint16_t outdestport = 5600, indestport = 5700;
 
 static uint32_t ip1,ip2;
@@ -113,8 +113,8 @@ static int __init wfb_nfkernel_init(void) {
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
-  in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
+  in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
+  in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
 
   dev_set_promiscuity(mypriv.wifidev,1);
   netdev_rx_handler_register(mypriv.wifidev, handle_frame, NULL);
