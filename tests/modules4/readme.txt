@@ -3,6 +3,8 @@ ISSUE : CAN ONLY WORK ONE SIDE ?
 -----------------------------------------------------------------------------------------
 https://www.linuxjournal.com/article/7184
 
+https://pages.sdu.dk/sdurobotics/linux-kernels/kernel/-/blob/4f1885a7b347a905cd9ed7deb6472a9688637432/drivers/net/wireless/virt_wifi.c
+
 -----------------------------------------------------------------------------------------
 sudo apt install dwarves
 
