@@ -1,10 +1,17 @@
 ISSUE : CAN ONLY WORK ONE SIDE ?
 
 -----------------------------------------------------------------------------------------
+https://github.com/a3f/mitm0/blob/master/mitm.c
+https://elixir.bootlin.com/linux/v7.0.12/source/drivers/net/bonding/bond_main.c
+
 https://www.linuxjournal.com/article/7184
 
 https://pages.sdu.dk/sdurobotics/linux-kernels/kernel/-/blob/4f1885a7b347a905cd9ed7deb6472a9688637432/drivers/net/wireless/virt_wifi.c
 
+https://oneuptime.com/blog/post/2026-03-20-remove-tc-qdisc-rules-ipv4/view
+sudo tc qdisc show dev eth0
+sudo tc class show dev eth0a
+sudo tc filter show dev eth0
 -----------------------------------------------------------------------------------------
 sudo apt install dwarves
 
