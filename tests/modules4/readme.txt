@@ -12,6 +12,14 @@ https://oneuptime.com/blog/post/2026-03-20-remove-tc-qdisc-rules-ipv4/view
 sudo tc qdisc show dev eth0
 sudo tc class show dev eth0a
 sudo tc filter show dev eth0
+
+-----------------------------------------------------------------------------------------
+2: enp5s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+=> RX OK
+
+3: enp0s25: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+=> RX KO
+
 -----------------------------------------------------------------------------------------
 sudo apt install dwarves
 
