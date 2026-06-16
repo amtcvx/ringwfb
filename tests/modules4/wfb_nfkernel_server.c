@@ -5,6 +5,8 @@
 
 #include <net/dst_metadata.h>
 
+#define MACDST {0x3c,0x18,0xa0,0xd6,0x0a,0xfa}
+//#define MACDST {0x90,0x1b,0xe,0x61,0x39,0x4f}
 /******************************************************************************/
 uint8_t *localname = "lo";
 uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
@@ -50,7 +52,7 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
         nskb->protocol = neth->h_proto = htons(ETH_P_IP);
 
-        char destaddr[ETH_ALEN] = {0x90,0x1b,0xe,0x61,0x39,0x4f};
+        char destaddr[ETH_ALEN] = MACDST;
         memcpy(neth->h_dest, destaddr, ETH_ALEN);
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
 
