@@ -7,7 +7,7 @@
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
 uint16_t outdestport = 5600, indestport = 5700;
 
 typedef struct {
@@ -88,6 +88,11 @@ static int __init wfb_nfkernel_init(void) {
 
   mypriv.localdev = dev_get_by_name(&init_net, "lo");
   mypriv.wifidev = dev_get_by_name(&init_net, wifiname);
+
+  //netif_set_real_num_rx_queues(mypriv.wifidev, 1);
+  pr_info("num_rx_queues(%d) \n", mypriv.wifidev->num_rx_queues);
+
+  dev_set_mtu(mypriv.wifidev,1500);
 
   dev_set_promiscuity(mypriv.wifidev,1);
   netdev_rx_handler_register(mypriv.wifidev, handle_frame, NULL);
