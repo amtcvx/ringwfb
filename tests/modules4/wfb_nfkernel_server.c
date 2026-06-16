@@ -7,7 +7,7 @@
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "enp5s0";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
 uint16_t outdestport = 5600, indestport = 5700;
 
 static uint32_t ip1,ip2;
@@ -32,6 +32,12 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
       struct udphdr *udph = udp_hdr(skb);
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(udph->dest)== outdestport)) {
 
+        pr_info("POST in skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          skb->len,
+          &(iph->saddr), &(iph->daddr),
+          ntohs(udph->len),
+          ntohs(udph->source), ntohs(udph->dest));
+
         struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
 
         pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
@@ -48,7 +54,17 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         memcpy(neth->h_dest, destaddr, ETH_ALEN);
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
 
+	uint8_t *nptr = skb_network_header(nskb);
+        struct udphdr *nudph = (struct udphdr *)(nptr + sizeof(struct iphdr));
+
+        pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          nskb->len,
+          &(niph->saddr), &(niph->daddr),
+          ntohs(nudph->len),
+          ntohs(nudph->source), ntohs(nudph->dest));
+
         dev_queue_xmit(nskb);
+
       }
     }
   }
@@ -63,8 +79,8 @@ static int __init wfb_nfkernel_init(void) {
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
-  in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
+  in4_pton("192.168.3.200", 13, (u8 *)&ip1, '\n', NULL);
+  in4_pton("192.168.3.100", 13, (u8 *)&ip2, '\n', NULL);
 
   wfb_nfkernel_hook_post = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(wfb_nfkernel_hook_post != NULL) {
