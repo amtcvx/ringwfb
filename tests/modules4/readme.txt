@@ -58,6 +58,7 @@ https://developers.redhat.com/articles/2026/04/03/introduction-to-linux-interfac
 sudo ip link add ifb0 type ifb
 sudo ip link set ifb0 up
 sudo tc qdisc add dev ifb0 root sfq
+(*)
 sudo tc qdisc add dev eth0 handle ffff: ingress
 sudo tc filter add dev eth0 parent ffff: u32 match u32 0 0 action mirred egress redirect dev ifb0
 
@@ -65,6 +66,25 @@ sudo tc filter add dev eth0 parent ffff: u32 match u32 0 0 action mirred egress 
 https://wiki.linuxfoundation.org/networking/ifb
 
 sudo tcpdump -n -i ifb0 -x -e -t
+
+(*)
+https://oneuptime.com/blog/post/2026-03-20-ifb-inbound-ipv4-traffic-shaping/view
+
+sudo tc qdisc add dev eth0 ingress
+sudo tc filter add dev eth0 parent ffff: protocol ip u32 \
+  match u32 0 0 \
+  action mirred egress redirect dev ifb0
+sudo tc qdisc add dev ifb0 root tbf \
+  rate 20mbit \
+  burst 32kb \
+  latency 400ms
+
+watch -n 1 sudo tc -s qdisc show dev ifb0
+
+
+sudo tc qdisc del dev eth0 ingress
+sudo tc qdisc del dev ifb0 root
+sudo ip link del ifb0
 
 -----------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------
