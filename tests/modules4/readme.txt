@@ -24,6 +24,7 @@ num_rx_queues: 8
 => RX KO
 num_rx_queues: 1
 
+-----------------------------------------------------------------------------------------
 sudo tc qdisc del dev eth0 root
 sudo tc qdisc show dev eth0
 
@@ -35,9 +36,37 @@ sudo tc qdisc replace dev eth0 root pfifo
 sudo tc qdisc replace dev eth0 root sfq
 sudo tc qdisc replace dev eth0 root tbf rate 220kbit latency 50ms burst 1540
 
-sudo tc qdisc replace dev eth0 root tbf rate 4000bit burst 32kbit latency 1ms
+sudo tc qdisc replace dev eth0 root tbf rate 5000bit burst 32kbit latency 1ms
 watch tc -s qdisc show dev eth0
 
+
+sudo tc qdisc replace dev eth0 root handle 1: htb default 2
+sudo tc class add dev eth0 parent 1: classid 1:1 htb rate 2.4mbit
+watch -n 1 'tc -s class show dev eth0'
+
+sudo tc qdisc replace dev eth0 root handle 1: htb default 1
+sudo tc class replace dev eth0 parent 1: classid 1:1 htb rate 100kbit
+
+sudo tc qdisc replace dev eth0 handle ffff: ingress
+sudo tc filter add dev eht0 parent ffff: protocol ip prio 50 u32 match ip dport 80 0xffff police rate 50Mbit burst 10m drop flowid :1
+
+-----------------------------------------------------------------------------------------
+eth0 ingress -> ifb0 outgress
+
+https://developers.redhat.com/articles/2026/04/03/introduction-to-linux-interfaces-for-virtual-networking#
+
+sudo ip link add ifb0 type ifb
+sudo ip link set ifb0 up
+sudo tc qdisc add dev ifb0 root sfq
+sudo tc qdisc add dev eth0 handle ffff: ingress
+sudo tc filter add dev eth0 parent ffff: u32 match u32 0 0 action mirred egress redirect dev ifb0
+
+
+https://wiki.linuxfoundation.org/networking/ifb
+
+sudo tcpdump -n -i ifb0 -x -e -t
+
+-----------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------
 sudo apt install dwarves
 
