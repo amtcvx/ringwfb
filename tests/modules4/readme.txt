@@ -25,39 +25,39 @@ num_rx_queues: 8
 num_rx_queues: 1
 
 -----------------------------------------------------------------------------------------
-sudo tc qdisc del dev eth0 root
-sudo tc qdisc show dev eth0
+export DEV=enp5s0
 
-fq_codel or fifo_fasta
-sudo tc qdisc replace dev eth0 root fq_codel
-sudo tc qdisc replace dev eth0 root fq
-sudo tc qdisc replace dev eth0 root pfifo_fast
-sudo tc qdisc replace dev eth0 root pfifo
-sudo tc qdisc replace dev eth0 root sfq
-sudo tc qdisc replace dev eth0 root tbf rate 220kbit latency 50ms burst 1540
+sudo tc qdisc delete dev $DEV ingress
+sudo tc qdisc show dev $DEV ingress
 
-sudo tc qdisc replace dev eth0 root tbf rate 5000bit burst 32kbit latency 1ms
-watch tc -s qdisc show dev eth0
+sudo tc qdisc delete dev $DEV root
+sudo tc qdisc show dev $DEV root
+=> 
+qdisc mq 0: root 
+
+sudo tc qdisc add dev $DEV handle ffff: ingress
+sudo tc qdisc show dev $DEV ingress
+=>
+qdisc ingress ffff: parent ffff:fff1 ---------------- 
 
 
-sudo tc qdisc replace dev eth0 root handle 1: htb default 2
-sudo tc class add dev eth0 parent 1: classid 1:1 htb rate 2.4mbit
-watch -n 1 'tc -s class show dev eth0'
+TODO 
 
-sudo tc qdisc replace dev eth0 root handle 1: htb default 1
-sudo tc class replace dev eth0 parent 1: classid 1:1 htb rate 100kbit
-
-sudo tc qdisc replace dev eth0 handle ffff: ingress
-sudo tc filter add dev eht0 parent ffff: protocol ip prio 50 u32 match ip dport 80 0xffff police rate 50Mbit burst 10m drop flowid :1
 
 -----------------------------------------------------------------------------------------
 https://medium.com/eatclub-tech/traffic-controller-linux-a5a671afc34a
 
-sudo tc qdisc add dev enp2s0 handle ffff: ingress
-sudo tc filter add dev enp2s0 parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate 1mbit burst 32kbit drop flowid :1
+sudo tc qdisc add dev enp5s0 handle ffff: ingress
+sudo tc filter add dev enp5s0 parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate 1mbit burst 32kbit drop flowid :1
 
-sudo tc qdisc del dev enp2s0 root handle 1:
-sudo tc qdisc del dev enp2s0 ingress
+sudo tc qdisc del dev enp5s0 root handle 1:
+sudo tc qdisc del dev enp5s0 ingress
+
+sudo tc filter add dev enp5s0 parent ffff: \
+    protocol ip prio 20 \
+    u32 match ip protocol 1 0xff \
+    police rate 2kbit buffer 10k drop \
+    flowid :1
 
 -----------------------------------------------------------------------------------------
 eth0 ingress -> ifb0 outgress
@@ -94,6 +94,19 @@ watch -n 1 sudo tc -s qdisc show dev ifb0
 sudo tc qdisc del dev eth0 ingress
 sudo tc qdisc del dev ifb0 root
 sudo ip link del ifb0
+
+-----------------------------------------------------------------------------------------
+sudo tc qdisc add dev enp5s0 handle 1: root htb
+sudo tc filter add dev enp5s0 parent 1: protocol ip prio 0 u32 match ip src 192.168.0.0/16 match ip dst 192.168.101.0/24 flowid 1:1
+
+sudo tc filter show dev enp5s0
+=>
+filter parent 1: protocol ip pref 49149 u32 chain 0 
+filter parent 1: protocol ip pref 49149 u32 chain 0 fh 803: ht divisor 1 
+...
+
+sudo tc filter del dev enp5s0
+
 
 -----------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------
