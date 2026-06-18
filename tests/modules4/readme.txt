@@ -1,4 +1,7 @@
-ISSUE : CAN ONLY WORK ONE SIDE ?
+ISSUE
+On usb/eth adapter seems to be fed at 10Kbit !
+
+-----------------------------------------------------------------------------------------
 
 https://satishdotpatel.github.io/maximizing-packet-capture-performance-with-tcpdump/
 
