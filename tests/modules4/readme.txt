@@ -51,6 +51,15 @@ sudo tc qdisc replace dev eth0 handle ffff: ingress
 sudo tc filter add dev eht0 parent ffff: protocol ip prio 50 u32 match ip dport 80 0xffff police rate 50Mbit burst 10m drop flowid :1
 
 -----------------------------------------------------------------------------------------
+https://medium.com/eatclub-tech/traffic-controller-linux-a5a671afc34a
+
+sudo tc qdisc add dev enp2s0 handle ffff: ingress
+sudo tc filter add dev enp2s0 parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate 1mbit burst 32kbit drop flowid :1
+
+sudo tc qdisc del dev enp2s0 root handle 1:
+sudo tc qdisc del dev enp2s0 ingress
+
+-----------------------------------------------------------------------------------------
 eth0 ingress -> ifb0 outgress
 
 https://developers.redhat.com/articles/2026/04/03/introduction-to-linux-interfaces-for-virtual-networking#
