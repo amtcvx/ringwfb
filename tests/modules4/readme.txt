@@ -29,7 +29,8 @@ sudo tc qdisc show dev $DEV ingress
 =>
 qdisc ingress ffff: parent ffff:fff1 ---------------- 
 
-sudo tc filter add dev $DEV parent ffff: protocol ip prio 1 handle 22 fw   action police rate 1000kbit burst 10k drop 
+//sudo tc filter add dev $DEV parent ffff: protocol ip prio 1 handle 22 fw   action police rate 1000kbit burst 10k drop 
+sudo tc filter add dev $DEV parent ffff: protocol all u32 match u32 0 0 action drop
 
 sudo tc filter show dev $DEV ingress
 =>
