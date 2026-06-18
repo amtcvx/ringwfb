@@ -10,19 +10,6 @@ https://www.linuxjournal.com/article/7184
 
 https://pages.sdu.dk/sdurobotics/linux-kernels/kernel/-/blob/4f1885a7b347a905cd9ed7deb6472a9688637432/drivers/net/wireless/virt_wifi.c
 
-https://oneuptime.com/blog/post/2026-03-20-remove-tc-qdisc-rules-ipv4/view
-sudo tc qdisc show dev eth0
-sudo tc class show dev eth0a
-sudo tc filter show dev eth0
-
------------------------------------------------------------------------------------------
-2: enp5s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
-=> RX OK
-num_rx_queues: 8
-
-3: enp0s25: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
-=> RX KO
-num_rx_queues: 1
 
 -----------------------------------------------------------------------------------------
 export DEV=enp5s0
@@ -36,9 +23,21 @@ sudo tc qdisc show dev $DEV root
 qdisc mq 0: root 
 
 sudo tc qdisc add dev $DEV handle ffff: ingress
+(same as sudo tc qdisc add dev $DEV ingress)
+
 sudo tc qdisc show dev $DEV ingress
 =>
 qdisc ingress ffff: parent ffff:fff1 ---------------- 
+
+sudo tc filter add dev $DEV parent ffff: protocol ip prio 1 handle 22 fw   action police rate 1000kbit burst 10k drop 
+
+sudo tc filter show dev $DEV ingress
+=>
+filter parent ffff: protocol ip pref 1 fw chain 0 
+filter parent ffff: protocol ip pref 1 fw chain 0 handle 0x16 
+
+        action order 1:  police 0x2 rate 1Mbit burst 10Kb mtu 2Kb action drop overhead 0b 
+        ref 1 bind 1 
 
 
 TODO 
