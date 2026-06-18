@@ -21,6 +21,9 @@ sudo tc qdisc delete dev $DEV root
 sudo tc qdisc show dev $DEV root
 => 
 qdisc mq 0: root 
+qdisc fq_codel 0: parent :4 limit 10240p flows 1024 quantum 1514 target 5ms interval 100ms memory_limit 32Mb ecn drop_batch 64 
+...
+
 
 sudo tc qdisc add dev $DEV handle ffff: ingress
 (same as sudo tc qdisc add dev $DEV ingress)
@@ -29,20 +32,45 @@ sudo tc qdisc show dev $DEV ingress
 =>
 qdisc ingress ffff: parent ffff:fff1 ---------------- 
 
-//sudo tc filter add dev $DEV parent ffff: protocol ip prio 1 handle 22 fw   action police rate 1000kbit burst 10k drop 
 sudo tc filter add dev $DEV parent ffff: protocol all u32 match u32 0 0 action drop
+! ONCE !
 
 sudo tc filter show dev $DEV ingress
 =>
-filter parent ffff: protocol ip pref 1 fw chain 0 
-filter parent ffff: protocol ip pref 1 fw chain 0 handle 0x16 
+filter parent ffff: protocol all pref 49152 u32 chain 0 
+filter parent ffff: protocol all pref 49152 u32 chain 0 fh 800: ht divisor 1 
+filter parent ffff: protocol all pref 49152 u32 chain 0 fh 800::800 order 2048 key ht 800 bkt 0 terminal flowid not_in_hw 
+  match 00000000/00000000 at 0
+        action order 1: gact action drop
+         random type none pass val 0
+         index 1 ref 1 bind 1
 
-        action order 1:  police 0x2 rate 1Mbit burst 10Kb mtu 2Kb action drop overhead 0b 
+gst-launch-1.0 udpsrc port=5600 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !\
+  videoconvert ! autovideosink sync=false
+=> NOT RECEIVING 
+gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! x265enc bitrate=2048 !\
+ rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=192.168.3.200
+=> suspend sending
+ 
+
+sudo tc filter del dev $DEV ingress
+sudo tc filter show dev $DEV ingress
+
+sudo tc filter add dev $DEV parent ffff: protocol all u32 match u32 0 0 action police rate 40Mbit burst 10k drop
+! ONCE !
+
+sudo tc filter show dev $DEV ingress
+=>
+filter parent ffff: protocol all pref 49152 u32 chain 0 
+filter parent ffff: protocol all pref 49152 u32 chain 0 fh 800: ht divisor 1 
+filter parent ffff: protocol all pref 49152 u32 chain 0 fh 800::800 order 2048 key ht 800 bkt 0 terminal flowid not_in_hw 
+  match 00000000/00000000 at 0
+        action order 1:  police 0x1 rate 40Mbit burst 10Kb mtu 2Kb action drop overhead 0b 
         ref 1 bind 1 
 
-
-TODO 
-
+gst-launch-1.0 udpsrc port=5600 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !\
+  videoconvert ! autovideosink sync=false
+=> RECEIVING
 
 -----------------------------------------------------------------------------------------
 https://medium.com/eatclub-tech/traffic-controller-linux-a5a671afc34a
