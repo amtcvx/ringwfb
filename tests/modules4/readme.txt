@@ -72,6 +72,22 @@ gst-launch-1.0 udpsrc port=5600 ! application/x-rtp, encoding-name=H265, payload
   videoconvert ! autovideosink sync=false
 => RECEIVING
 
+watch -n 1 sudo tc -s qdisc show dev $DEV
+=>
+qdisc mq 0: root 
+ Sent 1300898 bytes 1337 pkt (dropped 0, overlimits 0 requeues 7) 
+ backlog 0b 0p requeues 7
+qdisc fq_codel 0: parent :4 limit 10240p flows 1024 quantum 1514 target 5ms interval 100ms memory_limit 32Mb ecn drop_batch 64 
+ Sent 1040807 bytes 856 pkt (dropped 0, overlimits 0 requeues 7) 
+ backlog 0b 0p requeues 7
+  maxpacket 1442 drop_overlimit 0 new_flow_count 4 ecn_mark 0
+  new_flows_len 0 old_flows_len 0
+...
+qdisc ingress ffff: parent ffff:fff1 ---------------- 
+ Sent 156174101 bytes 122830 pkt (dropped 0, overlimits 0 requeues 0) 
+ backlog 0b 0p requeues 0
+
+
 -----------------------------------------------------------------------------------------
 https://medium.com/eatclub-tech/traffic-controller-linux-a5a671afc34a
 
