@@ -13,6 +13,9 @@ https://pages.sdu.dk/sdurobotics/linux-kernels/kernel/-/blob/4f1885a7b347a905cd9
 
 -----------------------------------------------------------------------------------------
 export DEV=enp5s0
+(pci ethernet card)
+
+No drops above 40 Mbit !
 
 sudo tc qdisc delete dev $DEV ingress
 sudo tc qdisc show dev $DEV ingress
@@ -87,6 +90,12 @@ qdisc ingress ffff: parent ffff:fff1 ----------------
  Sent 156174101 bytes 122830 pkt (dropped 0, overlimits 0 requeues 0) 
  backlog 0b 0p requeues 0
 
+
+-----------------------------------------------------------------------------------------
+export DEV=eth0
+(usb ethernet adpater)
+
+No drops above 60 Mbit !
 
 -----------------------------------------------------------------------------------------
 https://medium.com/eatclub-tech/traffic-controller-linux-a5a671afc34a
