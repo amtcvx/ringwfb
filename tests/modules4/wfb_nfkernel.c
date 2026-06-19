@@ -2,7 +2,7 @@
 
 gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=127.0.0.1
 
-gst-launch-1.0 udpsrc port=5600 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
+gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
 
 */
 #include <linux/netfilter_ipv4.h>
@@ -17,20 +17,17 @@ uint8_t *localname = "lo";
 uint8_t *wifiname = "eth0";
 uint16_t outdestport = 5600, indestport = 5700;
 
-//static uint32_t ip1,ip2;
-
 typedef struct {
-//  uint32_t localipint;
+  uint32_t localipint;
   struct net_device *localdev;
   struct net_device *wifidev;
 } priv_t;
 
 static priv_t mypriv;
 
-//static struct nf_hook_ops *wfb_nfkernel_hook_post = NULL;
+static struct nf_hook_ops *wfb_nfkernel_hook_post = NULL;
 
 /******************************************************************************/
-/*
 static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
   if(skb != NULL) {
@@ -44,25 +41,34 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
         pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
         struct iphdr* niph = ip_hdr(nskb);
-        niph->saddr = ip1;
-        niph->daddr = ip2;
+	memset(&niph->saddr, 0, sizeof(niph->saddr));
+	memset(&niph->daddr, 0, sizeof(niph->saddr));
         nskb->dev = mypriv.wifidev;
         nskb->pkt_type = PACKET_OUTGOING;
 
         struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
         nskb->protocol = neth->h_proto = htons(ETH_P_IP);
 
-        char destaddr[ETH_ALEN] = {0x90,0x1b,0xe,0x61,0x39,0x4f};
-        memcpy(neth->h_dest, destaddr, ETH_ALEN);
+        memset(neth->h_dest, 0, ETH_ALEN);
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
 
+        uint8_t *nptr = skb_network_header(nskb);
+        struct udphdr *nudph = (struct udphdr *)(nptr + sizeof(struct iphdr));
+
+        pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          nskb->len,
+          &(niph->saddr), &(niph->daddr),
+          ntohs(nudph->len),
+          ntohs(nudph->source), ntohs(nudph->dest));
+
         dev_queue_xmit(nskb);
+
       }
     }
   }
   return NF_ACCEPT;
 }
-*/
+
 /******************************************************************************/
 static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
@@ -99,15 +105,12 @@ static int __init wfb_nfkernel_init(void) {
 
   mypriv.localdev = dev_get_by_name(&init_net, localname);
   mypriv.wifidev  = dev_get_by_name(&init_net, wifiname);
-/*
+
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  in4_pton("192.168.3.100", 13, (u8 *)&ip1, '\n', NULL);
-  in4_pton("192.168.3.200", 13, (u8 *)&ip2, '\n', NULL);
-*/
   dev_set_promiscuity(mypriv.wifidev,1);
   netdev_rx_handler_register(mypriv.wifidev, handle_frame, NULL);
-/*
+
   wfb_nfkernel_hook_post = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(wfb_nfkernel_hook_post != NULL) {
     wfb_nfkernel_hook_post->hook     = (nf_hookfn*)wfb_nfkernel_handler_post;
@@ -116,7 +119,7 @@ static int __init wfb_nfkernel_init(void) {
     wfb_nfkernel_hook_post->priority = NF_IP_PRI_FIRST;
     nf_register_net_hook(&init_net, wfb_nfkernel_hook_post);
   }
-*/
+
   return 0;
 }
 
@@ -125,12 +128,12 @@ static void __exit wfb_nfkernel_exit(void) {
 
   dev_set_promiscuity(mypriv.wifidev,0);
   netdev_rx_handler_unregister(mypriv.wifidev);
-/*
+
   if(wfb_nfkernel_hook_post != NULL) {
     nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_post);
     kfree(wfb_nfkernel_hook_post);
   }
-*/
+
 }
 
 /******************************************************************************/
