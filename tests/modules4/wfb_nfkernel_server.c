@@ -5,11 +5,11 @@
 
 #include <net/dst_metadata.h>
 
-#define MACDST {0x3c,0x18,0xa0,0xd6,0x0a,0xfa}
-//#define MACDST {0x90,0x1b,0xe,0x61,0x39,0x4f}
+//#define MACDST {0x3c,0x18,0xa0,0xd6,0x0a,0xfa}
+#define MACDST {0x90,0x1b,0xe,0x61,0x39,0x4f}
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "eth0";//"wlx3c7c3fa9bdca";
+uint8_t *wifiname = "enx3c18a0d60afa";//"wlx3c7c3fa9bdca";
 uint16_t outdestport = 5600, indestport = 5700;
 
 static uint32_t ip1,ip2;
