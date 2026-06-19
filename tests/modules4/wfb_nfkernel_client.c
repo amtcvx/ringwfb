@@ -17,28 +17,27 @@ typedef struct {
 } priv_t;
 
 static priv_t mypriv;
+/*
 static struct nf_hook_ops *wfb_nfkernel_hook_locin = NULL;
 static struct nf_hook_ops *wfb_nfkernel_hook_pre = NULL;
+*/
 
 /******************************************************************************/
 static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
+  if (!*pskb) return RX_HANDLER_CONSUMED;
   struct sk_buff *skb = *pskb;
-  skb = skb_share_check(skb, GFP_ATOMIC);
-
   if (!skb) return RX_HANDLER_CONSUMED;
-
-  *pskb = skb;
 
   struct iphdr * iph;
   iph = ip_hdr(skb);
 
-  if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_PASS;
+  if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
 
   uint8_t *ptr = skb_network_header(skb);
   struct udphdr *udph = (struct udphdr *)(ptr + sizeof(struct iphdr));// udp_hdr(skb);
 
-  if ((ntohs(udph->dest) != outdestport)) return RX_HANDLER_PASS;
+  if ((ntohs(udph->dest) != outdestport)) return RX_HANDLER_CONSUMED;
 /*
   uint8_t ch, *p;
   p = skb->data;
@@ -54,6 +53,9 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
 
+/*
+https://www.linkedin.com/pulse/understanding-skbuff-linear-fragment-data-organization-david-zhu-aoqqc
+*/
   pr_info("handle_frame skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
     skb->len,
     &(iph->saddr), &(iph->daddr),
@@ -61,9 +63,11 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
     ntohs(udph->source), ntohs(udph->dest));
 
   return RX_HANDLER_ANOTHER;
+
 }
 
 /******************************************************************************/
+/*
 static unsigned int wfb_nfkernel_handler_locin(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
   if(skb != NULL) {
@@ -72,7 +76,6 @@ static unsigned int wfb_nfkernel_handler_locin(void *priv, struct sk_buff *skb, 
   return NF_ACCEPT;
 }
 
-/******************************************************************************/
 static unsigned int wfb_nfkernel_handler_pre(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
   if(skb != NULL) {
@@ -80,7 +83,7 @@ static unsigned int wfb_nfkernel_handler_pre(void *priv, struct sk_buff *skb, co
   }
   return NF_ACCEPT;
 }
-
+*/
 /******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
 
@@ -96,7 +99,7 @@ static int __init wfb_nfkernel_init(void) {
 
   dev_set_promiscuity(mypriv.wifidev,1);
   netdev_rx_handler_register(mypriv.wifidev, handle_frame, NULL);
-
+/*
   wfb_nfkernel_hook_locin = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(wfb_nfkernel_hook_locin != NULL) {
     wfb_nfkernel_hook_locin->hook     = (nf_hookfn*)wfb_nfkernel_handler_locin;
@@ -114,7 +117,7 @@ static int __init wfb_nfkernel_init(void) {
     wfb_nfkernel_hook_pre->priority = NF_IP_PRI_FIRST + 2;
     nf_register_net_hook(&init_net, wfb_nfkernel_hook_pre);
   }
-
+*/
   return 0;
 }
 
@@ -123,7 +126,7 @@ static void __exit wfb_nfkernel_exit(void) {
 
   dev_set_promiscuity(mypriv.wifidev,0);
   netdev_rx_handler_unregister(mypriv.wifidev);
-
+/*
   if(wfb_nfkernel_hook_locin != NULL) {
     nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_locin);
     kfree(wfb_nfkernel_hook_locin);
@@ -133,7 +136,7 @@ static void __exit wfb_nfkernel_exit(void) {
     nf_unregister_net_hook(&init_net, wfb_nfkernel_hook_pre);
     kfree(wfb_nfkernel_hook_pre);
   }
-
+*/
 }
 
 /******************************************************************************/
