@@ -14,7 +14,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "eth0";
+uint8_t *wifiname = "enp5s0";
 uint16_t outdestport = 5600, indestport = 5700;
 
 typedef struct {
@@ -82,9 +82,9 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
           ntohs(nudph->len),
           ntohs(nudph->source), ntohs(nudph->dest));
 */
-        pr_info("POST out len(%d)\n",skb->len);
-        p = skb->data;
-        for (uint16_t i = 0; i < skb->len; i++) {
+        pr_info("POST out len(%d)\n",nskb->len);
+        p = nskb->data;
+        for (uint16_t i = 0; i < nskb->len; i++) {
           ch = p[i];
           printk(KERN_CONT "%02x ", (uint32_t) ch);
         }
