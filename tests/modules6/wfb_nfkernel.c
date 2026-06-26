@@ -16,14 +16,14 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 uint8_t *localname = "lo";
 uint8_t *wifiname = "enp5s0";
 uint16_t outdestport = 5600, indestport = 5700;
-
+/*
 typedef struct {
   uint8_t droneid;
-  uint64_t seq;
-  uint16_t msglen;
-  int32_t backfreq;
+  uint8_t seq; //uint64_t seq;
+  uint8_t msglen; //uint16_t msglen;
+  uint8_t backfreq; //int32_t backfreq;
 } __attribute__((packed)) payhd_t;
-
+*/
 typedef struct {
   uint32_t localipint;
   struct net_device *localdev;
@@ -57,9 +57,18 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
         struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
 
-        //pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+/*
         pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(payhd_t), 0, GFP_KERNEL);
 
+        skb_pull_data(nskb,sizeof(struct iphdr)+sizeof(struct udphdr)); 
+
+        payhd_t* pah = (payhd_t*)skb_push(nskb, sizeof(payhd_t));
+        pah->droneid = 1;
+        pah->seq =2;
+        pah->msglen = 3;
+        pah->backfreq = 4;
+*/
 
         struct iphdr* niph = ip_hdr(nskb);
 	memset(&niph->saddr, 0, sizeof(niph->saddr));
