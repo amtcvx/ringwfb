@@ -14,16 +14,16 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "enp5s0";
+uint8_t *wifiname = "eno1";
 uint16_t outdestport = 5600, indestport = 5700;
-/*
+
 typedef struct {
   uint8_t droneid;
   uint8_t seq; //uint64_t seq;
   uint8_t msglen; //uint16_t msglen;
   uint8_t backfreq; //int32_t backfreq;
 } __attribute__((packed)) payhd_t;
-*/
+
 typedef struct {
   uint32_t localipint;
   struct net_device *localdev;
@@ -57,8 +57,8 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
         struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
 
-        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
-/*
+//        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+
         pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(payhd_t), 0, GFP_KERNEL);
 
         skb_pull_data(nskb,sizeof(struct iphdr)+sizeof(struct udphdr)); 
@@ -68,11 +68,14 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         pah->seq =2;
         pah->msglen = 3;
         pah->backfreq = 4;
-*/
 
         struct iphdr* niph = ip_hdr(nskb);
 	memset(&niph->saddr, 0, sizeof(niph->saddr));
 	memset(&niph->daddr, 0, sizeof(niph->saddr));
+
+        struct iphdr* iph = ip_hdr(skb);
+        niph->tot_len = iph->tot_len + ntohs(sizeof(payhd_t));
+
         nskb->dev = mypriv.wifidev;
         nskb->pkt_type = PACKET_OUTGOING;
 
@@ -81,10 +84,14 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
         memset(neth->h_dest, 0, ETH_ALEN);
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-/*
+
         uint8_t *nptr = skb_network_header(nskb);
         struct udphdr *nudph = (struct udphdr *)(nptr + sizeof(struct iphdr));
 
+	struct uphdr* uh = ip_hdr(skb);
+	nuh->len = uh->len + ntohs(sizeof(payhd_t));
+
+/*
         pr_info("POST out skb->len(%d) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           nskb->len,
           &(niph->saddr), &(niph->daddr),
