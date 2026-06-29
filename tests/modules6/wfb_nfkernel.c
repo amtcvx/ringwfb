@@ -22,7 +22,7 @@ typedef struct {
   uint8_t seq; //uint64_t seq;
   uint8_t msglen; //uint16_t msglen;
   uint8_t backfreq; //int32_t backfreq;
-} __attribute__((packed)) payhd_t;
+} __attribute__((packed)) phdr_t;
 
 typedef struct {
   uint32_t localipint;
@@ -53,42 +53,50 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         }
         printk(KERN_CONT "\n");
 */
+	struct iphdr* iph = ip_hdr(skb);
+	struct udphdr* uph = udp_hdr(skb);
 
         struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
-        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+        pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(phdr_t), 0, GFP_KERNEL);
 
-        struct iphdr* niph = ip_hdr(nskb);
+	skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
+
+        phdr_t *npay = (phdr_t *)skb_push(nskb, sizeof (phdr_t));
+        struct udphdr *nudph = (struct udphdr *)skb_push(nskb, sizeof (struct udphdr));
+        struct iphdr *niph   = (struct iphdr *) skb_push(nskb, sizeof (struct iphdr));
+        struct ethhdr *neth  = (struct ethhdr *)skb_push(nskb, sizeof (struct ethhdr));
+
+        npay->droneid = 1;
+        npay->seq =2;
+        npay->msglen = 3;
+        npay->backfreq = 4;
+
+        nudph->len = udph->len + ntohs(sizeof(phdr_t));
+	memcpy(&nudph->source, &udph->source, sizeof(udph->source));
+	memcpy(&nudph->dest,   &udph->dest,   sizeof(udph->dest));
+
+        long unsigned int dum = sizeof(struct iphdr) / 4;
+        niph->ihl = dum;
+	niph->version = 4;
+	niph->frag_off = 0;
+	niph->check = 0;
+	niph->protocol = IPPROTO_UDP;
+        niph->tot_len = iph->tot_len + ntohs(sizeof(phdr_t));
 	memset(&niph->saddr, 0, sizeof(niph->saddr));
 	memset(&niph->daddr, 0, sizeof(niph->saddr));
-
-        niph->tot_len += ntohs(sizeof(payhd_t));
-
-        nskb->dev = mypriv.wifidev;
-        nskb->pkt_type = PACKET_OUTGOING;
-
-        struct ethhdr* neth = (struct ethhdr*)skb_push(nskb, sizeof (struct ethhdr));
-        nskb->protocol = neth->h_proto = htons(ETH_P_IP);
 
         memset(neth->h_dest, 0, ETH_ALEN);
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
 
-        uint8_t *nptr = skb_network_header(nskb);
-        struct udphdr *nudph = (struct udphdr *)(nptr + sizeof(struct iphdr));
-
-        nudph->len += ntohs(sizeof(payhd_t));
-
-        payhd_t* pah = (payhd_t*)skb_put(nskb, sizeof(payhd_t));
-        pah->droneid = 1;
-        pah->seq =2;
-        pah->msglen = 3;
-        pah->backfreq = 4;
+        nskb->dev = mypriv.wifidev;
+        nskb->pkt_type = PACKET_OUTGOING;
+        nskb->protocol = neth->h_proto = htons(ETH_P_IP);
 
         pr_info("POST out tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(niph->tot_len),
           &(niph->saddr), &(niph->daddr),
           ntohs(nudph->len),
           ntohs(nudph->source), ntohs(nudph->dest));
-
 /*
         pr_info("POST out len(%d)\n",nskb->len);
         p = nskb->data;
