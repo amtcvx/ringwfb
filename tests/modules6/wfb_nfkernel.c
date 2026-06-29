@@ -43,20 +43,11 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
     if(iph && iph->protocol == IPPROTO_UDP) {
       struct udphdr *udph = udp_hdr(skb);
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(udph->dest)== outdestport)) {
-/*
-        uint8_t ch, *p;
-        pr_info("POST in len(%d)\n",skb->len);
-        p = skb->data;
-        for (uint16_t i = 0; i < skb->len; i++) {
-          ch = p[i];
-          printk(KERN_CONT "%02x ", (uint32_t) ch);
-        }
-        printk(KERN_CONT "\n");
-*/
+
 	struct iphdr* iph = ip_hdr(skb);
 	struct udphdr* uph = udp_hdr(skb);
 
-        struct sk_buff * nskb = skb_clone(skb, GFP_KERNEL);
+        struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
         pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(phdr_t), 0, GFP_KERNEL);
 
 	skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
@@ -97,15 +88,7 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
           &(niph->saddr), &(niph->daddr),
           ntohs(nudph->len),
           ntohs(nudph->source), ntohs(nudph->dest));
-/*
-        pr_info("POST out len(%d)\n",nskb->len);
-        p = nskb->data;
-        for (uint16_t i = 0; i < nskb->len; i++) {
-          ch = p[i];
-          printk(KERN_CONT "%02x ", (uint32_t) ch);
-        }
-        printk(KERN_CONT "\n");
-*/
+
         dev_queue_xmit(nskb);
       }
     }
@@ -125,10 +108,17 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
   if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
 
-  uint8_t *ptr = skb_network_header(skb);
-  struct udphdr *udph = (struct udphdr *)(ptr + sizeof(struct iphdr));// udp_hdr(skb);
+  struct udphdr *udph = udp_hdr(skb);
 
   if ((ntohs(udph->dest) != outdestport)) return RX_HANDLER_CONSUMED;
+
+  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
+  struct iphdr *niph = ip_hdr(nskb);
+  struct udphdr *nudph = udp_hdr(nskb);
+
+  niph->tot_len = iph->tot_len - ntohs(sizeof(phdr_t));
+  nudph->len = udph->len - ntohs(sizeof(phdr_t));
+
 
   udph->dest = htons(indestport);
 
