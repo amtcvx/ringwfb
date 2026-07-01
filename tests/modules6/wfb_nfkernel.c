@@ -116,65 +116,46 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   struct udphdr* uph = udp_hdr(skb);
 
   if ((ntohs(uph->dest) != outdestport)) return RX_HANDLER_CONSUMED;
-/*
-  uph->dest = htons(indestport);
-  skb->dev = mypriv.localdev;
-  skb->pkt_type = PACKET_HOST;
-  return RX_HANDLER_ANOTHER;
-*/
-/*
-  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
-  struct udphdr *nuph = udp_hdr(nskb);
-  nuph->dest = htons(indestport);
-  nskb->dev = mypriv.localdev;
-  nskb->pkt_type = PACKET_HOST;
-  netif_rx(nskb);
-  return RX_HANDLER_CONSUMED;
-*/
 
   struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
-//  phdr_t *pay = (phdr_t *)skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
   phdr_t *pay = (phdr_t *)((void *)uph + sizeof(struct udphdr));
 
   pr_info("pay  droneid(%d) seq(%d) msglen(%d) backfres(%d)\n",
     pay->droneid, pay->seq, pay->msglen, pay->backfreq);
-/*
+
   pr_info("IN handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
-*/
+
   skb_pull(nskb, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t));
 
-  struct udphdr *nuph = (struct udphdr *)skb_push(nskb, sizeof(struct udphdr));
-  struct iphdr  *niph = (struct iphdr *) skb_push(nskb, sizeof(struct iphdr));
-  struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, sizeof(struct ethhdr));
-/*
-  memcpy(nuph, uph, sizeof(struct udphdr));
-  memcpy(niph, iph, sizeof(struct iphdr));
-
+  skb_push(nskb, sizeof(struct udphdr));
+  struct udphdr *nuph = udp_hdr(nskb);
+  skb_reset_transport_header(nskb);
+  memset(nuph, 0, sizeof(struct udphdr));
   nuph->len = uph->len - ntohs(sizeof(phdr_t));
   nuph->dest = htons(indestport);
 
+  skb_push(nskb, sizeof(struct iphdr));
+  struct iphdr  *niph = ip_hdr(nskb);
+  skb_reset_network_header(nskb);
   memset(niph, 0, sizeof(struct iphdr));
   long unsigned int dum = sizeof(struct iphdr) / 4;
   niph->ihl = dum;
   niph->version = 4;
-
-  niph->frag_off = 0;
-  niph->check = 0;
-
   niph->protocol = IPPROTO_UDP;
   niph->tot_len = iph->tot_len - ntohs(sizeof(phdr_t));
 
-  memset(&niph->saddr, 0, sizeof(niph->saddr));
-  memset(&niph->daddr, 0, sizeof(niph->saddr));
-*/
+  skb_push(nskb, sizeof(struct ethhdr));
+  struct ethhdr *neth = eth_hdr(nskb);
+  skb_reset_mac_header(skb);
   memset(neth, 0, sizeof(struct ethhdr));
   memcpy(neth->h_source, skb->dev->dev_addr, ETH_ALEN);
 
+  nskb->protocol = neth->h_proto = htons(ETH_P_IP);
   nskb->dev = mypriv.localdev;
   nskb->pkt_type = PACKET_HOST;
 
