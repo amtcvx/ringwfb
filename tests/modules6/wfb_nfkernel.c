@@ -134,14 +134,14 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
   skb_push(nskb, sizeof(struct udphdr));
   struct udphdr *nuph = udp_hdr(nskb);
-  skb_reset_transport_header(nskb);
+  skb_reset_transport_header(nskb); // skb->transport_header = skb->data;
   memset(nuph, 0, sizeof(struct udphdr));
   nuph->len = uph->len - ntohs(sizeof(phdr_t));
   nuph->dest = htons(indestport);
 
   skb_push(nskb, sizeof(struct iphdr));
   struct iphdr  *niph = ip_hdr(nskb);
-  skb_reset_network_header(nskb);
+  skb_reset_network_header(nskb); // skb->network_header = skb->data - skb->head;
   memset(niph, 0, sizeof(struct iphdr));
   long unsigned int dum = sizeof(struct iphdr) / 4;
   niph->ihl = dum;
@@ -151,9 +151,11 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
   skb_push(nskb, sizeof(struct ethhdr));
   struct ethhdr *neth = eth_hdr(nskb);
-  skb_reset_mac_header(skb);
+  skb_reset_mac_header(nskb); // skb->mac_header = skb->data - skb->head;
   memset(neth, 0, sizeof(struct ethhdr));
   memcpy(neth->h_source, skb->dev->dev_addr, ETH_ALEN);
+
+  skb_reset_mac_len(nskb); // skb->mac_len = skb->network_header - skb->mac_header;
 
   nskb->protocol = neth->h_proto = htons(ETH_P_IP);
   nskb->dev = mypriv.localdev;
