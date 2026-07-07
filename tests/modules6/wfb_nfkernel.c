@@ -116,20 +116,59 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   struct udphdr* uph = udp_hdr(skb);
 
   if ((ntohs(uph->dest) != outdestport)) return RX_HANDLER_CONSUMED;
-
-  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
-
+/*
   phdr_t *pay = (phdr_t *)((void *)uph + sizeof(struct udphdr));
 
   pr_info("pay  droneid(%d) seq(%d) msglen(%d) backfres(%d)\n",
     pay->droneid, pay->seq, pay->msglen, pay->backfreq);
-
+*/
   pr_info("IN handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
+/*
+  struct iphdr refiph;
+  memcpy(&refiph, iph, sizeof(struct iphdr));
+  struct udphdr refuph;
+  memcpy(&refuph, uph, sizeof(struct udphdr));
+*/
+  skb_pull(skb, sizeof(struct ethhdr));
 
+//  uph = skb_push(skb, sizeof(struct udphdr));
+//  skb_reset_transport_header(skb);
+//  memcpy(uph, &refuph, sizeof(struct udphdr));
+
+  uph->dest = htons(indestport);
+
+//  uph->len -= ntohs(sizeof(phdr_t));
+
+//  iph = skb_push(skb, sizeof(struct iphdr));
+//  skb_reset_network_header(skb);
+//  memcpy(iph, &refiph, sizeof(struct iphdr));
+//  iph->protocol = IPPROTO_UDP;
+
+//  iph->tot_len -= ntohs(sizeof(phdr_t));
+
+  struct ethhdr *eth = (struct ethhdr *)skb_push(skb, sizeof(struct ethhdr)); 
+//  skb_reset_mac_header(skb);
+  skb->protocol = eth->h_proto = htons(ETH_P_IP);
+
+  skb->dev = mypriv.localdev;
+  skb->pkt_type = PACKET_HOST;
+
+  iph = ip_hdr(skb);
+  udp_hdr(skb);
+
+  pr_info("OUT handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          ntohs(iph->tot_len),
+          &(iph->saddr), &(iph->daddr),
+          ntohs(uph->len),
+          ntohs(uph->source), ntohs(uph->dest));
+
+  return NF_ACCEPT;
+}
+/*
   skb_pull(nskb, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t));
 
   skb_push(nskb, sizeof(struct udphdr)); // skb->data -=  sizeof(struct udphdr); skb->len += sizeof(struct udphdr); return skb->data;
@@ -155,7 +194,7 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   memset(neth, 0, sizeof(struct ethhdr));
   memcpy(neth->h_source, skb->dev->dev_addr, ETH_ALEN);
 
-//  skb_reset_mac_len(nskb); // skb->mac_len = skb->network_header - skb->mac_header;
+  skb_reset_mac_len(nskb); // skb->mac_len = skb->network_header - skb->mac_header;
 
   nskb->protocol = neth->h_proto = htons(ETH_P_IP);
   nskb->dev = mypriv.localdev;
@@ -171,6 +210,7 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
   return RX_HANDLER_CONSUMED;
 }
+*/
 
 /******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
