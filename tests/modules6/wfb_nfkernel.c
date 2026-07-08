@@ -127,29 +127,41 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
+
+
+  uint8_t ch, *p;
+  p = skb->data;
+  for (uint16_t i = 0; i < skb->len; i++) {
+    if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
+    ch = p[i];
+    printk(KERN_CONT "%02x ", (uint32_t) ch);
+  }
+  printk(KERN_CONT "\n");
+
 /*
   struct iphdr refiph;
   memcpy(&refiph, iph, sizeof(struct iphdr));
   struct udphdr refuph;
   memcpy(&refuph, uph, sizeof(struct udphdr));
+
+  skb_pull(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr));
+
+  uph = skb_push(skb, sizeof(struct udphdr));
+  skb_reset_transport_header(skb);
+  memcpy(uph, &refuph, sizeof(struct udphdr));
 */
-  skb_pull(skb, sizeof(struct ethhdr));
-
-//  uph = skb_push(skb, sizeof(struct udphdr));
-//  skb_reset_transport_header(skb);
-//  memcpy(uph, &refuph, sizeof(struct udphdr));
-
   uph->dest = htons(indestport);
-
+/*
 //  uph->len -= ntohs(sizeof(phdr_t));
 
-//  iph = skb_push(skb, sizeof(struct iphdr));
-//  skb_reset_network_header(skb);
-//  memcpy(iph, &refiph, sizeof(struct iphdr));
-//  iph->protocol = IPPROTO_UDP;
+  iph = skb_push(skb, sizeof(struct iphdr));
+  skb_reset_network_header(skb);
+  memcpy(iph, &refiph, sizeof(struct iphdr));
+  iph->protocol = IPPROTO_UDP;
 
 //  iph->tot_len -= ntohs(sizeof(phdr_t));
-
+*/
+  skb_pull(skb, sizeof(struct ethhdr));
   struct ethhdr *eth = (struct ethhdr *)skb_push(skb, sizeof(struct ethhdr)); 
 //  skb_reset_mac_header(skb);
   skb->protocol = eth->h_proto = htons(ETH_P_IP);
@@ -166,7 +178,18 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
 
-  return NF_ACCEPT;
+
+  p = skb->data;
+  for (uint16_t i = 0; i < skb->len; i++) {
+    if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
+    ch = p[i];
+    printk(KERN_CONT "%02x ", (uint32_t) ch);
+  }
+  printk(KERN_CONT "\n");
+
+
+  // udpsrc port=5700
+  return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
 }
 /*
   skb_pull(nskb, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t));
