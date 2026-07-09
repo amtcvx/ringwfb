@@ -116,45 +116,33 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   struct udphdr* uph = udp_hdr(skb);
 
   if ((ntohs(uph->dest) != outdestport)) return RX_HANDLER_CONSUMED;
-/*
+
   phdr_t *pay = (phdr_t *)((void *)uph + sizeof(struct udphdr));
 
   pr_info("pay  droneid(%d) seq(%d) msglen(%d) backfres(%d)\n",
     pay->droneid, pay->seq, pay->msglen, pay->backfreq);
-*/
+
   pr_info("IN handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
 
-
-  uint8_t ch, *p;
-  p = skb->data;
-  for (uint16_t i = 0; i < skb->len; i++) {
-    if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
-    ch = p[i];
-    printk(KERN_CONT "%02x ", (uint32_t) ch);
-  }
-  printk(KERN_CONT "\n");
-
-
-  struct ethhdr refeth;
-  memcpy(&refeth, skb->data, sizeof(struct ethhdr));
   struct iphdr refiph;
-  memcpy(&refiph, iph, sizeof(struct iphdr));
+  memcpy((void  *)&refiph, (void *)iph, sizeof(struct iphdr));
   struct udphdr refuph;
-  memcpy(&refuph, uph, sizeof(struct udphdr));
+  memcpy((void *)&refuph, (void *)uph, sizeof(struct udphdr));
 
-  skb_pull(skb, sizeof(struct iphdr));
-  iph = (struct iphdr *)skb_push(skb, sizeof(struct iphdr));
-  memcpy(iph, &refiph, sizeof(struct iphdr));
+  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));// + sizeof(phdr_t)); 
 
-  skb_pull(skb, sizeof(struct ethhdr));
-  struct ethhdr *eth = (struct ethhdr *)skb_push(skb, sizeof(struct ethhdr));
-  memcpy(eth, &refeth, sizeof(struct ethhdr));
+  uint8_t *ptr = skb_push(skb, sizeof(struct udphdr));
+  refuph.dest = htons(indestport);
+//  refuph.len -= sizeof(phdr_t);
+  memcpy(ptr, (void *)&refuph, sizeof(struct udphdr));
 
-  uph->dest = htons(indestport);
+  ptr = skb_push(skb, sizeof(struct iphdr));
+//  refiph.tot_len -= sizeof(phdr_t);
+  memcpy(ptr, (void *)&refiph, sizeof(struct iphdr));
 
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
@@ -162,69 +150,8 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   iph = ip_hdr(skb);
   udp_hdr(skb);
 
-
-  pr_info("OUT handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          ntohs(iph->tot_len),
-          &(iph->saddr), &(iph->daddr),
-          ntohs(uph->len),
-          ntohs(uph->source), ntohs(uph->dest));
-
-
-  p = skb->data;
-  for (uint16_t i = 0; i < skb->len; i++) {
-    if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "In pay\n");
-    ch = p[i];
-    printk(KERN_CONT "%02x ", (uint32_t) ch);
-  }
-  printk(KERN_CONT "\n");
-
-
-  // udpsrc port=5700
   return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
 }
-/*
-  skb_pull(nskb, sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t));
-
-  skb_push(nskb, sizeof(struct udphdr)); // skb->data -=  sizeof(struct udphdr); skb->len += sizeof(struct udphdr); return skb->data;
-  skb_reset_transport_header(nskb);      // skb->transport_header = skb->data (- skb->head)
-  struct udphdr *nuph = udp_hdr(nskb);   // return (struct udphdr *)(skb->head + skb->transport_header)
-  memset(nuph, 0, sizeof(struct udphdr));
-  nuph->len = uph->len - ntohs(sizeof(phdr_t));
-  nuph->dest = htons(indestport);
-
-  skb_push(nskb, sizeof(struct iphdr)); // skb->data -= sizeof(struct iphdr);  skb->len += sizeof(struct iphdr); return skb->data;
-  skb_reset_network_header(nskb);       // skb->network_header = skb->data (- skb->head)
-  struct iphdr *niph = ip_hdr(nskb);    // return (struct iphdr *)(skb->head + skb->network_header)
-  memset(niph, 0, sizeof(struct iphdr));
-  long unsigned int dum = sizeof(struct iphdr) / 4;
-  niph->ihl = dum;
-  niph->version = 4;
-  niph->protocol = IPPROTO_UDP;
-  niph->tot_len = iph->tot_len - ntohs(sizeof(phdr_t));
-
-  skb_push(nskb, sizeof(struct ethhdr)); // skb->data -= sizeof(struct ethhdr); skb->len += sizeof(struct ethhdr); return skb->data;
-  skb_reset_mac_header(nskb);          // skb->mac_header = skb->data (- skb->head)
-  struct ethhdr *neth = eth_hdr(nskb); // (struct ethhdr *)(skb->head + skb->mac_header)
-  memset(neth, 0, sizeof(struct ethhdr));
-  memcpy(neth->h_source, skb->dev->dev_addr, ETH_ALEN);
-
-  skb_reset_mac_len(nskb); // skb->mac_len = skb->network_header - skb->mac_header;
-
-  nskb->protocol = neth->h_proto = htons(ETH_P_IP);
-  nskb->dev = mypriv.localdev;
-  nskb->pkt_type = PACKET_HOST;
-
-  netif_rx(nskb);
-
-  pr_info("OUT handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          ntohs(niph->tot_len),
-          &(niph->saddr), &(niph->daddr),
-          ntohs(nuph->len),
-          ntohs(nuph->source), ntohs(nuph->dest));
-
-  return RX_HANDLER_CONSUMED;
-}
-*/
 
 /******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
