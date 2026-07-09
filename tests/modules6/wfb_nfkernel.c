@@ -15,7 +15,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 /******************************************************************************/
 uint8_t *localname = "lo";
 uint8_t *wifiname = "enx3c18a0d60afa";
-uint16_t outdestport = 5600, indestport = 5700;
+uint16_t outdestport = 5600, lineport = 5650, indestport = 5700;
 
 typedef struct {
   uint8_t droneid;
@@ -57,7 +57,7 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
 	iph = ip_hdr(nskb);
         uph = udp_hdr(nskb);
-	uph->dest = htons(indestport);
+	uph->dest = htons(lineport);
 
 /*
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
@@ -113,7 +113,6 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 /******************************************************************************/
 static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
-
   if (!*pskb) return RX_HANDLER_CONSUMED;
   struct sk_buff *skb = *pskb;
   if (!skb) return RX_HANDLER_CONSUMED;
@@ -126,7 +125,7 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 
   struct udphdr* uph = udp_hdr(skb);
 
-  if ((ntohs(uph->dest) != outdestport)) return RX_HANDLER_CONSUMED;
+  if ((ntohs(uph->dest) != lineport)) return RX_HANDLER_CONSUMED;
 
   phdr_t *pay = (phdr_t *)((void *)uph + sizeof(struct udphdr));
 
@@ -159,7 +158,12 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   skb->pkt_type = PACKET_HOST;
 
   iph = ip_hdr(skb);
-  udp_hdr(skb);
+  uph = udp_hdr(skb);
+  pr_info("OUT  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          ntohs(iph->tot_len),
+          &(iph->saddr), &(iph->daddr),
+          ntohs(uph->len),
+          ntohs(uph->source), ntohs(uph->dest));
 
   return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
 }
