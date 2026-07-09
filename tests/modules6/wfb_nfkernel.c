@@ -14,7 +14,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "enp5s0";
+uint8_t *wifiname = "enx3c18a0d60afa";
 uint16_t outdestport = 5600, indestport = 5700;
 
 typedef struct {
@@ -47,8 +47,19 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)) {
 
-	struct iphdr* iph = ip_hdr(skb);
+        struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
+        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+
+	uint8_t *ptr = skb_push(nskb, sizeof (struct ethhdr));
+	struct ethhdr *eth = (struct ethhdr *)ptr;
+        memcpy(eth->h_source, nskb->dev->dev_addr, ETH_ALEN);
+
+	iph = ip_hdr(nskb);
+        uph = udp_hdr(nskb);
+	uph->dest = htons(indestport);
+
+/*
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
         pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(phdr_t), 0, GFP_KERNEL);
 
@@ -80,18 +91,18 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
         memset(neth->h_dest, 0, ETH_ALEN);
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-
+*/
         nskb->dev = mypriv.wifidev;
         nskb->pkt_type = PACKET_OUTGOING;
-        nskb->protocol = neth->h_proto = htons(ETH_P_IP);
+        nskb->protocol = eth->h_proto = htons(ETH_P_IP);
 
         dev_queue_xmit(nskb);
 
         pr_info("POST out tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          ntohs(niph->tot_len),
-          &(niph->saddr), &(niph->daddr),
-          ntohs(nuph->len),
-          ntohs(nuph->source), ntohs(nuph->dest));
+          ntohs(iph->tot_len),
+          &(iph->saddr), &(iph->daddr),
+          ntohs(uph->len),
+          ntohs(uph->source), ntohs(uph->dest));
 
       }
     }
