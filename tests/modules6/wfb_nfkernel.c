@@ -14,7 +14,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "enx3c18a0d60afa";
+uint8_t *wifiname = "enp5s0";
 uint16_t outdestport = 5600, lineport = 5650, indestport = 5700;
 
 typedef struct {
@@ -39,11 +39,11 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
   if(skb != NULL) {
 
-    struct iphdr* iph = ip_hdr(skb);
+    struct iphdr* iph = (struct iphdr*)(skb->data);
 
     if(iph && iph->protocol == IPPROTO_UDP) {
 
-      struct udphdr *uph = udp_hdr(skb);
+      struct udphdr* uph = (struct udphdr*)(skb->data + sizeof(struct iphdr));
 
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)) {
 
@@ -100,17 +100,17 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   struct sk_buff *skb = *pskb;
   if (!skb) return RX_HANDLER_CONSUMED;
 
-  pr_info("skb->len (%d)\n",skb->len);
+  pr_info("IN kb->len (%d)\n",skb->len);
 
-  struct iphdr* iph = ip_hdr(skb);
+  struct iphdr* iph = (struct iphdr*)(skb->data);
 
   if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
 
-  struct udphdr* uph = udp_hdr(skb);
+  struct udphdr* uph = (struct udphdr*)(skb->data + sizeof(struct iphdr));
 
   if ((ntohs(uph->dest) != lineport)) return RX_HANDLER_CONSUMED;
 
-  phdr_t *pay = (phdr_t *)((void *)uph + sizeof(struct udphdr));
+  phdr_t *pay = (phdr_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
 
   pr_info("pay  droneid(%d) seq(%d) msglen(%d) backfres(%d)\n",
     pay->droneid, pay->seq, pay->msglen, pay->backfreq);
@@ -140,8 +140,9 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
 
-  iph = ip_hdr(skb);
-  uph = udp_hdr(skb);
+
+  iph = (struct iphdr*)(skb->data);
+  uph = (struct udphdr*)(skb->data + sizeof(struct iphdr));
   pr_info("OUT  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
