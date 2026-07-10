@@ -49,12 +49,11 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
+//      pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(phdr_t), 0, GFP_KERNEL);
         pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
 
 	skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
 /*
-        pskb_expand_head(nskb, sizeof(struct ethhdr) + + sizeof(phdr_t), 0, GFP_KERNEL);
-
         phdr_t *npay = (phdr_t *)skb_push(nskb, sizeof (phdr_t));
         npay->droneid = 1;
         npay->seq =2;
@@ -64,13 +63,13 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         struct udphdr *nuph = (struct udphdr *)skb_push(nskb, sizeof(struct udphdr));
 	memcpy((void *)nuph, (void *)uph, sizeof(struct udphdr));
         nuph->dest = htons(lineport);
-//        nuph->len += sizeof(phdr_t);
+//        nuph->len += htons(sizeof(phdr_t));
 
 	struct iphdr *niph = (struct iphdr *)skb_push(nskb, sizeof(struct iphdr));
 	memcpy((void *)niph, (void *)iph, sizeof(struct iphdr));
         memset(&niph->saddr, 0, sizeof(iph->saddr));
         memset(&niph->daddr, 0, sizeof(iph->saddr));
- //       niph->tot_len += sizeof(phdr_t);
+//        niph->tot_len += htons(sizeof(phdr_t));
 
 	struct ethhdr *neth = skb_push(nskb, sizeof (struct ethhdr));
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
@@ -82,11 +81,10 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
         dev_queue_xmit(nskb);
 
         pr_info("POST out tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          ntohs(iph->tot_len),
-          &(iph->saddr), &(iph->daddr),
-          ntohs(uph->len),
-          ntohs(uph->source), ntohs(uph->dest));
-
+          ntohs(niph->tot_len),
+          &(niph->saddr), &(niph->daddr),
+          ntohs(nuph->len),
+          ntohs(nuph->source), ntohs(nuph->dest));
       }
     }
   }
@@ -109,12 +107,12 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   struct udphdr* uph = (struct udphdr*)(skb->data + sizeof(struct iphdr));
 
   if ((ntohs(uph->dest) != lineport)) return RX_HANDLER_CONSUMED;
-
+/*
   phdr_t *pay = (phdr_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
 
   pr_info("pay  droneid(%d) seq(%d) msglen(%d) backfres(%d)\n",
     pay->droneid, pay->seq, pay->msglen, pay->backfreq);
-
+*/
   pr_info("IN handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
@@ -126,15 +124,16 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   struct udphdr refuph;
   memcpy((void *)&refuph, (void *)uph, sizeof(struct udphdr));
 
-  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));// + sizeof(phdr_t)); 
+//  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t)); 
+  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
 
   uint8_t *ptr = skb_push(skb, sizeof(struct udphdr));
   refuph.dest = htons(indestport);
-//  refuph.len -= sizeof(phdr_t);
+//  refuph.len -= htons(sizeof(phdr_t));
   memcpy(ptr, (void *)&refuph, sizeof(struct udphdr));
 
   ptr = skb_push(skb, sizeof(struct iphdr));
-//  refiph.tot_len -= sizeof(phdr_t);
+//  refiph.tot_len -=  htons(sizeof(phdr_t));
   memcpy(ptr, (void *)&refiph, sizeof(struct iphdr));
 
   skb->dev = mypriv.localdev;
