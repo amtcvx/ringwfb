@@ -49,8 +49,8 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
-      pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(phdr_t), 0, GFP_KERNEL);
-//        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+        pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(phdr_t), 0, GFP_KERNEL);
+//      pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
 
 	skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
 
@@ -128,12 +128,12 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
 //  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
 
   uint8_t *ptr = skb_push(skb, sizeof(struct udphdr));
-  refuph.dest = htons(indestport);
-  refuph.len -= htons(sizeof(phdr_t));
+  refuph.dest = ntohs(indestport);
+  refuph.len -= ntohs(sizeof(phdr_t));
   memcpy(ptr, (void *)&refuph, sizeof(struct udphdr));
 
   ptr = skb_push(skb, sizeof(struct iphdr));
-  refiph.tot_len -= htons(sizeof(phdr_t));
+  refiph.tot_len -= ntohs(sizeof(phdr_t));
   memcpy(ptr, (void *)&refiph, sizeof(struct iphdr));
 
   skb->dev = mypriv.localdev;
