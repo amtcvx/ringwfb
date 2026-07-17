@@ -158,7 +158,7 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   int len = skb->len - offset;
   refuph.check = ~csum_tcpudp_magic((refiph.saddr), (refiph.daddr), len, IPPROTO_UDP, 0);
 */
-  iph->check = 0;
+//  iph->check = 0;
   ip_send_check(iph);
 
 
