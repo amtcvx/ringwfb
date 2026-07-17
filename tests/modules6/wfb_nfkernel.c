@@ -12,18 +12,22 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 #include <net/dst_metadata.h>
 
+
+#include <net/ip.h>
+//#include <net/udp.h>
+
 /******************************************************************************/
 uint8_t *localname = "lo";
 uint8_t *wifiname = "enp5s0";
 uint16_t outdestport = 5600, lineport = 5650, indestport = 5700;
-
+/*
 typedef struct {
   uint8_t droneid;
   uint8_t seq; //uint64_t seq;
   uint8_t msglen; //uint16_t msglen;
   uint8_t backfreq; //int32_t backfreq;
 } __attribute__((packed)) phdr_t;
-
+*/
 typedef struct {
   uint32_t localipint;
   struct net_device *localdev;
@@ -49,27 +53,27 @@ static unsigned int wfb_nfkernel_handler_post(void *priv, struct sk_buff *skb, c
 
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
-        pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(phdr_t), 0, GFP_KERNEL);
-//      pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
+//        pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(phdr_t), 0, GFP_KERNEL);
+        pskb_expand_head(nskb, sizeof(struct ethhdr), 0, GFP_KERNEL);
 
 	skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
-
+/*
         phdr_t *npay = (phdr_t *)skb_push(nskb, sizeof (phdr_t));
         npay->droneid = 1;
         npay->seq =2;
         npay->msglen = 3;
         npay->backfreq = 4;
-
+*/
         struct udphdr *nuph = (struct udphdr *)skb_push(nskb, sizeof(struct udphdr));
 	memcpy((void *)nuph, (void *)uph, sizeof(struct udphdr));
         nuph->dest = htons(lineport);
-        nuph->len += htons(sizeof(phdr_t));
+//        nuph->len += htons(sizeof(phdr_t));
 
 	struct iphdr *niph = (struct iphdr *)skb_push(nskb, sizeof(struct iphdr));
 	memcpy((void *)niph, (void *)iph, sizeof(struct iphdr));
         memset(&niph->saddr, 0, sizeof(iph->saddr));
         memset(&niph->daddr, 0, sizeof(iph->saddr));
-        niph->tot_len += htons(sizeof(phdr_t));
+//        niph->tot_len += htons(sizeof(phdr_t));
 
 	struct ethhdr *neth = skb_push(nskb, sizeof (struct ethhdr));
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
@@ -107,13 +111,14 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   struct udphdr* uph = (struct udphdr*)(skb->data + sizeof(struct iphdr));
 
   if ((ntohs(uph->dest) != lineport)) return RX_HANDLER_CONSUMED;
-
+/*
   phdr_t *pay = (phdr_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
 
   pr_info("pay  droneid(%d) seq(%d) msglen(%d) backfres(%d)\n",
     pay->droneid, pay->seq, pay->msglen, pay->backfreq);
-
-  pr_info("IN handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+*/
+  pr_info("%d IN  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          skb->ip_summed,
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
@@ -124,25 +129,41 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   struct udphdr refuph;
   memcpy((void *)&refuph, (void *)uph, sizeof(struct udphdr));
 
-  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t)); 
-//  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
+//  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t)); 
+  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
+
 
   uint8_t *ptr = skb_push(skb, sizeof(struct udphdr));
   refuph.dest = ntohs(indestport);
-  refuph.len -= ntohs(sizeof(phdr_t));
+//  refuph.len -= ntohs(sizeof(phdr_t));
+
   memcpy(ptr, (void *)&refuph, sizeof(struct udphdr));
 
   ptr = skb_push(skb, sizeof(struct iphdr));
-  refiph.tot_len -= ntohs(sizeof(phdr_t));
+//  refiph.tot_len -= ntohs(sizeof(phdr_t));
+
   memcpy(ptr, (void *)&refiph, sizeof(struct iphdr));
 
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
 
+//  skb->ip_summed = CHECKSUM_UNNECESSARY;  
 
   iph = (struct iphdr*)(skb->data);
   uph = (struct udphdr*)(skb->data + sizeof(struct iphdr));
-  pr_info("OUT  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+
+/*
+  uph->check = 0;
+  int offset = skb_transport_offset(skb);
+  int len = skb->len - offset;
+  refuph.check = ~csum_tcpudp_magic((refiph.saddr), (refiph.daddr), len, IPPROTO_UDP, 0);
+*/
+  iph->check = 0;
+  ip_send_check(iph);
+
+
+  pr_info("%d OUT  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          skb->ip_summed,
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
