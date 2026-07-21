@@ -117,8 +117,9 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   pr_info("pay  droneid(%d) seq(%d) msglen(%d) backfres(%d)\n",
     pay->droneid, pay->seq, pay->msglen, pay->backfreq);
 */
-  pr_info("%d IN  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          skb->ip_summed,
+  pr_info("%d %d %d %d %d %d IN  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          skb->ip_summed, skb->csum, skb->csum_start, skb->csum_offset,
+          iph->check, uph->check,
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
@@ -129,9 +130,10 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   struct udphdr refuph;
   memcpy((void *)&refuph, (void *)uph, sizeof(struct udphdr));
 
+//  skb_pull_rcsum(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t)); 
 //  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t)); 
   skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
-
+//  skb_pull_rcsum(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
 
   uint8_t *ptr = skb_push(skb, sizeof(struct udphdr));
   refuph.dest = ntohs(indestport);
@@ -152,18 +154,17 @@ static rx_handler_result_t handle_frame(struct sk_buff **pskb) {
   iph = (struct iphdr*)(skb->data);
   uph = (struct udphdr*)(skb->data + sizeof(struct iphdr));
 
-/*
+
   uph->check = 0;
-  int offset = skb_transport_offset(skb);
-  int len = skb->len - offset;
-  refuph.check = ~csum_tcpudp_magic((refiph.saddr), (refiph.daddr), len, IPPROTO_UDP, 0);
-*/
-//  iph->check = 0;
-  ip_send_check(iph);
+//  uph->check = ~csum_tcpudp_magic((iph->saddr), (iph->daddr), uph->len, IPPROTO_UDP, 0);
 
+  iph->ttl = 1;
+  iph->check = 0;
+  iph->check = ip_fast_csum((uint8_t *)iph, iph->ihl);
 
-  pr_info("%d OUT  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          skb->ip_summed,
+  pr_info("%d %d %d %d %d %d OUT  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          skb->ip_summed, skb->csum, skb->csum_start, skb->csum_offset,
+          iph->check, uph->check,
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
