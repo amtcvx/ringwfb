@@ -4,6 +4,31 @@ gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,f
 
 gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
 
+TO CHECK
+
+  uint16_t len = uph->len;
+  uint16_t totlen = iph->tot_len;
+  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
+
+  skb_push(skb, sizeof(struct udphdr));
+  skb_reset_transport_header(skb);
+  struct udphdr *nuh = udp_hdr(skb);
+  memset((void *)nuh, 0, sizeof(struct udphdr));
+  nuh->dest = htons(indestport);
+  nuh->len = len;
+
+  skb_push(skb, sizeof(struct iphdr));
+  skb_reset_network_header(skb);
+  struct iphdr *niph = ip_hdr(skb);
+  memset((void *)niph, 0, sizeof(struct iphdr));
+  niph->version = 4;
+  niph->ihl = 5;
+  niph->protocol = skb->protocol;
+  niph->saddr = mypriv.localipint;
+  niph->daddr = mypriv.localipint;
+  niph->tot_len = totlen;
+
+
 */
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
