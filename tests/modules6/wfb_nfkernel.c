@@ -47,13 +47,13 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   pr_info("IN kb->len (%d)\n",skb->len);
 
-//  struct iphdr *iph = ip_hdr(skb);
-  struct iphdr* iph = (struct iphdr*)(skb->data);
+  struct iphdr *iph = ip_hdr(skb);
 
   if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
 
-//  struct udphdr* uph = udp_hdr(skb);
-  struct udphdr* uph = (struct udphdr*)(skb->data + sizeof(struct iphdr));
+  skb->transport_header = skb->network_header + iph->ihl*4;
+
+  struct udphdr* uph = udp_hdr(skb);
 
   if ((ntohs(uph->dest) != lineport)) return RX_HANDLER_CONSUMED;
 
@@ -105,11 +105,13 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   if(skb != NULL) {
 
-    struct iphdr* iph = (struct iphdr*)(skb->data);
+    struct iphdr *iph = ip_hdr(skb);
 
     if(iph && iph->protocol == IPPROTO_UDP) {
 
-      struct udphdr* uph = (struct udphdr*)(skb->data + sizeof(struct iphdr));
+      skb->transport_header = skb->network_header + iph->ihl*4;
+
+      struct udphdr* uph = udp_hdr(skb);
 
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)) {
 
@@ -124,15 +126,13 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
-//        pskb_expand_head(nskb, sizeof(struct ethhdr) + sizeof(phdr_t), 0, GFP_KERNEL);
-
+//        pskb_expand_head(nskb, sizeof(phdr_t), 0, GFP_KERNEL);
         skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
 /*
-	phdr_t *npay = (phdr_t *)skb_push(nskb, sizeof (phdr_t));
-        npay->droneid = 1;
-        npay->seq =2;
-        npay->msglen = 3;
-        npay->backfreq = 4;
+	phdr_t *npay;
+	skb_push(nskb, sizeof(*npay));
+	memset((void *)npay,0,sizeof(*npay));
+        nskb->data = (void *)npay;
 */
 	skb_push(nskb, sizeof(*uph));
         skb_reset_transport_header(nskb);
