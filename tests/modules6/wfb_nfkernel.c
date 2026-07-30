@@ -130,9 +130,10 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
 
         skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
-/*
-        pskb_expand_head(nskb, sizeof(pph_t), 0, GFP_KERNEL);
 
+        pskb_expand_head(nskb, ETH_ALEN, 0, GFP_KERNEL);
+/*
+        pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
 	skb_push(nskb, sizeof(pph_t));
 	pph_t *pph = (pph_t *)skb->data;
 	memset((void *)pph, 0, sizeof(pph_t));
@@ -147,7 +148,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 	memset((void *)uph, 0,sizeof(*uph));
         uph->dest = htons(lineport);        
 	uph->len = ulen;
- //       uph->len += htons(sizeof(pph_t));
+//        uph->len += htons(sizeof(pph_t));
 
         skb_push(nskb, sizeof(*iph));
         skb_reset_network_header(nskb);
@@ -160,18 +161,15 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         iph->tot_len = itotlen;
 //        iph->tot_len += htons(sizeof(pph_t));
 
-
-/*
 	struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, ETH_HLEN);
         skb_reset_mac_header(nskb);
 	memset((void *)neth, 0,sizeof(*neth));
 	memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-*/
-
+/*
 	struct ethhdr *neth = (struct ethhdr *)nskb->head; //skb_mac_header(nskb);
 	memset((void *)neth, 0,sizeof(*neth));
 	memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-
+*/
 
         neth->h_proto = htons(ETH_P_IP);
 
