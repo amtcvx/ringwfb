@@ -26,7 +26,7 @@ typedef struct {
   uint8_t seq; //uint64_t seq;
   uint8_t msglen; //uint16_t msglen;
   uint8_t backfreq; //int32_t backfreq;
-} __attribute__((packed)) phdr_t;
+} __attribute__((packed)) pph_t;
 */
 typedef struct {
   uint32_t localipint;
@@ -51,7 +51,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
 
-  skb->transport_header = skb->network_header + iph->ihl*4;
+  skb->transport_header = skb->network_header + iph->ihl*4; // skb_reset_transport_header(skb);
 
   struct udphdr* uph = udp_hdr(skb);
 
@@ -105,11 +105,13 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   if(skb != NULL) {
 
+    pr_info("IN output_proc kb->len (%d)\n",skb->len);
+
     struct iphdr *iph = ip_hdr(skb);
 
     if(iph && iph->protocol == IPPROTO_UDP) {
 
-      skb->transport_header = skb->network_header + iph->ihl*4;
+      skb->transport_header = skb->network_header + iph->ihl*4; // skb_reset_transport_header(skb);
 
       struct udphdr* uph = udp_hdr(skb);
 
@@ -126,13 +128,18 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
-//        pskb_expand_head(nskb, sizeof(phdr_t), 0, GFP_KERNEL);
+
         skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
 /*
-	phdr_t *npay;
-	skb_push(nskb, sizeof(*npay));
-	memset((void *)npay,0,sizeof(*npay));
-        nskb->data = (void *)npay;
+        pskb_expand_head(nskb, sizeof(pph_t), 0, GFP_KERNEL);
+
+	skb_push(nskb, sizeof(pph_t));
+	pph_t *pph = (pph_t *)skb->data;
+	memset((void *)pph, 0, sizeof(pph_t));
+        pph->droneid = 1;
+        pph->seq = 2;
+        pph->msglen = 3;
+        pph->backfreq = 4;
 */
 	skb_push(nskb, sizeof(*uph));
         skb_reset_transport_header(nskb);
@@ -140,7 +147,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 	memset((void *)uph, 0,sizeof(*uph));
         uph->dest = htons(lineport);        
 	uph->len = ulen;
-//        uph->len += htons(sizeof(phdr_t));
+ //       uph->len += htons(sizeof(pph_t));
 
         skb_push(nskb, sizeof(*iph));
         skb_reset_network_header(nskb);
@@ -151,25 +158,34 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 	iph->protocol = IPPROTO_UDP;
 	iph->ttl = 64;
         iph->tot_len = itotlen;
-//        iph->tot_len += htons(sizeof(phdr_t));
+//        iph->tot_len += htons(sizeof(pph_t));
 
+
+/*
 	struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, ETH_HLEN);
         skb_reset_mac_header(nskb);
 	memset((void *)neth, 0,sizeof(*neth));
 	memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
+*/
 
-        nskb->protocol = neth->h_proto = htons(ETH_P_IP);
+	struct ethhdr *neth = (struct ethhdr *)nskb->head; //skb_mac_header(nskb);
+	memset((void *)neth, 0,sizeof(*neth));
+	memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
+
+
+        neth->h_proto = htons(ETH_P_IP);
+
+        nskb->protocol = htons(ETH_P_IP);
 
         nskb->dev = mypriv.wifidev;
 
 	dev_direct_xmit(nskb, 0);
 
-        pr_info("output_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+        pr_info("OUT output_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
-
       }
     }
   }
@@ -190,8 +206,8 @@ static int __init wfb_nfkernel_init(void) {
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(output_hk != NULL) {
     output_hk->hook     = (nf_hookfn*)output_proc;
-    output_hk->hooknum  = NF_INET_PRE_ROUTING;
-    output_hk->pf       = PF_INET;
+    output_hk->hooknum  = NF_INET_POST_ROUTING;
+    output_hk->pf       = NFPROTO_IPV4;
     output_hk->priority = NF_IP_PRI_FIRST;
     nf_register_net_hook(&init_net, output_hk);
   }
