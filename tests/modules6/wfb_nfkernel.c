@@ -13,7 +13,6 @@ https://github.com/YanayGoor/MyRootkit/blob/master/src/networking.c
 
 #include <net/dst_metadata.h>
 
-
 #include <net/ip.h>
 
 /******************************************************************************/
@@ -22,10 +21,11 @@ uint8_t *wifiname = "enp5s0";
 uint16_t outdestport = 5600, lineport = 5650, indestport = 5700;
 
 typedef struct {
+  uint8_t padding;
   uint8_t droneid;
-  uint8_t seq; //uint64_t seq;
-  uint8_t msglen; //uint16_t msglen;
-  uint8_t backfreq; //int32_t backfreq;
+  uint16_t msglen;
+  int32_t backfreq;
+  uint64_t seq;
 } __attribute__((packed)) pph_t;
 
 typedef struct {
@@ -45,7 +45,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct sk_buff *skb = *pskb;
   if (!skb) return RX_HANDLER_CONSUMED;
 
-  pr_info("IN input_proc kb->len (%d)\n",skb->len);
+//  pr_info("IN input_proc kb->len (%d)\n",skb->len);
 
   struct iphdr *iph = ip_hdr(skb);
 
@@ -56,17 +56,17 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct udphdr* uph = udp_hdr(skb);
 
   if ((ntohs(uph->dest) != lineport)) return RX_HANDLER_CONSUMED;
-
+/*
   pr_info("input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
-
+*/
   pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
 
-  pr_info("pay  droneid(%d) seq(%d) msglen(%d) backfres(%d)\n",
-    pph->droneid, pph->seq, pph->msglen, pph->backfreq);
+  pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
+          pph->droneid, pph->msglen, pph->backfreq, pph->seq);
 
   uint16_t ulen = uph->len - htons(sizeof(pph_t));
   uint16_t itotlen = iph->tot_len - htons(sizeof(pph_t));
@@ -95,13 +95,13 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
-
+/*
   pr_info("OUT input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
-
+*/
   return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
 }
 
@@ -110,7 +110,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   if(skb != NULL) {
 
-    pr_info("IN output_proc kb->len (%d)\n",skb->len);
+//    pr_info("IN output_proc kb->len (%d)\n",skb->len);
 
     struct iphdr *iph = ip_hdr(skb);
 
@@ -121,13 +121,13 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
       struct udphdr* uph = udp_hdr(skb);
 
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)) {
-
+/*
         pr_info("output_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
-
+*/
         uint16_t ulen = uph->len;
         uint16_t itotlen = iph->tot_len;
 
@@ -137,12 +137,12 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
         pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
 	skb_push(nskb, sizeof(pph_t));
-	pph_t *pph = (pph_t *)skb->data;
+	pph_t *pph = (pph_t *)nskb->data;
 	memset((void *)pph, 0, sizeof(pph_t));
-        pph->droneid = 1;
-        pph->seq = 2;
-        pph->msglen = 3;
-        pph->backfreq = 4;
+        pph->droneid =  0xff;                // uint8_t
+        pph->msglen =   0xffff;              // uint16_t
+        pph->backfreq = 0xffffffff;          // int32_t
+        pph->seq =      0xffffffffffffffff;  // uint64_t
 
 	skb_push(nskb, sizeof(*uph));
         skb_reset_transport_header(nskb);
@@ -174,12 +174,13 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         nskb->dev = mypriv.wifidev;
 
 	dev_direct_xmit(nskb, 0);
-
+/*
         pr_info("OUT output_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
+*/
       }
     }
   }
