@@ -6,7 +6,7 @@ export DEVICE=wlxfc349725a317
 sudo ip link set $DEVICE down
 sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
-sudo iw dev $DEVICE set channel 3
+sudo iw dev $DEVICE set channel 15
 
 
 gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=127.0.0.1
@@ -168,22 +168,11 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
       struct udphdr* uph = udp_hdr(skb);
 
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)) {
-/*
-        pr_info("output_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          ntohs(iph->tot_len),
-          &(iph->saddr), &(iph->daddr),
-          ntohs(uph->len),
-          ntohs(uph->source), ntohs(uph->dest));
-*/
-/*
-        uint16_t ulen = uph->len;
-        uint16_t itotlen = iph->tot_len;
-*/
+
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
         skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
 
-//        pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
         pskb_expand_head(nskb, sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t), 0, GFP_KERNEL);
 
 	skb_push(nskb, sizeof(pph_t));
@@ -200,49 +189,13 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 	memcpy(nskb->data, ieeehd, sizeof(ieeehd));
         ptr = skb_push(nskb, sizeof(radiotaphd));
 	memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
-/*
-	skb_push(nskb, sizeof(*uph));
-        skb_reset_transport_header(nskb);
-	uph = udp_hdr(nskb);
-	memset((void *)uph, 0,sizeof(*uph));
-        uph->dest = htons(lineport);        
-	uph->len = ulen;
-        uph->len += htons(sizeof(pph_t));
 
-        skb_push(nskb, sizeof(*iph));
-        skb_reset_network_header(nskb);
-        iph = ip_hdr(nskb);
-        memset((void *)iph, 0,sizeof(*iph));
-        iph->version = IPVERSION;
-        iph->ihl = sizeof(struct iphdr) / 4;
-	iph->protocol = IPPROTO_UDP;
-	iph->ttl = 64;
-        iph->tot_len = itotlen;
-        iph->tot_len += htons(sizeof(pph_t));
-
-	struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, ETH_HLEN);
-        skb_reset_mac_header(nskb);
-	memset((void *)neth, 0,sizeof(*neth));
-	memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-        neth->h_proto = htons(ETH_P_IP);
-*/
-/*
-        nskb->protocol = htons(ETH_P_IP);
-*/
         nskb->dev = mypriv.wifidev;
 
 	dev_direct_xmit(nskb, 0);
 
         pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
           pph->droneid, pph->msglen, pph->backfreq, curseq);
-
-/*
-        pr_info("OUT output_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          ntohs(iph->tot_len),
-          &(iph->saddr), &(iph->daddr),
-          ntohs(uph->len),
-          ntohs(uph->source), ntohs(uph->dest));
-*/
       }
     }
   }
