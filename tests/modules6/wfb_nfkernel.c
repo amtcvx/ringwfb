@@ -51,7 +51,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
 
-  skb->transport_header = skb->network_header + iph->ihl*4; // skb_reset_transport_header(skb);
+  skb->transport_header = skb->network_header + iph->ihl*4;
 
   struct udphdr* uph = udp_hdr(skb);
 
@@ -72,7 +72,6 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   uint16_t itotlen = iph->tot_len - htons(sizeof(pph_t));
 
   skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
-  //skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
 
   skb_push(skb, sizeof(*uph));
   skb_reset_transport_header(skb);
@@ -117,7 +116,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
     if(iph && iph->protocol == IPPROTO_UDP) {
 
-      skb->transport_header = skb->network_header + iph->ihl*4; // skb_reset_transport_header(skb);
+      skb->transport_header = skb->network_header + iph->ihl*4;
 
       struct udphdr* uph = udp_hdr(skb);
 
@@ -134,10 +133,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
-
         skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
-
-//        pskb_expand_head(nskb, ETH_ALEN, 0, GFP_KERNEL);
 
         pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
 	skb_push(nskb, sizeof(pph_t));
