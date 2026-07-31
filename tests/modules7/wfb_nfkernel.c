@@ -2,7 +2,7 @@
 
 sudo rfkill
 
-export DEVICE=wlxfc349725a317
+export DEVICE=wlx244bfeb72618
 sudo ip link set $DEVICE down
 sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
@@ -25,7 +25,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "wlxfc349725a317";
+uint8_t *wifiname = "wlx244bfeb72618";
 uint16_t outdestport = 5600, lineport = 5650, indestport = 5700;
 
 typedef struct {
@@ -92,41 +92,30 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct sk_buff *skb = *pskb;
   if (!skb) return RX_HANDLER_CONSUMED;
 
-//  pr_info("IN input_proc kb->len (%d)\n",skb->len);
+  pr_info("INi1 input_proc kb->len (%d)\n",skb->len);
 
-  struct iphdr *iph = ip_hdr(skb);
+  skb_pull(skb, 35);
+  skb_pull(skb, 24);
+  skb_pull(skb, 4);
 
-  if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
-
-  skb->transport_header = skb->network_header + iph->ihl*4;
-
-  struct udphdr* uph = udp_hdr(skb);
-
-  if ((ntohs(uph->dest) != lineport)) return RX_HANDLER_CONSUMED;
-/*
-  pr_info("input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          ntohs(iph->tot_len),
-          &(iph->saddr), &(iph->daddr),
-          ntohs(uph->len),
-          ntohs(uph->source), ntohs(uph->dest));
-*/
-  pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
+  pph_t *pph = (pph_t *)(skb->data);
 
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
           pph->droneid, pph->msglen, pph->backfreq, pph->seq);
 
-  uint16_t ulen = uph->len - htons(sizeof(pph_t));
-  uint16_t itotlen = iph->tot_len - htons(sizeof(pph_t));
+  if ((pph->droneid != 255) || pph->msglen > skb->len) return RX_HANDLER_CONSUMED;
 
-  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
+  skb_pull(skb, sizeof(pph_t));
 
+  struct udphdr* uph;
   skb_push(skb, sizeof(*uph));
   skb_reset_transport_header(skb);
   uph = udp_hdr(skb);
   memset((void *)uph, 0,sizeof(*uph));
   uph->dest = htons(indestport);
-  uph->len = ulen;
+  uph->len = pph->msglen;
 
+  struct iphdr *iph;
   skb_push(skb, sizeof(*iph));
   skb_reset_network_header(skb);
   iph = ip_hdr(skb);
@@ -135,20 +124,20 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   iph->ihl = sizeof(struct iphdr) / 4;
   iph->protocol = IPPROTO_UDP;
   iph->ttl = 64;
-  iph->tot_len = itotlen;
+//  iph->tot_len = itotlen;
 
   iph->check = 0;
   iph->check = ip_fast_csum((uint8_t *)iph, iph->ihl);
 
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
-/*
+
   pr_info("OUT input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
-*/
+
   return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
 }
 
@@ -183,6 +172,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         pph->backfreq = 0xffffffff;          // int32_t
         pph->seq = curseq;//     0xffffffffffffffff;  // uint64_t
 
+        pph->msglen = htons(uph->len);
 	curseq++;
 
         uint8_t *ptr = skb_push(nskb, sizeof(ieeehd));
