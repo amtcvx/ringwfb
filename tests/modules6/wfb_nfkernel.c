@@ -20,14 +20,14 @@ https://github.com/YanayGoor/MyRootkit/blob/master/src/networking.c
 uint8_t *localname = "lo";
 uint8_t *wifiname = "enp5s0";
 uint16_t outdestport = 5600, lineport = 5650, indestport = 5700;
-/*
+
 typedef struct {
   uint8_t droneid;
   uint8_t seq; //uint64_t seq;
   uint8_t msglen; //uint16_t msglen;
   uint8_t backfreq; //int32_t backfreq;
 } __attribute__((packed)) pph_t;
-*/
+
 typedef struct {
   uint32_t localipint;
   struct net_device *localdev;
@@ -45,7 +45,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct sk_buff *skb = *pskb;
   if (!skb) return RX_HANDLER_CONSUMED;
 
-  pr_info("IN kb->len (%d)\n",skb->len);
+  pr_info("IN input_proc kb->len (%d)\n",skb->len);
 
   struct iphdr *iph = ip_hdr(skb);
 
@@ -57,22 +57,22 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   if ((ntohs(uph->dest) != lineport)) return RX_HANDLER_CONSUMED;
 
-  pr_info("input_proc  handle_frame  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+  pr_info("input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
-/*
-  phdr_t *pay = (phdr_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
+
+  pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
 
   pr_info("pay  droneid(%d) seq(%d) msglen(%d) backfres(%d)\n",
-    pay->droneid, pay->seq, pay->msglen, pay->backfreq);
-*/
-  uint16_t ulen = uph->len;
-  uint16_t itotlen = iph->tot_len;
+    pph->droneid, pph->seq, pph->msglen, pph->backfreq);
 
-  //skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(phdr_t));
-  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
+  uint16_t ulen = uph->len - htons(sizeof(pph_t));
+  uint16_t itotlen = iph->tot_len - htons(sizeof(pph_t));
+
+  skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
+  //skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr));
 
   skb_push(skb, sizeof(*uph));
   skb_reset_transport_header(skb);
@@ -96,6 +96,12 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
+
+  pr_info("OUT input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          ntohs(iph->tot_len),
+          &(iph->saddr), &(iph->daddr),
+          ntohs(uph->len),
+          ntohs(uph->source), ntohs(uph->dest));
 
   return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
 }
@@ -131,8 +137,8 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
         skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
 
-        pskb_expand_head(nskb, ETH_ALEN, 0, GFP_KERNEL);
-/*
+//        pskb_expand_head(nskb, ETH_ALEN, 0, GFP_KERNEL);
+
         pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
 	skb_push(nskb, sizeof(pph_t));
 	pph_t *pph = (pph_t *)skb->data;
@@ -141,14 +147,14 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         pph->seq = 2;
         pph->msglen = 3;
         pph->backfreq = 4;
-*/
+
 	skb_push(nskb, sizeof(*uph));
         skb_reset_transport_header(nskb);
 	uph = udp_hdr(nskb);
 	memset((void *)uph, 0,sizeof(*uph));
         uph->dest = htons(lineport);        
 	uph->len = ulen;
-//        uph->len += htons(sizeof(pph_t));
+        uph->len += htons(sizeof(pph_t));
 
         skb_push(nskb, sizeof(*iph));
         skb_reset_network_header(nskb);
@@ -159,18 +165,12 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 	iph->protocol = IPPROTO_UDP;
 	iph->ttl = 64;
         iph->tot_len = itotlen;
-//        iph->tot_len += htons(sizeof(pph_t));
+        iph->tot_len += htons(sizeof(pph_t));
 
 	struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, ETH_HLEN);
         skb_reset_mac_header(nskb);
 	memset((void *)neth, 0,sizeof(*neth));
 	memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-/*
-	struct ethhdr *neth = (struct ethhdr *)nskb->head; //skb_mac_header(nskb);
-	memset((void *)neth, 0,sizeof(*neth));
-	memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-*/
-
         neth->h_proto = htons(ETH_P_IP);
 
         nskb->protocol = htons(ETH_P_IP);
