@@ -17,7 +17,7 @@ https://github.com/YanayGoor/MyRootkit/blob/master/src/networking.c
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "enp5s0";
+uint8_t *wifiname = "eth0";
 uint16_t outdestport = 5600, lineport = 5650, indestport = 5700;
 
 typedef struct {
@@ -26,6 +26,7 @@ typedef struct {
   uint16_t msglen;
   int32_t backfreq;
   uint64_t seq;
+  uint16_t dummy;
 } __attribute__((packed)) pph_t;
 
 typedef struct {
@@ -37,6 +38,8 @@ typedef struct {
 static priv_t mypriv;
 
 static struct nf_hook_ops *output_hk = NULL;
+
+static uint64_t curseq = 0;
 
 /******************************************************************************/
 static rx_handler_result_t input_proc(struct sk_buff **pskb) {
@@ -66,10 +69,10 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
 
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
-          pph->droneid, pph->msglen, pph->backfreq, pph->seq);
+          pph->droneid, ntohs(pph->msglen), pph->backfreq, pph->seq);
 
-  uint16_t ulen = uph->len - htons(sizeof(pph_t));
-  uint16_t itotlen = iph->tot_len - htons(sizeof(pph_t));
+  uint16_t ulen = pph->msglen;
+  uint16_t itotlen = iph->tot_len - htons(sizeof(pph_t)); // TODO
 
   skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
 
@@ -95,13 +98,13 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
-/*
+
   pr_info("OUT input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
-*/
+
   return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
 }
 
@@ -138,19 +141,19 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
 	skb_push(nskb, sizeof(pph_t));
 	pph_t *pph = (pph_t *)nskb->data;
-	memset((void *)pph, 0, sizeof(pph_t));
-        pph->droneid =  0xff;                // uint8_t
-        pph->msglen =   0xffff;              // uint16_t
-        pph->backfreq = 0xffffffff;          // int32_t
-        pph->seq =      0xffffffffffffffff;  // uint64_t
+        memset((void *)pph, 0, sizeof(pph_t));
+        pph->droneid =  0xff;
+        pph->seq = curseq;
+        pph->msglen = ulen;
+
+        curseq++;
 
 	skb_push(nskb, sizeof(*uph));
         skb_reset_transport_header(nskb);
 	uph = udp_hdr(nskb);
 	memset((void *)uph, 0,sizeof(*uph));
         uph->dest = htons(lineport);        
-	uph->len = ulen;
-        uph->len += htons(sizeof(pph_t));
+	uph->len = ulen + htons(sizeof(pph_t));
 
         skb_push(nskb, sizeof(*iph));
         skb_reset_network_header(nskb);
@@ -160,8 +163,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         iph->ihl = sizeof(struct iphdr) / 4;
 	iph->protocol = IPPROTO_UDP;
 	iph->ttl = 64;
-        iph->tot_len = itotlen;
-        iph->tot_len += htons(sizeof(pph_t));
+        iph->tot_len = itotlen + htons(sizeof(pph_t));
 
 	struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, ETH_HLEN);
         skb_reset_mac_header(nskb);
@@ -174,13 +176,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         nskb->dev = mypriv.wifidev;
 
 	dev_direct_xmit(nskb, 0);
-/*
-        pr_info("OUT output_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          ntohs(iph->tot_len),
-          &(iph->saddr), &(iph->daddr),
-          ntohs(uph->len),
-          ntohs(uph->source), ntohs(uph->dest));
-*/
+
       }
     }
   }
