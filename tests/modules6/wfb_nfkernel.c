@@ -17,7 +17,7 @@ https://github.com/YanayGoor/MyRootkit/blob/master/src/networking.c
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *wifiname = "eth0";
+uint8_t *wifiname = "enp5s0";
 uint16_t outdestport = 5600, lineport = 5650, indestport = 5700;
 
 typedef struct {
@@ -59,20 +59,12 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct udphdr* uph = udp_hdr(skb);
 
   if ((ntohs(uph->dest) != lineport)) return RX_HANDLER_CONSUMED;
-/*
-  pr_info("input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
-          ntohs(iph->tot_len),
-          &(iph->saddr), &(iph->daddr),
-          ntohs(uph->len),
-          ntohs(uph->source), ntohs(uph->dest));
-*/
-  pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
 
+  pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
+/*
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
           pph->droneid, ntohs(pph->msglen), pph->backfreq, pph->seq);
-
-  uint16_t ulen = pph->msglen;
-  uint16_t itotlen = iph->tot_len - htons(sizeof(pph_t)); // TODO
+*/
 
   skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
 
@@ -81,7 +73,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   uph = udp_hdr(skb);
   memset((void *)uph, 0,sizeof(*uph));
   uph->dest = htons(indestport);
-  uph->len = ulen;
+  uph->len = pph->msglen;
 
   skb_push(skb, sizeof(*iph));
   skb_reset_network_header(skb);
@@ -91,7 +83,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   iph->ihl = sizeof(struct iphdr) / 4;
   iph->protocol = IPPROTO_UDP;
   iph->ttl = 64;
-  iph->tot_len = itotlen;
+  iph->tot_len = htons(20+ntohs(uph->len));
 
   iph->check = 0;
   iph->check = ip_fast_csum((uint8_t *)iph, iph->ihl);
@@ -99,12 +91,13 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
 
+/*
   pr_info("OUT input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
-
+*/
   return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
 }
 
@@ -131,20 +124,16 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
 */
-        uint16_t ulen = uph->len;
-        uint16_t itotlen = iph->tot_len;
-
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
-
         skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
-
         pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
+
 	skb_push(nskb, sizeof(pph_t));
 	pph_t *pph = (pph_t *)nskb->data;
         memset((void *)pph, 0, sizeof(pph_t));
         pph->droneid =  0xff;
         pph->seq = curseq;
-        pph->msglen = ulen;
+        pph->msglen = uph->len;
 
         curseq++;
 
@@ -153,7 +142,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 	uph = udp_hdr(nskb);
 	memset((void *)uph, 0,sizeof(*uph));
         uph->dest = htons(lineport);        
-	uph->len = ulen + htons(sizeof(pph_t));
+	uph->len = htons(ntohs(pph->msglen) + sizeof(pph_t));
 
         skb_push(nskb, sizeof(*iph));
         skb_reset_network_header(nskb);
@@ -163,7 +152,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         iph->ihl = sizeof(struct iphdr) / 4;
 	iph->protocol = IPPROTO_UDP;
 	iph->ttl = 64;
-        iph->tot_len = itotlen + htons(sizeof(pph_t));
+        iph->tot_len = htons(20 + ntohs(pph->msglen) + sizeof(pph_t));
 
 	struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, ETH_HLEN);
         skb_reset_mac_header(nskb);
@@ -174,9 +163,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         nskb->protocol = htons(ETH_P_IP);
 
         nskb->dev = mypriv.wifidev;
-
 	dev_direct_xmit(nskb, 0);
-
       }
     }
   }
