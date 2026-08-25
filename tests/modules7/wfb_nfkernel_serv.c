@@ -2,7 +2,7 @@
 
 sudo rfkill
 
-export DEVICE=wlx3c7c3fa9bfb6
+export DEVICE=wlx3c7c3fa9c1e4
 sudo ip link set $DEVICE down
 sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
@@ -25,7 +25,7 @@ gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,f
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlx3c7c3fa9bfb6";
+uint8_t *devname = "wlx3c7c3fa9c1e4";
 uint16_t outdestport = 5600;
 
 uint16_t ethport = 5650;
@@ -52,6 +52,7 @@ static struct nf_hook_ops *output_hk = NULL;
 static uint64_t curseq = 0;
 
 /************************************************************************************************/
+
 #define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
 
 #define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI | (IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT))
@@ -91,8 +92,6 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)) {
 
-        uint16_t ulen = uph->len;
-
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
         skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
@@ -100,17 +99,14 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         pskb_expand_head(nskb, sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t), 0, GFP_KERNEL);
 //        pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
 
-	skb_push(nskb, sizeof(pph_t));
-	pph_t *pph = (pph_t *)nskb->data;
-	memset((void *)pph, 0, sizeof(pph_t));
-        pph->droneid =  0xff;                // uint8_t
-        pph->msglen =   0xffff;              // uint16_t
-        pph->backfreq = 0xffffffff;          // int32_t
-        pph->seq = curseq;//     0xffffffffffffffff;  // uint64_t
+        skb_push(nskb, sizeof(pph_t));
+        pph_t *pph = (pph_t *)nskb->data;
+        memset((void *)pph, 0, sizeof(pph_t));
+        pph->droneid =  0xff;
+        pph->seq = curseq;
+        pph->msglen = uph->len;
 
-        pph->msglen = htons(ulen);
-        
-	curseq++;
+        curseq++;
 
 
         uint8_t *ptr = skb_push(nskb, sizeof(ieeehd));
@@ -124,7 +120,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         uph = udp_hdr(nskb);
         memset((void *)uph, 0,sizeof(*uph));
         uph->dest = htons(ethport);
-        uph->len = ulen + htons(sizeof(pph_t));
+        uph->len = htons(ntohs(pph->msglen) + sizeof(pph_t));
 
         skb_push(nskb, sizeof(*iph));
         skb_reset_network_header(nskb);
@@ -134,6 +130,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         iph->ihl = sizeof(struct iphdr) / 4;
         iph->protocol = IPPROTO_UDP;
         iph->ttl = 64;
+        iph->tot_len = htons(20 + ntohs(pph->msglen) + sizeof(pph_t));
 
         struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, ETH_HLEN);
         skb_reset_mac_header(nskb);
@@ -144,13 +141,10 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         nskb->protocol = htons(ETH_P_IP);
 */
 
-
-
         nskb->dev = mypriv.wifidev;
+        dev_direct_xmit(nskb, 0);
 
-	dev_direct_xmit(nskb, 0);
-
-        pr_info("IN output_proc msglen (%d)\n",pph->msglen);
+        pr_info("IN output_proc msglen (%d)\n",ntohs(pph->msglen));
       }
     }
   }

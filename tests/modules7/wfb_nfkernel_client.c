@@ -22,7 +22,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlx3c7c3fa9c1e8";
+uint8_t *devname = "wlxfc349725a317";
 uint16_t indestport = 5700;
 
 uint16_t ethport = 5650;
@@ -44,8 +44,6 @@ typedef struct {
 
 static priv_t mypriv;
 
-#define WFB_PAY_MTU 1500
-
 /******************************************************************************/
 static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
@@ -58,30 +56,31 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct iphdr *iph;
   struct udphdr* uph;
 
-
+/*
   uint16_t radiotaplg = (uint16_t)skb->data[2];
   if (!((radiotaplg == 35) || (radiotaplg == 41))) return RX_HANDLER_CONSUMED;
   skb_pull(skb, radiotaplg);
   skb_pull(skb, 24);
   pph_t *pph = (pph_t *)(skb->data);
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
-          pph->droneid, pph->msglen, pph->backfreq, pph->seq);
-  if ((pph->droneid != 255) || pph->msglen > skb->len) return RX_HANDLER_CONSUMED;
-  uint16_t ulen = htons(pph->msglen);
+          pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
+  if ((pph->droneid != 255) || htons(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
+  uint16_t ulen = pph->msglen;
   skb_pull(skb, sizeof(pph_t));
+*/
 
-/*
   iph = ip_hdr(skb);
   if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
   skb->transport_header = skb->network_header + iph->ihl*4;
   uph = udp_hdr(skb);
   if ((ntohs(uph->dest) != ethport)) return RX_HANDLER_CONSUMED;
   pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
+  uint16_t ulen = pph->msglen;
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
-          pph->droneid, pph->msglen, pph->backfreq, pph->seq);
-  uint16_t ulen = htons(pph->msglen);
+          pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
+
   skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
-*/
+
 
 
   skb_push(skb, sizeof(*uph));
@@ -99,25 +98,13 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   iph->ihl = sizeof(struct iphdr) / 4;
   iph->protocol = IPPROTO_UDP;
   iph->ttl = 64;
-  iph->tot_len = uph->len + htons(20);
+  iph->tot_len = htons(20+ntohs(uph->len));
 
   iph->check = 0;
   iph->check = ip_fast_csum((uint8_t *)iph, iph->ihl);
 
   skb->dev = mypriv.localdev;
   skb->pkt_type = PACKET_HOST;
-
-
-  pr_info("Out len(%d)\n",skb->len);
-  uint8_t ch, *p;
-  p = skb->data;
-  for (uint16_t i = 0; i < skb->len; i++) {
-    if (i == sizeof(struct iphdr) + sizeof(struct udphdr)) printk(KERN_CONT "Out pay\n");
-    ch = p[i];
-    printk(KERN_CONT "%02x ", (uint32_t) ch);
-  }
-  printk(KERN_CONT "\n");
-
 
   pr_info("OUT input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
