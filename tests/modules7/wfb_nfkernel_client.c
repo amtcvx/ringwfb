@@ -2,7 +2,7 @@
 
 sudo rfkill
 
-export DEVICE=wlx3c7c3fa9c1e8
+export DEVICE=wlxfc349725a317
 sudo ip link set $DEVICE down
 sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
@@ -56,31 +56,39 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct iphdr *iph;
   struct udphdr* uph;
 
-/*
+
   uint16_t radiotaplg = (uint16_t)skb->data[2];
   if (!((radiotaplg == 35) || (radiotaplg == 41))) return RX_HANDLER_CONSUMED;
-  skb_pull(skb, radiotaplg);
-  skb_pull(skb, 24);
-  pph_t *pph = (pph_t *)(skb->data);
+  pph_t *pph = (pph_t *)(skb->data + radiotaplg + 24);
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
           pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
   if ((pph->droneid != 255) || htons(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
   uint16_t ulen = pph->msglen;
-  skb_pull(skb, sizeof(pph_t));
-*/
+  skb_pull(skb, radiotaplg + 24 + sizeof(pph_t));
+  skb->len -= 4;
 
+/*
   iph = ip_hdr(skb);
   if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
   skb->transport_header = skb->network_header + iph->ihl*4;
   uph = udp_hdr(skb);
   if ((ntohs(uph->dest) != ethport)) return RX_HANDLER_CONSUMED;
   pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
-  uint16_t ulen = pph->msglen;
+  uint16_t ulen =  htons(8+ntohs(pph->msglen));
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
           pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
-
   skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
+*/
 
+
+  uint8_t ch, *p;
+  pr_info("In len(%d)\n",skb->len);
+  p = skb->data;
+  for (uint16_t i = 0; i < skb->len; i++) {
+    ch = p[i];
+    printk(KERN_CONT "%02x ", (uint32_t) ch);
+  }
+  printk(KERN_CONT "\n");
 
 
   skb_push(skb, sizeof(*uph));

@@ -94,7 +94,20 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
 
-        skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
+	skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
+
+
+
+	uint8_t ch, *p;
+        pr_info("In len(%d)\n",nskb->len);
+        p = nskb->data;
+        for (uint16_t i = 0; i < nskb->len; i++) {
+          ch = p[i];
+          printk(KERN_CONT "%02x ", (uint32_t) ch);
+        }
+        printk(KERN_CONT "\n");
+
+
 
         pskb_expand_head(nskb, sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t), 0, GFP_KERNEL);
 //        pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
@@ -104,7 +117,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         memset((void *)pph, 0, sizeof(pph_t));
         pph->droneid =  0xff;
         pph->seq = curseq;
-        pph->msglen = uph->len;
+        pph->msglen = htons(ntohs(uph->len) - 8);
 
         curseq++;
 
