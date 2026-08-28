@@ -2,7 +2,7 @@
 
 sudo rfkill
 
-export DEVICE=wlx3c7c3fa9c1e4
+export DEVICE=wlxfc349725a317
 sudo ip link set $DEVICE down
 sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
@@ -25,7 +25,7 @@ gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,f
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlx3c7c3fa9c1e4";
+uint8_t *devname = "wlxfc349725a317";
 uint16_t outdestport = 5600;
 
 uint16_t ethport = 5650;
@@ -96,7 +96,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
 	skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
 
-
+        uint16_t paylen = nskb->len;
 
 	uint8_t ch, *p;
         pr_info("In len(%d)\n",nskb->len);
@@ -117,7 +117,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         memset((void *)pph, 0, sizeof(pph_t));
         pph->droneid =  0xff;
         pph->seq = curseq;
-        pph->msglen = htons(ntohs(uph->len) - 8);
+        pph->msglen = htons(paylen);
 
         curseq++;
 
@@ -133,7 +133,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         uph = udp_hdr(nskb);
         memset((void *)uph, 0,sizeof(*uph));
         uph->dest = htons(ethport);
-        uph->len = htons(ntohs(pph->msglen) + sizeof(pph_t));
+        uph->len = htons(8 + paylen + sizeof(pph_t));
 
         skb_push(nskb, sizeof(*iph));
         skb_reset_network_header(nskb);
@@ -143,7 +143,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         iph->ihl = sizeof(struct iphdr) / 4;
         iph->protocol = IPPROTO_UDP;
         iph->ttl = 64;
-        iph->tot_len = htons(20 + ntohs(pph->msglen) + sizeof(pph_t));
+        iph->tot_len = htons(20 + ntohs(uph->len));
 
         struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, ETH_HLEN);
         skb_reset_mac_header(nskb);
@@ -157,7 +157,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         nskb->dev = mypriv.wifidev;
         dev_direct_xmit(nskb, 0);
 
-        pr_info("IN output_proc msglen (%d)\n",ntohs(pph->msglen));
+        pr_info("IN output_proc msglen (%d) (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
       }
     }
   }
