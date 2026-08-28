@@ -2,7 +2,7 @@
 
 sudo rfkill
 
-export DEVICE=wlxfc349725a317
+export DEVICE=wlx3c7c3fa9c1e4
 sudo ip link set $DEVICE down
 sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
@@ -22,7 +22,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlxfc349725a317";
+uint8_t *devname = "wlx3c7c3fa9c1e4";
 uint16_t indestport = 5700;
 
 uint16_t ethport = 5650;
@@ -63,9 +63,11 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
           pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
   if ((pph->droneid != 255) || htons(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
-  uint16_t ulen = pph->msglen;
+  uint16_t paylen = pph->msglen;
   skb_pull(skb, radiotaplg + 24 + sizeof(pph_t));
-  skb->len -= 4;
+//  skb_trim(skb,4);
+//  skb->len -= 4;
+//  skb->data_len -= 4;
 
 /*
   iph = ip_hdr(skb);
@@ -74,7 +76,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   uph = udp_hdr(skb);
   if ((ntohs(uph->dest) != ethport)) return RX_HANDLER_CONSUMED;
   pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
-  uint16_t ulen =  htons(8+ntohs(pph->msglen));
+  uint16_t paylen = pph->msglen;
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
           pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
   skb_pull(skb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
@@ -96,7 +98,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   uph = udp_hdr(skb);
   memset((void *)uph, 0,sizeof(*uph));
   uph->dest = htons(indestport);
-  uph->len = ulen;
+  uph->len = htons(8 + htons(paylen));
 
   skb_push(skb, sizeof(*iph));
   skb_reset_network_header(skb);
