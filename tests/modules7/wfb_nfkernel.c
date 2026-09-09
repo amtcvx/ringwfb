@@ -19,6 +19,8 @@ gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,f
 #include <linux/udp.h>
 #include <linux/etherdevice.h>
 
+#include <linux/inet.h>
+
 /******************************************************************************/
 uint8_t *localname = "lo";
 uint8_t *devname = "wlx3c7c3fa9c1e4";
@@ -45,7 +47,7 @@ static priv_t mypriv;
 
 /******************************************************************************/
 static rx_handler_result_t input_proc(struct sk_buff **pskb) {
-{
+
   struct sk_buff *skb = *pskb;
   struct udphdr *uph;
   struct iphdr  *iph;
