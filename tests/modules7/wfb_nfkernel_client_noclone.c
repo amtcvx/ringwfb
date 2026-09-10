@@ -64,12 +64,8 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
           pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
   uint16_t paylen = pph->msglen;
-
-
-  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
-
-  skb_trim(nskb,skb->len-4);
-  skb_pull(nskb, radiotaplg + 24 + sizeof(pph_t));
+  skb_trim(skb,skb->len-4);
+  skb_pull(skb, radiotaplg + 24 + sizeof(pph_t));
 
 /*
   iph = ip_hdr(skb);
@@ -86,25 +82,25 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
 
   uint8_t ch, *p;
-  pr_info("In len(%d)\n",nskb->len);
-  p = nskb->data;
-  for (uint16_t i = 0; i < nskb->len; i++) {
+  pr_info("In len(%d)\n",skb->len);
+  p = skb->data;
+  for (uint16_t i = 0; i < skb->len; i++) {
     ch = p[i];
     printk(KERN_CONT "%02x ", (uint32_t) ch);
   }
   printk(KERN_CONT "\n");
 
 
-  skb_push(nskb, sizeof(*uph));
-  skb_reset_transport_header(nskb);
-  uph = udp_hdr(nskb);
+  skb_push(skb, sizeof(*uph));
+  skb_reset_transport_header(skb);
+  uph = udp_hdr(skb);
   memset((void *)uph, 0,sizeof(*uph));
   uph->dest = htons(indestport);
   uph->len = htons(8 + htons(paylen));
 
-  skb_push(nskb, sizeof(*iph));
-  skb_reset_network_header(nskb);
-  iph = ip_hdr(nskb);
+  skb_push(skb, sizeof(*iph));
+  skb_reset_network_header(skb);
+  iph = ip_hdr(skb);
   memset((void *)iph, 0,sizeof(*iph));
   iph->version = IPVERSION;
   iph->ihl = sizeof(struct iphdr) / 4;
@@ -115,16 +111,8 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   iph->check = 0;
   iph->check = ip_fast_csum((uint8_t *)iph, iph->ihl);
 
-  skb_reset_mac_header(nskb);
-
-  nskb->dev = mypriv.localdev;
-  nskb->pkt_type = PACKET_HOST;
-
-  nskb->protocol = htons(ETH_P_IP);
-
-  netif_rx(nskb);
-  dev_put(mypriv.localdev);
-  kfree_skb(skb);
+  skb->dev = mypriv.localdev;
+  skb->pkt_type = PACKET_HOST;
 
   pr_info("OUT input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
           ntohs(iph->tot_len),
@@ -132,8 +120,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
           ntohs(uph->len),
           ntohs(uph->source), ntohs(uph->dest));
 
-  return RX_HANDLER_CONSUMED; 
-  //return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
+  return RX_HANDLER_PASS; // RX_HANDLER_ANOTHER duplicated on lo
 }
 
 /******************************************************************************/
