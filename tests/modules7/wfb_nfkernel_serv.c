@@ -93,20 +93,8 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
       if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)) {
 
         struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
-
 	skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
-
         uint16_t paylen = nskb->len;
-
-	uint8_t ch, *p;
-        pr_info("In len(%d)\n",nskb->len);
-        p = nskb->data;
-        for (uint16_t i = 0; i < nskb->len; i++) {
-          ch = p[i];
-          printk(KERN_CONT "%02x ", (uint32_t) ch);
-        }
-        printk(KERN_CONT "\n");
-
 
 
         pskb_expand_head(nskb, sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t), 0, GFP_KERNEL);
@@ -128,16 +116,14 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 	memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
 
 /*
-        skb_push(nskb, sizeof(*uph));
+        uph = (struct udphdr*)skb_push(nskb, sizeof(*uph));
         skb_reset_transport_header(nskb);
-        uph = udp_hdr(nskb);
         memset((void *)uph, 0,sizeof(*uph));
         uph->dest = htons(ethport);
         uph->len = htons(8 + paylen + sizeof(pph_t));
 
-        skb_push(nskb, sizeof(*iph));
+        iph = (struct iphdr*)skb_push(nskb, sizeof(*iph));
         skb_reset_network_header(nskb);
-        iph = ip_hdr(nskb);
         memset((void *)iph, 0,sizeof(*iph));
         iph->version = IPVERSION;
         iph->ihl = sizeof(struct iphdr) / 4;
@@ -150,11 +136,11 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
         memset((void *)neth, 0,sizeof(*neth));
         memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
         neth->h_proto = htons(ETH_P_IP);
-
         nskb->protocol = htons(ETH_P_IP);
 */
 
         nskb->dev = mypriv.wifidev;
+
         dev_direct_xmit(nskb, 0);
 
         pr_info("IN output_proc msglen (%d) (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
