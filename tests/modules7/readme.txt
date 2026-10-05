@@ -8,6 +8,7 @@ sudo systemctl stop wpa_supplicant.service
 
 /etc/modprobe.d/rtw88.conf
 options rtw88_usb switch_usb_mode=n
+options rtw88_core disable_ack=y
 
 plugUSB
 
