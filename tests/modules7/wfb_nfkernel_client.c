@@ -2,7 +2,7 @@
 
 sudo rfkill
 
-export DEVICE=wlx3c7c3fa9c1e4
+export DEVICE=wlxfc349725a317
 sudo ip link set $DEVICE down
 sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
@@ -22,7 +22,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlx3c7c3fa9c1e4";
+uint8_t *devname = "wlxfc349725a317";
 uint16_t indestport = 5700;
 
 uint16_t ethport = 5650;
@@ -58,15 +58,15 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
 
   uint16_t radiotaplg = (uint16_t)skb->data[2];
-  if (!((radiotaplg == 35) || (radiotaplg == 41))) return RX_HANDLER_CONSUMED;
-  pph_t *pph = (pph_t *)(skb->data + radiotaplg + 24);
+  if (!((radiotaplg == 32) || (radiotaplg == 41))) return RX_HANDLER_CONSUMED;
+  pph_t *pph = (pph_t *)(skb->data + radiotaplg + 26);
   if ((pph->droneid != 255) || htons(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
           pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
   uint16_t paylen = pph->msglen;
   struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
   skb_trim(nskb,skb->len-4);
-  skb_pull(nskb, radiotaplg + 24 + sizeof(pph_t));
+  skb_pull(nskb, radiotaplg + 26 + sizeof(pph_t));
 
 /*
   iph = ip_hdr(skb);

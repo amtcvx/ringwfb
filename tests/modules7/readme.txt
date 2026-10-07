@@ -2,13 +2,11 @@ sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgst
 
 -------------------------------------------------------------------------------
 
-if rtw88 
 sudo systemctl stop NetworkManager
 sudo systemctl stop wpa_supplicant.service 
 
 /etc/modprobe.d/rtw88.conf
 options rtw88_usb switch_usb_mode=n
-(options rtw88_core disable_ack=y => ignored)
 
 plugUSB
 
