@@ -44,10 +44,10 @@ sudo nmtui radio on
 sudo nmtui
 
 sudo apt-get update
-sudo apt-get install iw make
-sudo apt-get install camera-engine-rkaiq-rk3588
+sudo apt-get upgrade
+software updater
 
-----
+-----------------
 PC wifi connect to hotspot
 
 PC ip address => Radxa wifi address
@@ -56,15 +56,41 @@ sudo nmap -sn 10.48.231.162/24
 
 ssh radxa@10.48.231.26
 
-----
-sudo systemctl start rkaiq_3A
-sudo systemctl enable rkaiq_3A
+-----------------
+sudo apt-get update
+sudo apt-get install iw make
+sudo apt-get install camera-engine-rkaiq-rk3588
+
+-----------------
+Ethernet
+
+-----------------
+On PC nmtui
+wired connection 
+192.168.3.1
+
+-----------------
+On radxa
+plug usb adpater
+sudo nmtui 
+wired connection 2
+192.168.3.2
+sudo nmtui 
+activate wire connection 2
+exit
+
+-----------------
+On PC
+ssh radxa@192.168.3.2
 
 ----
 /etc/default/u-boot
 U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo"
-U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo radxa-zero3-rpi-camera-v2.dtbo rk3588-uart4-m0.dtbo"
+U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo radxa-zero3-rpi-camera-v2.dtbo rk3588-uart4-m0.dtbo radxa-zero3-disabled-wireless.dtbo"
 sudo u-boot-update
+
+----
+sudo reboot
 
 ----
 /etc/sysctl.conf
@@ -76,6 +102,9 @@ net.ipv6.conf.lo.disable_ipv6 = 1
 mkdir Projects
 cd Projects
 git clone https://github.com/amtcvx/ringwfb.git
+
+sudo systemctl start rkaiq_3A
+sudo systemctl enable rkaiq_3A
 
 ----
 /etc/apt/apt.conf.d/20auto-upgrades
@@ -112,25 +141,6 @@ sudo systemctl set-default multi-user.target
 
 #sudo systemctl set-default graphical.target
 #sudo reboot
-
------------------
-On PC nmtui
-wired connction 
-192.168.3.1
-
------------------
-On radxa
-plug usb adpater
-sudo nmtui 
-wired connection 2
-192.168.3.2
-sudo nmtui 
-activate wire connection 2
-exit
-
------------------
-On PC
-ssh radxa@192.168.3.2
 
 -----------------
 sudo systemctl stop wpa_supplicant
