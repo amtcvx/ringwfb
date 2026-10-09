@@ -71,4 +71,10 @@ sudo reboot
 sudo systemctl set-default graphical.target
 sudo reboot
 
+-----------------
+sudo systemctl stop wpa_supplicant
+sudo systemctl disable wpa_supplicant
 
+/etc/NetworkManager/conf.d/unmanaged.conf
+[keyfile]
+unmanaged-devices=interface-name:wlx*
