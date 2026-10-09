@@ -31,3 +31,44 @@ sudo wireshark -i $DEVICE -k
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
+
+-------------------------------------------------------------------------------
+on radxa ubuntu 24.04
+
+/etc/apt/apt.conf.d/20auto-upgrades
+
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+=>
+APT::Periodic::Update-Package-Lists "0";
+APT::Periodic::Download-Upgradeable-Packages "0";
+APT::Periodic::Unattended-Upgrade "0";
+APT::Periodic::AutocleanInterval "0";
+
+------------------
+snap list
+=>
+firefox            146.0.1-1                       7563   latest/stable  mozilla✓    -
+...
+sudo snap remove --purge firefox
+sudo snap remove --purge gnome-42-2204
+sudo snap remove --purge gtk-common-themes
+sudo snap remove --purge lxd
+sudo snap remove --purge bare
+sudo snap remove --purge core22
+sudo snap remove --purge core24
+sudo snap remove --purge snapd
+
+sudo apt purge --autoremove snapd -y
+echo -e "Package: snapd\nPin: release a=*\nPin-Priority: -10" | sudo tee /etc/apt/preferences.d/nosnap.pref
+sudo apt updatea
+sudo rm -rf /var/cache/snapd/ /var/snap/ /var/lib/snapd/ /snap/ ~/snap/
+
+------------------
+sudo systemctl set-default multi-user.target
+sudo reboot
+
+sudo systemctl set-default graphical.target
+sudo reboot
+
+
