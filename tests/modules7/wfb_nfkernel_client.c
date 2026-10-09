@@ -58,7 +58,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
 
   uint16_t radiotaplg = (uint16_t)skb->data[2];
-  if (!((radiotaplg == 32) || (radiotaplg == 38))) return RX_HANDLER_CONSUMED;
+  if (!((radiotaplg == 32) || (radiotaplg == 38) || (radiotaplg == 41))) return RX_HANDLER_CONSUMED;
   pph_t *pph = (pph_t *)(skb->data + radiotaplg + 26);
   if ((pph->droneid != 255) || htons(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
   pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
