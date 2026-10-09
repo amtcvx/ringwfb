@@ -33,8 +33,51 @@ net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 
 -------------------------------------------------------------------------------
-on radxa ubuntu 24.04
+ON RADXA ZERO 3W
 
+https://github.com/Qengineering/Radxa-Zero-3-NPU-Ubuntu24
+
+External HDMI display, usb keyboard and usb mouse
+
+Radxa wifi connect to hotspot
+sudo nmtui radio on
+sudo nmtui
+
+sudo apt-get update
+sudo apt-get install iw make
+sudo apt-get install camera-engine-rkaiq-rk3588
+
+----
+PC wifi connect to hotspot
+
+PC ip address => Radxa wifi address
+
+sudo nmap -sn 10.48.231.162/24
+
+ssh radxa@10.48.231.26
+
+----
+sudo systemctl start rkaiq_3A
+sudo systemctl enable rkaiq_3A
+
+----
+/etc/default/u-boot
+U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo"
+U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo radxa-zero3-rpi-camera-v2.dtbo rk3588-uart4-m0.dtbo"
+sudo u-boot-update
+
+----
+/etc/sysctl.conf
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+
+----
+mkdir Projects
+cd Projects
+git clone https://github.com/amtcvx/ringwfb.git
+
+----
 /etc/apt/apt.conf.d/20auto-upgrades
 
 APT::Periodic::Update-Package-Lists "1";
@@ -45,7 +88,6 @@ APT::Periodic::Download-Upgradeable-Packages "0";
 APT::Periodic::Unattended-Upgrade "0";
 APT::Periodic::AutocleanInterval "0";
 
-------------------
 snap list
 =>
 firefox            146.0.1-1                       7563   latest/stable  mozilla✓    -
@@ -61,15 +103,34 @@ sudo snap remove --purge snapd
 
 sudo apt purge --autoremove snapd -y
 echo -e "Package: snapd\nPin: release a=*\nPin-Priority: -10" | sudo tee /etc/apt/preferences.d/nosnap.pref
-sudo apt updatea
+sudo apt update
 sudo rm -rf /var/cache/snapd/ /var/snap/ /var/lib/snapd/ /snap/ ~/snap/
 
 ------------------
 sudo systemctl set-default multi-user.target
-sudo reboot
+#reboot
 
-sudo systemctl set-default graphical.target
-sudo reboot
+#sudo systemctl set-default graphical.target
+#sudo reboot
+
+-----------------
+On PC nmtui
+wired connction 
+192.168.3.1
+
+-----------------
+On radxa
+plug usb adpater
+sudo nmtui 
+wired connection 2
+192.168.3.2
+sudo nmtui 
+activate wire connection 2
+exit
+
+-----------------
+On PC
+ssh radxa@192.168.3.2
 
 -----------------
 sudo systemctl stop wpa_supplicant
@@ -78,3 +139,12 @@ sudo systemctl disable wpa_supplicant
 /etc/NetworkManager/conf.d/unmanaged.conf
 [keyfile]
 unmanaged-devices=interface-name:wlx*
+
+-----------------
+(radxa from PC)
+reboot
+
+-----------------
+PC
+ping 192.168.3.2
+
