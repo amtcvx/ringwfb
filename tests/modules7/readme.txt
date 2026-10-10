@@ -33,6 +33,7 @@ net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 
 -------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ON RADXA ZERO 3W
 
 https://github.com/Qengineering/Radxa-Zero-3-NPU-Ubuntu24
@@ -57,56 +58,20 @@ sudo nmap -sn 10.48.231.162/24
 ssh radxa@10.48.231.26
 
 -----------------
-sudo apt-get update
 sudo apt-get install iw make
 sudo apt-get install camera-engine-rkaiq-rk3588
 
------------------
-Ethernet
+mkdir Projects
+cd Projects
+git clone https://github.com/amtcvx/ringwfb.git
 
 -----------------
-On PC nmtui
-wired connection 
-192.168.3.1
-
------------------
-On radxa
-plug usb adpater
-sudo nmtui 
-wired connection 2
-192.168.3.2
-sudo nmtui 
-activate wire connection 2
-exit
-
------------------
-On PC
-ssh radxa@192.168.3.2
-
-----
-/etc/default/u-boot
-U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo"
-U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo radxa-zero3-rpi-camera-v2.dtbo rk3588-uart4-m0.dtbo radxa-zero3-disabled-wireless.dtbo"
-sudo u-boot-update
-
-----
-sudo reboot
-
-----
 /etc/sysctl.conf
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 
-----
-mkdir Projects
-cd Projects
-git clone https://github.com/amtcvx/ringwfb.git
-
-sudo systemctl start rkaiq_3A
-sudo systemctl enable rkaiq_3A
-
-----
+-----------------
 /etc/apt/apt.conf.d/20auto-upgrades
 
 APT::Periodic::Update-Package-Lists "1";
@@ -135,12 +100,28 @@ echo -e "Package: snapd\nPin: release a=*\nPin-Priority: -10" | sudo tee /etc/ap
 sudo apt update
 sudo rm -rf /var/cache/snapd/ /var/snap/ /var/lib/snapd/ /snap/ ~/snap/
 
-------------------
-sudo systemctl set-default multi-user.target
-#reboot
+-----------------
+On PC nmtui
+wired connection 
+192.168.3.1
 
-#sudo systemctl set-default graphical.target
-#sudo reboot
+-----------------
+On radxa
+plug usb adpater
+sudo nmtui 
+wired connection 2
+192.168.3.2
+sudo nmtui 
+activate wire connection 2
+
+-----------------
+On PC
+ssh radxa@192.168.3.2
+
+/etc/default/u-boot
+U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo"
+U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo radxa-zero3-rpi-camera-v2.dtbo rk3588-uart4-m0.dtbo radxa-zero3-disabled-wireless.dtbo"
+sudo u-boot-update
 
 -----------------
 sudo systemctl stop wpa_supplicant
@@ -151,10 +132,12 @@ sudo systemctl disable wpa_supplicant
 unmanaged-devices=interface-name:wlx*
 
 -----------------
-(radxa from PC)
-reboot
+sudo systemctl set-default multi-user.target
+sudo reboot
+
+#sudo systemctl set-default graphical.target
+#sudo reboot
 
 -----------------
-PC
-ping 192.168.3.2
-
+sudo systemctl start rkaiq_3A
+sudo systemctl enable rkaiq_3A
