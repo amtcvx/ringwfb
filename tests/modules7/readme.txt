@@ -63,6 +63,11 @@ sudo depmod -a
 #sudo modprobe wfb_nfkernel
 #sudo modprobe -r wfb_nfkernel
 
+wfb_usb.sh
+
+/etc/udev/rules.d/60-wfb.rules
+SUBSYSTEM=="net", ACTION=="add|remove", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="8812", ENV{NM_UNMANAGED}="1", RUN+="/home/pprz/Projects/ringwfb/scripts/wfb_usb.sh"
+
 plugUSB
 
 
