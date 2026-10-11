@@ -1,8 +1,5 @@
 sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio
 
-sudo apt-get install iw make
-sudo apt-get install gcc-13
-
 -------------------------------------------------------------------------------
 
 sudo systemctl stop NetworkManager
@@ -34,6 +31,30 @@ sudo wireshark -i $DEVICE -k
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
+
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+ON PC 
+
+sudo apt-get install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio
+
+sudo apt-get install iw make
+sudo apt-get install gcc-13
+
+/etc/modprobe.d/rtw88.conf
+options rtw88_usb switch_usb_mode=n
+
+/etc/NetworkManager/conf.d/unmanaged.conf
+[keyfile]
+unmanaged-devices=interface-name:wlx*
+
+/etc/sysctl.conf
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+
+plugUSB
+
 
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
