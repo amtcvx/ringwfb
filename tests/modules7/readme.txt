@@ -66,7 +66,7 @@ sudo depmod -a
 wfb_usb.sh
 
 /etc/udev/rules.d/60-wfb.rules
-SUBSYSTEM=="net", ACTION=="add|remove", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="8812", ENV{NM_UNMANAGED}="1", RUN+="/home/pprz/Projects/ringwfb/scripts/wfb_usb.sh"
+pprz@darkvador:~/Projects/ringwfb/scripts$ cat /etc/udev/rules.d/60-wfb.rules SUBSYSTEM=="net", ACTION=="add|remove", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="17d2", ENV{NM_UNMANAGED}="1", RUN+="/home/pprz/Projects/ringwfb/scripts/wfb_usb.sh"
 
 plugUSB
 
