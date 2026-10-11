@@ -53,6 +53,16 @@ net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 
+sudo cp wfb_nfkernel.ko /lib/modules/$(uname -r)/kernel/net
+
+/etc/modprobe.d/rtw88.conf
+softdep wfb_nfkernel pre: rtw88_8812au
+
+sudo depmod -a
+
+#sudo modprobe wfb_nfkernel
+#sudo modprobe -r wfb_nfkernel
+
 plugUSB
 
 
