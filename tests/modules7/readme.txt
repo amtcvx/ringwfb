@@ -142,17 +142,17 @@ sudo rm -rf /var/cache/snapd/ /var/snap/ /var/lib/snapd/ /snap/ ~/snap/
 
 -----------------
 On PC nmtui
-wired connection 
-192.168.3.1
+plug usb/eth adpater
+sudo nmcli connection add type ethernet con-name "myusbconnection" ifname enx*
+sudo nmtui
+set 192.168.3.1 and activate
 
 -----------------
 On radxa
-plug usb adpater
+plug usb/eth adpater
+sudo nmcli connection add type ethernet con-name "myusbconnection" ifname enx*
 sudo nmtui 
-wired connection 2
-192.168.3.2
-sudo nmtui 
-activate wire connection 2
+set 192.168.3.2 and activate
 
 -----------------
 On PC
@@ -181,3 +181,43 @@ sudo reboot
 -----------------
 sudo systemctl start rkaiq_3A
 sudo systemctl enable rkaiq_3A
+
+
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+ON RADXA PRE FLASH
+
+sudo dd if=/dev/sdb of=ubuntu24-full.img bs=4M status=progress conv=fsync
+
+SHRINK
+
+sudo losetup -f -P ubuntu24-full.img
+=> 32 Go
+
+sudo losetup -a
+=> /dev/loop8: [66306]:4459410 (/home/pprz/Téléchargements/ubuntu24-full.img)
+sudo gparted /dev/loop8
+
+device /dev/loop8
+ext4 resize
+apply
+
+close gparted
+sudo losetup -d /dev/loop8
+
+
+TRUNCATE
+
+fdisk -l ubuntu24-full.img
+=> EndSector and SectorSize
+
+NewSize = (EndSector + 1) x SectorSize
+15914745856 = (31083487 + 1)  x 512
+
+sudo truncate --size=<NewSizeInBytes> ubuntu24-full.img
+=> 16 Go
+
+gzip -v ubuntu24-full.img
+=> 5.1 Go
+~            
+
