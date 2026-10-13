@@ -85,8 +85,9 @@ sudo nmtui
 
 sudo apt-get update
 sudo apt-get upgrade
-software updater ?
-500 Mb !
+400 Mb !
+software updater
+680 Mb !
 
 -----------------
 PC wifi connect to hotspot
@@ -188,11 +189,11 @@ sudo systemctl enable rkaiq_3A
 ON RADXA PRE FLASH
 
 sudo dd if=/dev/sdb of=ubuntu24-full.img bs=4M status=progress conv=fsync
+=> 31 Go (15 Go)
 
 SHRINK
 
 sudo losetup -f -P ubuntu24-full.img
-=> 32 Go
 
 sudo losetup -a
 => /dev/loop8: [66306]:4459410 (/home/pprz/Téléchargements/ubuntu24-full.img)
@@ -217,7 +218,7 @@ NewSize = (EndSector + 1) x SectorSize
 sudo truncate --size=<NewSizeInBytes> ubuntu24-full.img
 => 16 Go
 
-gzip -v ubuntu24-full.img
+xz ubuntu24-full.img
 => 5.1 Go
 ~            
 
