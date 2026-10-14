@@ -189,11 +189,13 @@ sudo systemctl enable rkaiq_3A
 ON RADXA PRE FLASH
 
 sudo dd if=/dev/sdb of=ubuntu24-full.img bs=4M status=progress conv=fsync
-=> 31 Go (15 Go)
+=> 32 Go (15 Go)
 
+_____________
 SHRINK
 
-sudo losetup -f -P ubuntu24-full.img
+sudo losetup -f -P --show ubuntu24-full.img
+=> /dev/loop8
 
 sudo losetup -a
 => /dev/loop8: [66306]:4459410 (/home/pprz/Téléchargements/ubuntu24-full.img)
@@ -206,19 +208,27 @@ apply
 close gparted
 sudo losetup -d /dev/loop8
 
+sudo gdisk ubuntu24-full.img
+w
 
+_____________
 TRUNCATE
 
 fdisk -l ubuntu24-full.img
 => EndSector and SectorSize
 
 NewSize = (EndSector + 1) x SectorSize
-15914745856 = (31083487 + 1)  x 512
+15894332416 = (31043584 + 1 + 33)  x 512
 
 sudo truncate --size=<NewSizeInBytes> ubuntu24-full.img
 => 16 Go
 
-xz ubuntu24-full.img
+xz -k ubuntu24-full.img
 => 5.1 Go
+
+_____________
+REBOOT
+
+sudo partprobe
 ~            
 
