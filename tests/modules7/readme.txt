@@ -99,7 +99,7 @@ sudo nmap -sn 10.48.231.162/24
 ssh radxa@10.48.231.26
 
 -----------------
-sudo apt-get install iw make
+sudo apt-get install iw make socat
 sudo apt-get install camera-engine-rkaiq-rk3588
 
 mkdir Projects
@@ -208,20 +208,27 @@ apply
 close gparted
 sudo losetup -d /dev/loop8
 
-sudo gdisk ubuntu24-full.img
-w
-
 _____________
 TRUNCATE
 
-fdisk -l ubuntu24-full.img
-=> EndSector and SectorSize
+sudo gdisk -l ubuntu24-full.img
+=>
+Found valid GPT with protective MBR; using GPT.
+Disk ubuntu24-full.img: 62333952 sectors, 29.7 GiB
+Sector size (logical): 512 bytes
 
-NewSize = (EndSector + 1) x SectorSize
-15894332416 = (31043584 + 1 + 33)  x 512
+Number  Start (sector)    End (sector)  Size       Code  Name
+   1           32768        32946175   15.7 GiB    EF00  primary
+
+
+NewSize = (EndSector + 1 + 33) x SectorSize
+(32946175 + 1 + 33) x 512 = 16868459008
 
 sudo truncate --size=<NewSizeInBytes> ubuntu24-full.img
 => 16 Go
+
+sudo gdisk ubuntu24-full.img
+w
 
 xz -k ubuntu24-full.img
 => 5.1 Go
