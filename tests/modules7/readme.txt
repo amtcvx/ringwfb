@@ -146,16 +146,15 @@ sudo rm -rf /var/cache/snapd/ /var/snap/ /var/lib/snapd/ /snap/ ~/snap/
 -----------------
 On PC nmtui
 plug usb/eth adpater
-sudo nmcli connection add type ethernet con-name "myusbconnection" ifname enx*
+sudo nmcli connection add type ethernet con-name "myusbconnection" ifname enx* 
 sudo nmtui
 set 192.168.3.1 and activate
 
 -----------------
 On radxa
 plug usb/eth adpater
-sudo nmcli connection add type ethernet con-name "myusbconnection" ifname enx*
-sudo nmtui 
-set 192.168.3.2 and activate
+sudo nmcli connection add type ethernet con-name "myusbconnection" ifname enx* ip4 192.168.3.2/24
+sudo nmcli connection up "myusbconnection"
 
 -----------------
 On PC
