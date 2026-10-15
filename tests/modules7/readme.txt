@@ -144,6 +144,12 @@ sudo apt update
 sudo rm -rf /var/cache/snapd/ /var/snap/ /var/lib/snapd/ /snap/ ~/snap/
 
 -----------------
+switchoff wifi, bluetooth
+switchoff session
+
+sudo dd if=/dev/sdb of=ubuntu24-lite.img bs=4M status=progress conv=fsync
+
+-----------------
 On PC nmtui
 plug usb/eth adpater
 sudo nmcli connection add type ethernet con-name "myusbconnection" ifname enx* 
