@@ -99,6 +99,8 @@ sudo nmap -sn 10.48.231.162/24
 ssh radxa@10.48.231.26
 
 -----------------
+sudo apt-get update
+sudo apt-get upgrade
 sudo apt-get install iw make socat
 sudo apt-get install camera-engine-rkaiq-rk3588
 
