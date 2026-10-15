@@ -244,10 +244,33 @@ dmesg -w
 sudo gparted
 repare
 
-
 _____________
 REBOOT
 
 sudo partprobe
+
+_____________
+RESTORE
+
+imager_2.0.12_amd64.AppImage
+ubuntu24-full.img.xz
+(5.4 Go)
+
+dmesg -w
+plug & unplug
+=>
+[   75.788840] GPT:Primary header thinks Alt. header is not at the end of the disk.
+[   75.788851] GPT:32946208 != 61951999
+[   75.788858] GPT:Alternate GPT header not at the end of the disk.
+[   75.788862] GPT:32946208 != 61951999
+[   75.788867] GPT: Use GNU Parted to correct GPT errors.
+
+sudo gparted
+Repare
+
+Boot
+login: radxa
+password: radxa
+
 ~            
 
