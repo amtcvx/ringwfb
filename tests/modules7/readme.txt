@@ -230,8 +230,19 @@ sudo truncate --size=<NewSizeInBytes> ubuntu24-full.img
 sudo gdisk ubuntu24-full.img
 w
 
-xz -k ubuntu24-full.img
-=> 5.1 Go
+#xz -k ubuntu24-full.img
+#=> 5.1 Go
+
+_____________
+COPY TO SD
+unplug & plug
+dmesg -w
+=>
+[ 4702.591102] GPT:Primary header thinks Alt. header is not at the end of the disk.
+
+sudo gparted
+repare
+
 
 _____________
 REBOOT
