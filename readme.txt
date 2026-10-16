@@ -2,7 +2,7 @@
 This project provides wireless communication between ground / board and board / board systems.
 
 -------------------------------------------------------------------------------
-It is base on a kernel module that exchange data on specific UDP port
+It is base on a linux kernel module that exchange wirelessly data using local UDP ports.
 
 -------------------------------------------------------------------------------
 For Desktop (ex: GCS)  Ubuntu 24.04 (kernel 7.0 with rtw88_8812au)
