@@ -102,7 +102,9 @@ ssh radxa@10.48.231.26
 sudo apt-get update
 sudo apt-get upgrade
 sudo apt-get install iw make socat
+
 sudo apt-get install camera-engine-rkaiq-rk3588
+https://github.com/Joshua-Riek/ubuntu-rockchip/issues/1127
 
 mkdir Projects
 cd Projects
