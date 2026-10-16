@@ -12,6 +12,9 @@ connect via wireless
 
 ssh pprz@10.13.74.26
 
+uname -r
+=> 6.1.115-vendor-rk35xx
+
 sudo apt-get update
 sudo apt-get upgrade
 
@@ -24,8 +27,11 @@ mkdir Projects
 cd Projects
 git clone https://github.com/amtcvx/ringwfb.git
 
+sudo mkdir /boot/overlay-user
+cd /boot/dtb-6.1.115-vendor-rk35xx/rockchip/overlay/
+sudo cp radxa-zero3-rpi-camera-v2.dtbo /boot/overlay-user
+sudo cp rk3588-uart4-m0.dtbo /boot/overlay-user
+
 /boot/armbianEnv.txt
-
-sudo armbian-add-overlay radxa-zero3-rpi-camera-v2.dtbo
-
+user_overlays=radxa-zero3-rpi-camera-v2 rk3588-uart4-m0 radxa-zero3-disabled-wireless
 
