@@ -18,8 +18,9 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 #include <net/dst_metadata.h>
 
-#include <net/cfg80211.h>
-#include <linux/nl80211.h>
+//#include <net/mac80211.h>
+//#include <net/cfg80211.h>
+//#include <linux/nl80211.h>
 
 #include <net/ip.h>
 
@@ -130,7 +131,12 @@ static int __init wfb_nfkernel_init(void) {
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
   dev_change_flags(mypriv.wifidev, mypriv.wifidev->flags & ~IFF_UP, NULL);
-  cfg80211_change_iface(mypriv.wifidev->wireless_data->wiphy, mypriv.wifidev, NL80211_IFTYPE_MONITOR, NULL);
+/*
+  struct ieee80211_hw *wdev = mypriv.wifidev->ieee80211_ptr;
+  if (!(wdev->wiphy->interface_modes & BIT(NL80211_IFTYPE_MONITOR))) {
+    wdev->wiphy->iftype = NL80211_IFTYPE_MONITOR;
+  }
+*/
   dev_change_flags(mypriv.wifidev, mypriv.wifidev->flags | IFF_UP, NULL);
 
   dev_set_promiscuity(mypriv.wifidev,1);
