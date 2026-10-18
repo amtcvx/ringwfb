@@ -18,16 +18,16 @@ read -p "for this side in $PROJ (y/n) ?" ANSWER
 if [ ! $ANSWER = "y" ] || [ -z $ANSWER ]; then exit -1; fi
 if ! groups | grep -q 'sudo'; then exit -1; fi
 
-for f in $PROJ/material/60-wfb.rules $PROJ/material/wfb.service $PROJ/scripts/wfb_on.sh; do
+for f in $PROJ/material/60-wfb.rules $PROJ/material/wfb.service $PROJ/material/wfb_on.sh; do
   sed -i 's#TOBEUPDATEATINSTALLATION#'$PROJ'#' ${f};
   echo ${f};
 done;
 
 if uname -a | grep -cs "6.1.0-1012-rockchip"> /dev/null 2>&1; then
-  sudo cp $PROJ/material/rtw88.conf /etc/modprobe.d
   sudo systemctl stop  wpa_supplicant
   sudo systemctl disable wpa_supplicant.service
 else
+  sudo cp $PROJ/material/rtw88.conf /etc/modprobe.d
   sudo apt-get install iw make gcc
   sudo apt-get install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio
 fi
@@ -37,4 +37,5 @@ sudo cp $PROJ/material/60-wfb.rules /etc/udev/rules.d
 sudo cp $PROJ/material/wfb.service /etc/systemd/system
 
 sudo systemctl reload NetworkManager.service
+sudo systemctl daemon-reload
 sudo udevadm control --reload-rules

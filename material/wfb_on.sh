@@ -1,6 +1,6 @@
 #!/bin/bash
 
-HOME_PRJ=TOBEUPDATEATINSTALLATION
+HOME_PRJ=/home/pprz/Projects/ringwfb
 
 PIDFILE=/tmp/wfb.pid
 
