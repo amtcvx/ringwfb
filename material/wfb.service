@@ -6,8 +6,8 @@ After=multi-user.target
 Type=idle
 RemainAfterExit=yes
 ExecStartPre=/bin/sleep 2
-ExecStart=TOBEUPDATEATINSTALLATION/scripts/wfb_on.sh
-ExecStop=TOBEUPDATEATINSTALLATION/scripts/wfb_off.sh
+ExecStart=TOBEUPDATEATINSTALLATION/build/wfb_on.sh
+ExecStop=TOBEUPDATEATINSTALLATION/build/wfb_off.sh
 
 [Install]
 WantedBy=multi-user.target

@@ -18,9 +18,10 @@ read -p "for this side in $PROJ (y/n) ?" ANSWER
 if [ ! $ANSWER = "y" ] || [ -z $ANSWER ]; then exit -1; fi
 if ! groups | grep -q 'sudo'; then exit -1; fi
 
-for f in $PROJ/material/60-wfb.rules $PROJ/material/wfb.service $PROJ/material/wfb_on.sh; do
-  sed -i 's#TOBEUPDATEATINSTALLATION#'$PROJ'#' ${f};
-  echo ${f};
+mkdir $PROJ/build
+for f in $PROJ/material/60-wfb.rules $PROJ/material/wfb.service $PROJ/scripts/wfb_on.sh; do
+  cp ${f} $PROJ/build/${f##*/}
+  sed -i 's#TOBEUPDATEATINSTALLATION#'$PROJ'#' $PROJ/build/${f##*/}
 done;
 
 if uname -a | grep -cs "6.1.0-1012-rockchip"> /dev/null 2>&1; then
