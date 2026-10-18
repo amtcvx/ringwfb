@@ -1,1 +1,1 @@
-SUBSYSTEM=="net", ACTION=="add|remove", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="17d2", ENV{NM_UNMANAGED}="1", RUN+="TOBEUPDATEATINSTALLATION/build/wfb_usb.sh"
+SUBSYSTEM=="net", ACTION=="add|remove", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="17d2", ENV{NM_UNMANAGED}="1", RUN+="TOBEUPDATEATINSTALLATION/scripts/wfb_usb.sh"
