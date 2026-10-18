@@ -8,13 +8,7 @@ sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
 sudo iw dev $DEVICE set freq 5300
 
-
-gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=127.0.0.1
-
-gst-launch-1.0 videotestsrc ! mpph265enc rc-mode=vbr bps=3000000 bps-max=3172000  ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=192.168.3.1
-
-gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw, width=1920, height=1080, framerate=30/1, format='NV12' ! mpph265enc rc-mode=vbr bps=3000000 bps-max=3172000  ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=127.0.0.1
-
+gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
 
 */
 #include <linux/netfilter_ipv4.h>
@@ -24,14 +18,15 @@ gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw, width=1920, height=1080
 
 #include <net/dst_metadata.h>
 
-#include <net/ieee80211_radiotap.h>
+#include <net/cfg80211.h>
+#include <linux/nl80211.h>
 
 #include <net/ip.h>
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlxfc349725a317";
-uint16_t outdestport = 5600;
+uint8_t *devname = "wlx3c7c3fa9bfbb";
+uint16_t indestport = 5700;
 
 uint16_t ethport = 5650;
 
@@ -52,107 +47,78 @@ typedef struct {
 
 static priv_t mypriv;
 
-static struct nf_hook_ops *output_hk = NULL;
-
-static uint64_t curseq = 0;
-
-/************************************************************************************************/
-
-#define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
-
-#define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI | (IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT))
-
-#define MCS_INDEX  2
-
-uint8_t radiotaphd[] = {
-        0x00, 0x00, // <-- radiotap version
-        0x0d, 0x00, // <- radiotap header length
-        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
-        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
-        MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
-};
-uint8_t ieeehd[] = {
-	0x88, 0x00,                         // Data (type=2) with QOS (subtype=8)
-	0x00, 0x00,
-	0x36, 0x35, 0x34, 0x33, 0x32, 0x31, // Receiver MAC
-	0x26, 0x25, 0x24, 0x23, 0x22, 0x21, // Transmitter MAC
-	0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
-	0x00, 0x00, 0x20, 0x00
-};
-
 /******************************************************************************/
-static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
-  if(skb != NULL) {
+  if (!*pskb) return RX_HANDLER_CONSUMED;
+  struct sk_buff *skb = *pskb;
+  if (!skb) return RX_HANDLER_CONSUMED;
 
-    pr_info("IN output_proc kb->len (%d)\n",skb->len);
+  pr_info("INi1 input_proc kb->len (%d)\n",skb->len);
 
-    struct iphdr *iph = ip_hdr(skb);
-
-    if(iph && iph->protocol == IPPROTO_UDP) {
-
-      skb->transport_header = skb->network_header + iph->ihl*4;
-
-      struct udphdr* uph = udp_hdr(skb);
-
-      if ((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)) {
-
-        struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
-	skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
-        uint16_t paylen = nskb->len;
+  struct iphdr *iph;
+  struct udphdr* uph;
 
 
-        pskb_expand_head(nskb, sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t), 0, GFP_KERNEL);
-//        pskb_expand_head(nskb, ETH_ALEN + sizeof(pph_t), 0, GFP_KERNEL);
-
-        skb_push(nskb, sizeof(pph_t));
-        pph_t *pph = (pph_t *)nskb->data;
-        memset((void *)pph, 0, sizeof(pph_t));
-        pph->droneid =  0xff;
-        pph->seq = curseq;
-        pph->msglen = htons(paylen);
-
-        curseq++;
-
-
-        uint8_t *ptr = skb_push(nskb, sizeof(ieeehd));
-	memcpy(nskb->data, ieeehd, sizeof(ieeehd));
-        ptr = skb_push(nskb, sizeof(radiotaphd));
-	memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
+  uint16_t radiotaplg = (uint16_t)skb->data[2];
+  if (!((radiotaplg == 32) || (radiotaplg == 38) || (radiotaplg == 41))) return RX_HANDLER_CONSUMED;
+  pph_t *pph = (pph_t *)(skb->data + radiotaplg + 26);
+  if ((pph->droneid != 255) || htons(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
+  pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
+          pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
+  uint16_t paylen = pph->msglen;
+  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
+  skb_trim(nskb,skb->len-4);
+  skb_pull(nskb, radiotaplg + 26 + sizeof(pph_t));
 
 /*
-        uph = (struct udphdr*)skb_push(nskb, sizeof(*uph));
-        skb_reset_transport_header(nskb);
-        memset((void *)uph, 0,sizeof(*uph));
-        uph->dest = htons(ethport);
-        uph->len = htons(8 + paylen + sizeof(pph_t));
-
-        iph = (struct iphdr*)skb_push(nskb, sizeof(*iph));
-        skb_reset_network_header(nskb);
-        memset((void *)iph, 0,sizeof(*iph));
-        iph->version = IPVERSION;
-        iph->ihl = sizeof(struct iphdr) / 4;
-        iph->protocol = IPPROTO_UDP;
-        iph->ttl = 64;
-        iph->tot_len = htons(20 + ntohs(uph->len));
-
-        struct ethhdr *neth = (struct ethhdr *)skb_push(nskb, ETH_HLEN);
-        skb_reset_mac_header(nskb);
-        memset((void *)neth, 0,sizeof(*neth));
-        memcpy(neth->h_source, nskb->dev->dev_addr, ETH_ALEN);
-        neth->h_proto = htons(ETH_P_IP);
-        nskb->protocol = htons(ETH_P_IP);
+  iph = ip_hdr(skb);
+  if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
+  skb->transport_header = skb->network_header + iph->ihl*4;
+  uph = udp_hdr(skb);
+  if ((ntohs(uph->dest) != ethport)) return RX_HANDLER_CONSUMED;
+  pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
+  pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
+          pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
+  uint16_t paylen = pph->msglen;
+  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
+  skb_pull(nskb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
 */
 
-        nskb->dev = mypriv.wifidev;
 
-        dev_direct_xmit(nskb, 0);
+  uph = (struct udphdr*)skb_push(nskb, sizeof(*uph));
+  skb_reset_transport_header(nskb);
+  memset((void *)uph, 0,sizeof(*uph));
+  uph->dest = htons(indestport);
+  uph->len = htons(8 + htons(paylen));
 
-        pr_info("IN output_proc msglen (%d) (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
-      }
-    }
-  }
-  return NF_ACCEPT;
+  iph = (struct iphdr*)skb_push(nskb, sizeof(*iph));
+  skb_reset_network_header(nskb);
+  memset((void *)iph, 0,sizeof(*iph));
+  iph->version = IPVERSION;
+  iph->ihl = sizeof(struct iphdr) / 4;
+  iph->protocol = IPPROTO_UDP;
+  iph->ttl = 64;
+  iph->tot_len = htons(20+ntohs(uph->len));
+  iph->check = 0;
+  iph->check = ip_fast_csum((uint8_t *)iph, iph->ihl);
+
+  skb_reset_mac_header(nskb);
+
+  nskb->dev = mypriv.localdev;
+  nskb->pkt_type = PACKET_HOST;
+  nskb->protocol = htons(ETH_P_IP);
+
+  netif_receive_skb(nskb);
+  kfree_skb(skb);
+
+  pr_info("OUT input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+          ntohs(iph->tot_len),
+          &(iph->saddr), &(iph->daddr),
+          ntohs(uph->len),
+          ntohs(uph->source), ntohs(uph->dest));
+
+  return RX_HANDLER_CONSUMED; 
 }
 
 /******************************************************************************/
@@ -163,14 +129,12 @@ static int __init wfb_nfkernel_init(void) {
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
-  if(output_hk != NULL) {
-    output_hk->hook     = (nf_hookfn*)output_proc;
-    output_hk->hooknum  = NF_INET_POST_ROUTING;
-    output_hk->pf       = NFPROTO_IPV4;
-    output_hk->priority = NF_IP_PRI_FIRST;
-    nf_register_net_hook(&init_net, output_hk);
-  }
+  dev_change_flags(mypriv.wifidev, mypriv.wifidev->flags & ~IFF_UP, NULL);
+  cfg80211_change_iface(mypriv.wifidev->wireless_data->wiphy, mypriv.wifidev, NL80211_IFTYPE_MONITOR, NULL);
+  dev_change_flags(mypriv.wifidev, mypriv.wifidev->flags | IFF_UP, NULL);
+
+  dev_set_promiscuity(mypriv.wifidev,1);
+  netdev_rx_handler_register(mypriv.wifidev, input_proc, NULL);
 
   return 0;
 }
@@ -178,10 +142,8 @@ static int __init wfb_nfkernel_init(void) {
 /******************************************************************************/
 static void __exit wfb_nfkernel_exit(void) {
 
-  if(output_hk != NULL) {
-    nf_unregister_net_hook(&init_net, output_hk);
-    kfree(output_hk);
-  }
+  dev_set_promiscuity(mypriv.wifidev,0);
+  netdev_rx_handler_unregister(mypriv.wifidev);
 
 }
 
