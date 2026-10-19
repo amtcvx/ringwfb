@@ -1,3 +1,9 @@
+https://github.com/radxa-build/radxa-zero3/releases/tag/rsdk-b1
+https://github.com/radxa-build/radxa-zero3/releases/download/rsdk-b1/radxa-zero3_bookworm_kde_b1.output_512.img.xz
+
+
+
+-------------------------------------------------------------------------------
 https://armbian.com/boards/radxa-zero3
 
 Minimal / IOT
