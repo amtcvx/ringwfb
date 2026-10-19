@@ -5,6 +5,11 @@ Flash SD
 sudo gparted
 => repare
 
+mount config
+hello.txt
+wifi hotspot password
+
+
 
 -------------------------------------------------------------------------------
 https://armbian.com/boards/radxa-zero3
