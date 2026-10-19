@@ -1,3 +1,17 @@
+DEBIAN 11
+
+https://github.com/radxa-build/radxa-zero3/releases/download/b6/radxa-zero3_debian_bullseye_xfce_b6.img.xz
+
+Radxa First Boot Configuration
+
+config/before.txt
+"
+connect_wi-fi Androidxp pprzpprz
+"
+Headless install
+
+--------------------------------------------------------------
+
 https://github.com/radxa-build/radxa-zero3/releases/tag/rsdk-b1
 https://github.com/radxa-build/radxa-zero3/releases/download/rsdk-b1/radxa-zero3_bookworm_kde_b1.output_512.img.xz
 
