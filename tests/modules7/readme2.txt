@@ -30,6 +30,8 @@ sudo nmap -sn 10.13.74.162/24
 ssh radxa@10.13.74.26
 radxa
 
+Plug wifi adapter
+=> NO DRIVER
 
 -------------------------------------------------------------------------------
 https://armbian.com/boards/radxa-zero3
