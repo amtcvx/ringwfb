@@ -34,6 +34,9 @@ sudo rsetup
 
 sudo reboot
 
+Plug wifi adapter
+=> NO DRIVER
+
 --------------------------------------------------------------
 --------------------------------------------------------------
 https://github.com/radxa-build/radxa-zero3/releases/tag/rsdk-b1
