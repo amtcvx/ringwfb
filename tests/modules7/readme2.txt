@@ -13,7 +13,7 @@ wifi hotspot password
 
 (
 sudo apt update && sudo apt install openssh-server -y
-sudo systemctl start sshs
+sudo systemctl start ssh
 sudo systemctl enable ssh
 )
 
