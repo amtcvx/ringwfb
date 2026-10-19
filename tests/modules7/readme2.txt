@@ -26,7 +26,13 @@ radxa
 uname -r => 5.10.160-26-rk356x
 sudo apt-get udpate
 sudo apt-get upgrade 
-240 Mo !
+240 Mo ! KO
+
+sudo rsetup
+- camera
+- uart4
+
+sudo reboot
 
 --------------------------------------------------------------
 --------------------------------------------------------------
