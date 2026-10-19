@@ -11,6 +11,8 @@ mount config
 hello.txt
 wifi hotspot password
 
+Wait 2 minutes first boot
+
 (
 sudo apt update && sudo apt install openssh-server -y
 sudo systemctl start ssh
@@ -23,12 +25,12 @@ passw : radxa
 uname -r
 6.1.84-10-rk2410-nocsf
 
-sudo apt-get udpate
-sudo apt-get upgrade 
-400 Mo !
+#sudo apt-get udpate
+#sudo apt-get upgrade 
+#400 Mo !
 
-Discover - Updates
-300 Mo !
+#Discover - Updates
+#300 Mo !
 
 restup
 - camera
