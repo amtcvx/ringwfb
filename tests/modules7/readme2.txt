@@ -12,6 +12,9 @@ wifi hotspot password
 login : radxa
 passw : radxa
 
+uname -r
+6.1.84-10-rk2410-nocsf
+
 sudo apt-get udpate
 sudo apt-get upgrade 
 400 Mo !
