@@ -25,7 +25,6 @@ for f in $PROJ/material/60-wfb.rules $PROJ/material/wfb.service $PROJ/scripts/wf
 done;
 
 if uname -a | grep -cs "6.1.84-10-rk2410-nocsf"> /dev/null 2>&1; then
-  sudo apt-get install gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
   sudo systemctl stop  wpa_supplicant
   sudo systemctl disable wpa_supplicant.service
 else
