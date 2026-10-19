@@ -16,22 +16,20 @@ config/before.txt
 connect_wi-fi Androidxp pprzpprz
 "
 ---------------------
-First boot with wifi to set static ethe
-=> blinking led
+PC
+ip address => 10.13.74.162/24
+sudo nmap -sn 10.13.74.162/24 => 10.13.74.26
+
+ssh radxa@10.13.74.26
+radxa
+
+uname -r => 5.10.160-26-rk356x
+sudo apt-get udpate
+sudo apt-get upgrade 
+240 Mo !
 
 --------------------------------------------------------------
-Wifi connection
--------------------
-ip address
-=> 192.168.1.131
-sudo nmap -sn 192.168.1.131/24
-=> Nmap scan report for radxa-zero3.home (192.168.1.87)
-
-ssh rock@192.168.1.87
-rock
-
 --------------------------------------------------------------
-
 https://github.com/radxa-build/radxa-zero3/releases/tag/rsdk-b1
 https://github.com/radxa-build/radxa-zero3/releases/download/rsdk-b1/radxa-zero3_bookworm_kde_b1.output_512.img.xz
 
