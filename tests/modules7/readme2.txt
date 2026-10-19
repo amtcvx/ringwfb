@@ -1,8 +1,22 @@
-https://armbian.com/fr/boards/radxa-zero3
+https://armbian.com/boards/radxa-zero3
+
+Minimal / IOT
+Build date: Aug 12, 2026
+
+Ubuntu 26.04 (RESOLUTE) Minimal (CLI) vendor6.1.115 387 MB 
+https://dl.armbian.com/radxa-zero3/Resolute_vendor_minimal
+
+sudo apt update && sudo apt install -y software-properties-common
+
+sudo add-apt-repository ppa:jjriek/rockchip-multimedia
 
 
-Debian 13 Minimal CLI 6.18.44
-https://dl.armbian.com/radxa-zero3/Trixie_current_minimal
+
+
+
+-------------------------------------------------------------------------------
+Debian 13 Minimal CLI 6.11.115 (TRIXIE)
+https://dl.armbian.com/radxa-zero3/Trixie_vendor_minimal
 
 login root 
 password 12345
@@ -17,6 +31,10 @@ uname -r
 
 sudo apt-get update
 sudo apt-get upgrade
+
+sudo apt-get install gstreamer1.0-tools
+gst-inspect-1.0 | grep 265
+=> NO 
 
 sudo apt-get install socat vim git
 
