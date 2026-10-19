@@ -9,7 +9,16 @@ mount config
 hello.txt
 wifi hotspot password
 
+login : radxa
+passw : radxa
 
+sudo nmap -sn 10.13.74.162/24
+ssh radxa@10.13.74.26
+radxa
+
+sudo apt-get udpate
+sudo apt-get upgrade 
+400 Mo !
 
 -------------------------------------------------------------------------------
 https://armbian.com/boards/radxa-zero3
