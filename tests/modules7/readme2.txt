@@ -11,8 +11,12 @@ sudo apt update && sudo apt install -y software-properties-common
 sudo add-apt-repository ppa:jjriek/rockchip-multimedia
 
 
+sudo add-apt-repository 
+  ppa:liujianfeng1994/rockchip-multimedia
+#  ppa:jjriek/rockchip-multimedia
 
-
+sudo apt update
+sudo apt install rockchip-multimedia-config
 
 -------------------------------------------------------------------------------
 Debian 13 Minimal CLI 6.11.115 (TRIXIE)
