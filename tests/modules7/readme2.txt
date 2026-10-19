@@ -1,6 +1,13 @@
 DEBIAN 11
 
 https://github.com/radxa-build/radxa-zero3/releases/download/b6/radxa-zero3_debian_bullseye_xfce_b6.img.xz
+1.4 Go
+
+Flash SD
+sudo gparted
+=> repare
+
+Headless install
 
 Radxa First Boot Configuration
 
@@ -8,7 +15,20 @@ config/before.txt
 "
 connect_wi-fi Androidxp pprzpprz
 "
-Headless install
+---------------------
+First boot with wifi to set static ethe
+=> blinking led
+
+--------------------------------------------------------------
+Wifi connection
+-------------------
+ip address
+=> 192.168.1.131
+sudo nmap -sn 192.168.1.131/24
+=> Nmap scan report for radxa-zero3.home (192.168.1.87)
+
+ssh rock@192.168.1.87
+rock
 
 --------------------------------------------------------------
 
