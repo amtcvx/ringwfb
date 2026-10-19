@@ -18,6 +18,11 @@ sudo apt-get upgrade
 
 Discover - Updates
 
+restup
+- camera
+- uart4
+reboot
+
 sudo nmap -sn 10.13.74.162/24
 ssh radxa@10.13.74.26
 radxa
