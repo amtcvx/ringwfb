@@ -32,7 +32,7 @@ uname -r
 #Discover - Updates
 #300 Mo !
 
-restup
+rsetup
 - camera
 - uart4
 reboot
