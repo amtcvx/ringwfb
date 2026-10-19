@@ -1,42 +1,3 @@
-DEBIAN 11
-
-https://github.com/radxa-build/radxa-zero3/releases/download/b6/radxa-zero3_debian_bullseye_xfce_b6.img.xz
-1.4 Go
-
-Flash SD
-sudo gparted
-=> repare
-
-Headless install
-
-Radxa First Boot Configuration
-
-config/before.txt
-"
-connect_wi-fi Androidxp pprzpprz
-"
----------------------
-PC
-ip address => 10.13.74.162/24
-sudo nmap -sn 10.13.74.162/24 => 10.13.74.26
-
-ssh radxa@10.13.74.26
-radxa
-
-uname -r => 5.10.160-26-rk356x
-sudo apt-get udpate
-sudo apt-get upgrade 
-240 Mo ! KO
-
-sudo rsetup
-- camera
-- uart4
-
-sudo reboot
-
-Plug wifi adapter
-=> NO DRIVER
-
 --------------------------------------------------------------
 --------------------------------------------------------------
 https://github.com/radxa-build/radxa-zero3/releases/tag/rsdk-b1
@@ -49,6 +10,12 @@ sudo gparted
 mount config
 hello.txt
 wifi hotspot password
+
+(
+sudo apt update && sudo apt install openssh-server -y
+sudo systemctl start sshs
+sudo systemctl enable ssh
+)
 
 login : radxa
 passw : radxa
