@@ -28,6 +28,7 @@ sudo apt-get upgrade
 400 Mo !
 
 Discover - Updates
+300 Mo !
 
 restup
 - camera
