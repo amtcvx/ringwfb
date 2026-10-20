@@ -27,12 +27,18 @@ done;
 sudo apt-get install iw make gcc
 
 if uname -a | grep -cs "6.1.84-10-rk2410-nocsf"> /dev/null 2>&1; then
+  git clone https://github.com/lwfinger/rtw88
+  cd $PWD/rtw88
+  sudo dkms install $PWD
+  sudo make install_fw
+  sudo modprobe rtw_8812au
   sudo systemctl stop  wpa_supplicant
   sudo systemctl disable wpa_supplicant.service
 else
-  sudo cp $PROJ/material/rtw88.conf /etc/modprobe.d
-  sudo apt-get install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio
+#  sudo apt-get install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio
 fi
+
+sudo cp $PROJ/material/rtw88.conf /etc/modprobe.d
 
 sudo cp $PROJ/material/unmanaged.conf /etc/NetworkManager/conf.d
 sudo cp $PROJ/material/60-wfb.rules /etc/udev/rules.d

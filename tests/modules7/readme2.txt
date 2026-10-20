@@ -25,7 +25,8 @@ passw : radxa
 uname -r
 6.1.84-10-rk2410-nocsf
 
-#sudo apt-get udpate
+sudo apt-get udpate
+DO NOT UPGRADE
 #sudo apt-get upgrade 
 #400 Mo !
 
@@ -41,8 +42,20 @@ sudo nmap -sn 10.13.74.162/24
 ssh radxa@10.13.74.26
 radxa
 
-Plug wifi adapter
+Plug usb wifi adapter
 => NO DRIVER
+
+/etc/NetworkManager/conf.d/99-unmanage-enx.conf
+[device-enx-wildcard]
+match-device=interface-name:enx*
+managed=0
+
+reboot
+
+Plug usb eth adapter
+sudo nmcli connection add type ethernet con-name "myusbconnection" ifname enx* ip4 192.168.3.2/24
+sudo nmcli connection up "myusbconnection"
+
 
 -------------------------------------------------------------------------------
 https://armbian.com/boards/radxa-zero3
