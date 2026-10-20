@@ -28,6 +28,8 @@ sudo apt-get install iw make gcc
 
 if uname -a | grep -cs "6.1.84-10-rk2410-nocsf"> /dev/null 2>&1; then
 
+  sudo apt-get install socat
+
   git clone https://github.com/lwfinger/rtw88
   cd $PWD/rtw88
   sudo dkms install $PWD
