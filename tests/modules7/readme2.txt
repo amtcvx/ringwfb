@@ -27,26 +27,16 @@ uname -r
 
 sudo apt-get udpate
 DO NOT UPGRADE
-#sudo apt-get upgrade 
-#400 Mo !
 
-#Discover - Updates
-#300 Mo !
-
-rsetup
-change default boot target : multi-user.target
-overlays
-- camera
-- uart4
 reboot
-
 
 sudo nmap -sn 10.13.74.162/24
 ssh radxa@10.13.74.26
 radxa
 
-Plug usb wifi adapter
-=> NO DRIVER
+git clone https://github.com/amtcvx/ringwfb.git
+cd ringwfb
+./install.sh
 
 plug usb eth adapter
 
@@ -54,12 +44,20 @@ sudo nmcli connection add type ethernet con-name myusbconnection match.interface
 
 sudo nmcli connection up myusbconnection
 
+exit
 ssh radxa@192.168.3.2
 
-after installation
 rsetup
+change default boot target : multi-user.target
 overlays
+- camera
+- uart4
 - disable zero wireless
+
+reboot
+
+ssh radxa@192.168.3.2
+
   
 -------------------------------------------------------------------------------
 https://armbian.com/boards/radxa-zero3
