@@ -44,15 +44,15 @@ sudo nmcli connection add type ethernet con-name myusbconnection match.interface
 
 sudo nmcli connection up myusbconnection
 
-exit
+reboot
 ssh radxa@192.168.3.2
 
-rsetup
-change default boot target : multi-user.target
-overlays
+sudo rsetup
+System / Change default boot target : multi-user.target
+Overlays / Manage overlays /
+- disable zero wireless
 - camera
 - uart4
-- disable zero wireless
 
 reboot
 

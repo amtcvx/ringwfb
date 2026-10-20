@@ -8,6 +8,7 @@ if uname -a | grep -cs "6.1.84-10-rk2410-nocsf"> /dev/null 2>&1; then
   cd $PROJ/rtw88
   sudo make uninstall
   sudo dkms remove rtw88/0.6
+  sudo depmod -a
   cd $PROJ
   sudo rm -R $PROJ/rtw88
   sudo systemctl start  wpa_supplicant
