@@ -58,6 +58,7 @@ reboot
 
 ssh radxa@192.168.3.2
 
+sudo killall rknn_server
   
 -------------------------------------------------------------------------------
 https://armbian.com/boards/radxa-zero3
