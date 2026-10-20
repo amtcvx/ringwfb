@@ -34,9 +34,12 @@ DO NOT UPGRADE
 #300 Mo !
 
 rsetup
+change default boot target : multi-user.target
+overlays
 - camera
 - uart4
 reboot
+
 
 sudo nmap -sn 10.13.74.162/24
 ssh radxa@10.13.74.26
@@ -45,18 +48,19 @@ radxa
 Plug usb wifi adapter
 => NO DRIVER
 
-/etc/NetworkManager/conf.d/99-unmanage-enx.conf
-[device-enx-wildcard]
-match-device=interface-name:enx*
-managed=0
+plug usb eth adapter
 
-reboot
+sudo nmcli connection add type ethernet con-name myusbconnection match.interface-name "enx*" ipv4.addresses "192.168.3.2/24" ipv4.method manual connection.autoconnect yes 
 
-Plug usb eth adapter
-sudo nmcli connection add type ethernet con-name "myusbconnection" ifname enx* ip4 192.168.3.2/24
-sudo nmcli connection up "myusbconnection"
+sudo nmcli connection up myusbconnection
 
+ssh radxa@192.168.3.2
 
+after installation
+rsetup
+overlays
+- disable zero wireless
+  
 -------------------------------------------------------------------------------
 https://armbian.com/boards/radxa-zero3
 
