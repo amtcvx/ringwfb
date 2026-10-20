@@ -35,7 +35,7 @@ if uname -a | grep -cs "6.1.84-10-rk2410-nocsf"> /dev/null 2>&1; then
   sudo modprobe rtw_8812au
 #  sudo systemctl stop  wpa_supplicant
 #  sudo systemctl disable wpa_supplicant.service
-else
+#else
 #  sudo apt-get install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio
 fi
 
