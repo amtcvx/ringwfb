@@ -19,6 +19,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 #include <net/dst_metadata.h>
 
 #include <net/mac80211.h>
+#include <net/cfg80211.h>
 
 #include <net/ip.h>
 
@@ -125,7 +126,11 @@ static int __init wfb_nfkernel_init(void) {
 
   mypriv.localdev = dev_get_by_name(&init_net, localname);
   mypriv.wifidev  = dev_get_by_name(&init_net, devname);
-
+/*
+  void wiphy_rfkill_set_hw_state(struct wiphy *wiphy, bool blocked);
+  struct wiphy 
+  wiphy_rfkill_set_hw_state(mypriv.wifidev->ieee80211_ptr, false);
+*/
 
   dev_change_flags(mypriv.wifidev, (mypriv.wifidev->flags & ~IFF_UP), NULL); // bring down
 
@@ -133,10 +138,28 @@ static int __init wfb_nfkernel_init(void) {
   call_netdevice_notifiers(NETDEV_CHANGE, mypriv.wifidev);
 
   dev_change_flags(mypriv.wifidev, (mypriv.wifidev->flags | IFF_UP), NULL);  // bring up
-/*
-  NL80211_CMD_SET_CHANNEL
-  set_monitor_channel
-*/
+
+
+
+  struct wireless_dev *wdev = mypriv.wifidev->ieee80211_ptr;
+  struct wiphy *wiphy = wdev->wiphy;
+  struct ieee80211_channel *chan = NULL; // cfg80211_channel *chan = NULL;
+  for (int i = 0; i < wiphy->bands[NL80211_BAND_2GHZ]->n_channels; i++) {
+    if (wiphy->bands[NL80211_BAND_2GHZ]->channels[i].hw_value == 1) {
+      chan = &wiphy->bands[NL80211_BAND_2GHZ]->channels[i];
+      break;
+    }
+  }
+  struct cfg80211_chan_def chandef;
+  memset(&chandef, 0, sizeof(chandef));
+  chandef.chan = chan;
+  chandef.width = NL80211_CHAN_WIDTH_20;
+  chandef.center_freq1 = chan->center_freq;
+  wiphy_lock(wiphy);
+  wiphy_unlock(wiphy);
+
+
+
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
   dev_set_promiscuity(mypriv.wifidev,1);
