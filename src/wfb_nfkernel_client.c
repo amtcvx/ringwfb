@@ -2,7 +2,7 @@
 
 sudo rfkill
 
-export DEVICE=wlxfc349725a317
+export DEVICE=wlx3c7c3fa9bfbb
 sudo ip link set $DEVICE down
 sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
@@ -17,6 +17,8 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 #include <linux/inet.h>
 
 #include <net/dst_metadata.h>
+
+#include <net/mac80211.h>
 
 #include <net/ip.h>
 
@@ -124,6 +126,17 @@ static int __init wfb_nfkernel_init(void) {
   mypriv.localdev = dev_get_by_name(&init_net, localname);
   mypriv.wifidev  = dev_get_by_name(&init_net, devname);
 
+
+  dev_change_flags(mypriv.wifidev, (mypriv.wifidev->flags & ~IFF_UP), NULL); // bring down
+
+  mypriv.wifidev->ieee80211_ptr->iftype = NL80211_IFTYPE_MONITOR;
+  call_netdevice_notifiers(NETDEV_CHANGE, mypriv.wifidev);
+
+  dev_change_flags(mypriv.wifidev, (mypriv.wifidev->flags | IFF_UP), NULL);  // bring up
+/*
+  NL80211_CMD_SET_CHANNEL
+  set_monitor_channel
+*/
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
   dev_set_promiscuity(mypriv.wifidev,1);
