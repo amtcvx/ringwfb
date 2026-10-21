@@ -151,15 +151,16 @@ static int __init wfb_nfkernel_init(void) {
       break;
     }
   }
-
+/*
   struct cfg80211_chan_def chandef;
   memset(&chandef, 0, sizeof(chandef));
   chandef.chan = chan;
   chandef.width = NL80211_CHAN_WIDTH_20;
   chandef.center_freq1 = chan->center_freq;
-  //set_monitor_channel(wiphy, mypriv.wifidev, &chandef);
 
-
+  set_monitor_channel(wiphy, chan, NL80211_CHAN_HT20);
+  struct ieee80211_channel *newchan = get_channel(wiphy, wdev, NL80211_CHAN_HT20);
+*/
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
