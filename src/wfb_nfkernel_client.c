@@ -147,16 +147,17 @@ static int __init wfb_nfkernel_init(void) {
   for (int i = 0; i < wiphy->bands[NL80211_BAND_2GHZ]->n_channels; i++) {
     if (wiphy->bands[NL80211_BAND_2GHZ]->channels[i].hw_value == 1) {
       chan = &wiphy->bands[NL80211_BAND_2GHZ]->channels[i];
+      pr_info("num chan(%d)\n",i);
       break;
     }
   }
+
   struct cfg80211_chan_def chandef;
   memset(&chandef, 0, sizeof(chandef));
   chandef.chan = chan;
   chandef.width = NL80211_CHAN_WIDTH_20;
   chandef.center_freq1 = chan->center_freq;
-  wiphy_lock(wiphy);
-  wiphy_unlock(wiphy);
+  //set_monitor_channel(wiphy, mypriv.wifidev, &chandef);
 
 
 
