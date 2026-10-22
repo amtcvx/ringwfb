@@ -134,16 +134,10 @@ static int __init wfb_nfkernel_init(void) {
 */
 
   dev_change_flags(mypriv.wifidev, (mypriv.wifidev->flags & ~IFF_UP), NULL); // bring down
-
   mypriv.wifidev->ieee80211_ptr->iftype = NL80211_IFTYPE_MONITOR;
-  call_netdevice_notifiers(NETDEV_CHANGE, mypriv.wifidev);
-
   dev_change_flags(mypriv.wifidev, (mypriv.wifidev->flags | IFF_UP), NULL);  // bring up
 
-
-  struct wireless_dev *wdev = mypriv.wifidev->ieee80211_ptr;
-  struct wiphy *wiphy = wdev->wiphy;
-
+  struct wiphy *wiphy = mypriv.wifidev->ieee80211_ptr->wiphy;
   // iw reg set US
 //  regulatory_set_wiphy_regd(wiphy, &wfb_regdom);
 
@@ -159,18 +153,24 @@ static int __init wfb_nfkernel_init(void) {
       break;
     }
   }
+/*
+  struct cfg80211_chan_def chandef;
+  cfg80211_chandef_create(&chandef, chan, NL80211_CHAN_WIDTH_20);
+  cfg80211_set_channel(wiphy, mypriv.wifidev->ieee80211_ptr, &chandef);
+  struct ieee80211_ops my_hardware_ops.set_channel = 
+
+  wdev->chandef = chandef;
+
+  struct cfg80211_registered_device *rdev = wiphy_to_rdev(wiphy);
 
   struct cfg80211_chan_def chandef;
   memset(&chandef, 0, sizeof(chandef));
   chandef.chan = chan;
   chandef.width = NL80211_CHAN_WIDTH_20;
   chandef.center_freq1 = chan->center_freq;
-  cfg80211_ch_switch_notify(mypriv.wifidev, &chandef, 0);
-
-
-/*
+  rtnl_lock();
   set_monitor_channel(wiphy, chan, NL80211_CHAN_HT20);
-  struct ieee80211_channel *newchan = get_channel(wiphy, wdev, NL80211_CHAN_HT20);
+  rtnl_unlock();
 */
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
