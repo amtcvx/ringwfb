@@ -26,7 +26,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlx3c7c3fa9bfbb";
+uint8_t *devname = "wlx3c7c3fa9bfb6";
 uint16_t indestport = 5700;
 
 uint16_t ethport = 5650;
@@ -153,25 +153,17 @@ static int __init wfb_nfkernel_init(void) {
       break;
     }
   }
-/*
-  struct cfg80211_chan_def chandef;
-  cfg80211_chandef_create(&chandef, chan, NL80211_CHAN_WIDTH_20);
-  cfg80211_set_channel(wiphy, mypriv.wifidev->ieee80211_ptr, &chandef);
-  struct ieee80211_ops my_hardware_ops.set_channel = 
 
-  wdev->chandef = chandef;
+  wiphy_lock(wiphy);
+  struct cfg80211_chan_def chandef = {
+        .chan = chan,
+        .width = NL80211_CHAN_WIDTH_20,
+        .center_freq1 = chan->center_freq,
+        .center_freq2 = 0,
+  };
+  cfg80211_ch_switch_notify(mypriv.wifidev, &chandef, 0);
+  wiphy_unlock(wiphy);
 
-  struct cfg80211_registered_device *rdev = wiphy_to_rdev(wiphy);
-
-  struct cfg80211_chan_def chandef;
-  memset(&chandef, 0, sizeof(chandef));
-  chandef.chan = chan;
-  chandef.width = NL80211_CHAN_WIDTH_20;
-  chandef.center_freq1 = chan->center_freq;
-  rtnl_lock();
-  set_monitor_channel(wiphy, chan, NL80211_CHAN_HT20);
-  rtnl_unlock();
-*/
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
