@@ -2,7 +2,7 @@
 
 sudo rfkill
 
-export DEVICE=wlx3c7c3fa9bfbb
+export DEVICE=wlxfc349725a317
 sudo ip link set $DEVICE down
 sudo iw dev $DEVICE set type monitor
 sudo ip link set $DEVICE up
@@ -20,13 +20,12 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 #include <net/mac80211.h>
 #include <net/cfg80211.h>
-#include "wfb_regdomain.h"
 
 #include <net/ip.h>
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlx3c7c3fa9bfb6";
+uint8_t *devname = "wlxfc349725a317";
 uint16_t indestport = 5700;
 
 uint16_t ethport = 5650;
@@ -127,20 +126,28 @@ static int __init wfb_nfkernel_init(void) {
 
   mypriv.localdev = dev_get_by_name(&init_net, localname);
   mypriv.wifidev  = dev_get_by_name(&init_net, devname);
-/*
-  void wiphy_rfkill_set_hw_state(struct wiphy *wiphy, bool blocked);
-  struct wiphy 
-  wiphy_rfkill_set_hw_state(mypriv.wifidev->ieee80211_ptr, false);
-*/
 
-  dev_change_flags(mypriv.wifidev, (mypriv.wifidev->flags & ~IFF_UP), NULL); // bring down
-  mypriv.wifidev->ieee80211_ptr->iftype = NL80211_IFTYPE_MONITOR;
-  dev_change_flags(mypriv.wifidev, (mypriv.wifidev->flags | IFF_UP), NULL);  // bring up
+//  char *argv1[] = { "/usr/sbin/rfkill", "unblock", mypriv.wifidev->phydev->mdio.dev.bus_id, NULL };
+// sudo rfkill -o ID,DEVICE,SOFT
+
+  static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
+
+  char *argv1[] = { "/usr/sbin/rfkill", "unblock", "wifi", NULL };
+  call_usermodehelper(argv1[0], argv1, envp, UMH_WAIT_PROC);
+
+  char *argv2[] = { "/usr/sbin/iw", "reg", "set","US", NULL };
+  call_usermodehelper(argv2[0], argv2, envp, UMH_WAIT_PROC);
+
+  char *argv3[] = { "/usr/sbin/ip", "link", "set", devname, "down", NULL };
+  call_usermodehelper(argv3[0], argv3, envp, UMH_WAIT_PROC);
+
+  char *argv4[] = { "/usr/sbin/iw", "dev", devname, "set", "type", "monitor", NULL };
+  call_usermodehelper(argv4[0], argv4, envp, UMH_WAIT_PROC);
+
+  char *argv5[] = { "/usr/sbin/ip", "link", "set", devname, "up", NULL };
+  call_usermodehelper(argv5[0], argv5, envp, UMH_WAIT_PROC);
 
   struct wiphy *wiphy = mypriv.wifidev->ieee80211_ptr->wiphy;
-  // iw reg set US
-//  regulatory_set_wiphy_regd(wiphy, &wfb_regdom);
-
   struct ieee80211_channel *chan = NULL; // cfg80211_channel *chan = NULL;
   for (int i = 0; i < wiphy->bands[NL80211_BAND_2GHZ]->n_channels; i++) {
     if (wiphy->bands[NL80211_BAND_2GHZ]->channels[i].hw_value == 1) {
@@ -154,16 +161,9 @@ static int __init wfb_nfkernel_init(void) {
     }
   }
 
-  wiphy_lock(wiphy);
-  struct cfg80211_chan_def chandef = {
-        .chan = chan,
-        .width = NL80211_CHAN_WIDTH_20,
-        .center_freq1 = chan->center_freq,
-        .center_freq2 = 0,
-  };
-  cfg80211_ch_switch_notify(mypriv.wifidev, &chandef, 0);
-  wiphy_unlock(wiphy);
-
+//  char *argv6[] = { "/usr/sbin/iw", "dev", devname, "set", "freq", "5300", NULL };
+  char *argv6[] = { "/usr/sbin/iw", "dev", devname, "set", "channel", "1", NULL };
+  call_usermodehelper(argv6[0], argv6, envp, UMH_WAIT_PROC);
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
