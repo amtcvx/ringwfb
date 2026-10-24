@@ -41,12 +41,20 @@ if uname -a | grep -cs "6.1.84-10-rk2410-nocsf"> /dev/null 2>&1; then
 #  sudo apt-get install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio
 fi
 
+cd $PROJ/src
+make
+sudo cp $PROJ/src/wfb_nfkernel.ko /lib/modules/`uname -r`
+sudo depmod -A
+
+
 sudo cp $PROJ/material/rtw88.conf /etc/modprobe.d
 
 sudo cp $PROJ/material/unmanaged.conf /etc/NetworkManager/conf.d
 sudo cp $PROJ/material/60-wfb.rules /etc/udev/rules.d
-sudo cp $PROJ/material/wfb.service /etc/systemd/system
+#sudo cp $PROJ/material/wfb.service /etc/systemd/system
 
 sudo systemctl reload NetworkManager.service
 sudo systemctl daemon-reload
 sudo udevadm control --reload-rules
+
+sudo modprobe wfb_nfkernel
