@@ -25,7 +25,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlxfc349725a317";
+uint8_t *devname = "wlxfc349725a319";
 uint16_t indestport = 5700;
 
 uint16_t ethport = 5650;
@@ -122,15 +122,35 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 }
 
 /******************************************************************************/
+
 static int __init wfb_nfkernel_init(void) {
+  char phy_str[32*6];
+  struct net_device *dev;
+  for_each_netdev_rcu(&init_net, dev) {
+    if (dev->flags & IFF_LOOPBACK) continue;
 
-  mypriv.localdev = dev_get_by_name(&init_net, localname);
-  mypriv.wifidev  = dev_get_by_name(&init_net, devname);
-
-//  char *argv1[] = { "/usr/sbin/rfkill", "unblock", mypriv.wifidev->phydev->mdio.dev.bus_id, NULL };
-// sudo rfkill -o ID,DEVICE,SOFT
+    struct device *extparent = dev->dev.parent;
+    if (extparent && extparent->driver) {
+      if (strcmp(extparent->driver->name, "rtw88_8812au")) continue;
+      struct wiphy *wiphy = dev->ieee80211_ptr->wiphy;
+      const char *phy_name = wiphy_name(wiphy);
+      pr_info("Interface cfg80211 : (%s)(%s)(%s)\n", dev->name, dev_name(extparent),phy_name);
+      sprintf(phy_str + strlen(phy_str), "%s\\|", phy_name);
+    }
+  }
+  phy_str[strlen(phy_str)-2] = '\0';
+ 
+  char shell_cmd[100];
+  sprintf(shell_cmd, "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | cut -c2)",phy_str);
+  pr_info("(%s)\n", shell_cmd);
 
   static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
+
+  char *argv[] = { "/bin/sh", "-c", shell_cmd, NULL };
+  call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+ 
+  mypriv.localdev = dev_get_by_name(&init_net, localname);
+  mypriv.wifidev  = dev_get_by_name(&init_net, devname);
 
   char *argv1[] = { "/usr/sbin/rfkill", "unblock", "wifi", NULL };
   call_usermodehelper(argv1[0], argv1, envp, UMH_WAIT_PROC);
@@ -175,10 +195,10 @@ static int __init wfb_nfkernel_init(void) {
 
 /******************************************************************************/
 static void __exit wfb_nfkernel_exit(void) {
-
+/*
   dev_set_promiscuity(mypriv.wifidev,0);
   netdev_rx_handler_unregister(mypriv.wifidev);
-
+*/
 }
 
 /******************************************************************************/
