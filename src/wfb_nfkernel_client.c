@@ -25,7 +25,7 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlxfc349725a319";
+//uint8_t *devname = "wlxfc349725a319";
 uint16_t indestport = 5700;
 
 uint16_t ethport = 5650;
@@ -122,8 +122,8 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 }
 
 /******************************************************************************/
-
 static int __init wfb_nfkernel_init(void) {
+  char *devname = NULL; 
   char phy_str[32*6];
   struct net_device *dev;
   for_each_netdev_rcu(&init_net, dev) {
@@ -136,8 +136,11 @@ static int __init wfb_nfkernel_init(void) {
       const char *phy_name = wiphy_name(wiphy);
       pr_info("Interface cfg80211 : (%s)(%s)(%s)\n", dev->name, dev_name(extparent),phy_name);
       sprintf(phy_str + strlen(phy_str), "%s\\|", phy_name);
+      devname = dev->name;
     }
   }
+  if (!(devname)) return -1;
+
   phy_str[strlen(phy_str)-2] = '\0';
  
   char shell_cmd[100];
@@ -195,10 +198,10 @@ static int __init wfb_nfkernel_init(void) {
 
 /******************************************************************************/
 static void __exit wfb_nfkernel_exit(void) {
-/*
+
   dev_set_promiscuity(mypriv.wifidev,0);
   netdev_rx_handler_unregister(mypriv.wifidev);
-*/
+
 }
 
 /******************************************************************************/
