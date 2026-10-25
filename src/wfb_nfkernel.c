@@ -1,33 +1,9 @@
-/*
-
-sudo rfkill
-
-export DEVICE=wlxfc349725a317
-sudo ip link set $DEVICE down
-sudo iw dev $DEVICE set type monitor
-sudo ip link set $DEVICE up
-sudo iw dev $DEVICE set freq 5300
-
-gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
-
-*/
-#include <linux/netfilter_ipv4.h>
-#include <linux/ip.h>
-#include <linux/udp.h>
 #include <linux/inet.h>
-
 #include <net/dst_metadata.h>
-
-#include <net/mac80211.h>
 #include <net/cfg80211.h>
 
-#include <net/ip.h>
-
 /******************************************************************************/
-uint8_t *localname = "lo";
 uint16_t indestport = 5700;
-
-uint16_t ethport = 5650;
 
 typedef struct {
   uint8_t padding;
@@ -49,10 +25,10 @@ typedef struct {
   uint8_t wifinb;
   uint32_t localipint; 
   struct net_device *localdev;
-  struct wifidev_t  wifidev[4];
+  wifidev_t  wifidev[4];
 } priv_t;
 
-static priv_t mypriv;
+static priv_t *privp;
 
 /******************************************************************************/
 static rx_handler_result_t input_proc(struct sk_buff **pskb) {
@@ -62,6 +38,9 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   if (!skb) return RX_HANDLER_CONSUMED;
 
   pr_info("INi1 input_proc kb->len (%d)\n",skb->len);
+
+  priv_t *priv = (priv_t *)rcu_dereference(skb->dev->rx_handler_data);
+  privp = priv;
 
   struct iphdr *iph;
   struct udphdr* uph;
@@ -98,7 +77,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   skb_reset_mac_header(nskb);
 
-  nskb->dev = mypriv.localdev;
+  nskb->dev = priv->localdev;
   nskb->pkt_type = PACKET_HOST;
   nskb->protocol = htons(ETH_P_IP);
 
@@ -117,12 +96,14 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 /******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
 
+  priv_t mypriv;
+
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
   char phy_str[4*5];
   struct net_device *dev;
   for_each_netdev_rcu(&init_net, dev) {
-    if (dev->flags & IFF_LOOPBACK) { mypriv.localdev = dev, continue; }
+    if (dev->flags & IFF_LOOPBACK) { mypriv.localdev = dev; continue; }
 
     struct device *extparent = dev->dev.parent;
     if (extparent && extparent->driver) {
@@ -132,47 +113,45 @@ static int __init wfb_nfkernel_init(void) {
       const char *phy_name = wiphy_name(wiphy);
       sprintf(phy_str + strlen(phy_str), "%s\\|", phy_name);
 
-      strcpy(&mypriv.wifidev[mypriv.wifinb].name, dev->name);
+      strcpy(mypriv.wifidev[mypriv.wifinb].name, dev->name);
       mypriv.wifidev[mypriv.wifinb++].dev = dev;
     }
   }
   if (!(mypriv.wifinb)) return -1;
   phy_str[strlen(phy_str)-2] = '\0';
- 
+
   static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
 
-  char shell_cmd[100];
-  sprintf(shell_cmd, "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | cut -c2)",phy_str);
-
-  char *argv[6][80];
-  argv[0][] = { "/bin/sh", "-c", shell_cmd, NULL };
-  argv[1][] = { "/usr/sbin/iw", "reg", "set","US", NULL };
-  for (uint8_t cmd=0; cmd<2; cmd++) 
-    call_usermodehelper(argv[], argv, envp, UMH_WAIT_PROC);
+  char shell_cmd[5][50];
+  sprintf(shell_cmd[0], "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | cut -c2)",phy_str);
+  sprintf(shell_cmd[1], "/usr/sbin/iw reg set US");
+  char argv[2][3][100] = {{ "/bin/sh", "-c", { shell_cmd[0][0] }  },{ "/bin/sh", "-c", { shell_cmd[1][0] } }};
+  for (uint8_t cmd=0; cmd<2; cmd++)  call_usermodehelper(argv[cmd][0], (char **)argv[cmd], envp, UMH_WAIT_PROC);
 
   struct wiphy *wiphy;  struct ieee80211_channel *chan;
   for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
     wiphy = mypriv.wifidev[cpt].dev->ieee80211_ptr->wiphy;
     for (int i = 0; i < wiphy->bands[NL80211_BAND_2GHZ]->n_channels; i++) {
       chan = &wiphy->bands[NL80211_BAND_2GHZ]->channels[i];
-      if ((IEEE80211_CHAN_DISABLED & chan->flag) && (IEEE80211_CHAN_NO_IR & chan->flags))
+      if ((IEEE80211_CHAN_DISABLED & chan->flags) && (IEEE80211_CHAN_NO_IR & chan->flags))
         mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb++] = 
 		wiphy->bands[NL80211_BAND_2GHZ]->channels[i].hw_value;
-      }
     }
   }
 
   for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
     uint8_t *name = mypriv.wifidev[cpt].name;
-    uint32_t chan =  mypriv.wifidev[cpt].chan;
-    argv[0] = { "/usr/sbin/ip", "link", "set",         name, "down", NULL };
-    argv[1] = { "/usr/sbin/iw", "dev",                 name, "set", "type", "monitor", NULL };
-    argv[2] = { "/usr/sbin/ip", "link", "set",         name, "up", NULL };
-    argv[3] = { "/sbin/sysctl", "-w", "net.ipv6.conf.",name, ".disable_ipv6=1", NULL };
-    argv[4] = { "/usr/sbin/iw", "dev",                 name, "set", "channel", chan, NULL };
-    for (uint8_t cmd=0; cmd<5; cmd++)   call_usermodehelper(argv[cmd][0], argv[cmd], envp, UMH_WAIT_PROC);
-    dev_set_promiscuity(mypriv.wifidev[cpt],1);
-    netdev_rx_handler_register(mypriv.wifidev[cpt], input_proc[cpt], NULL);
+    uint32_t chan =  mypriv.wifidev[cpt].chan[cpt];
+
+    sprintf(shell_cmd[0], "/usr/sbin/ip link set %s down",name);
+    sprintf(shell_cmd[1], "/usr/sbin/iw dev %s set type monitor",name);
+    sprintf(shell_cmd[2], "/usr/sbin/ip link set %s up",name);
+    sprintf(shell_cmd[3], "/sbin/sysctl -w net.ipv6.conf.%s.disable_ipv6=1",name);
+    sprintf(shell_cmd[4], "/usr/sbin/iw dev %s set channel %d",name,chan);
+    for (uint8_t cmd=0; cmd<5; cmd++)  call_usermodehelper(argv[cmd][0], (char **)argv[cmd], envp, UMH_WAIT_PROC);
+
+    dev_set_promiscuity(mypriv.wifidev[cpt].dev,1);
+    netdev_rx_handler_register(mypriv.wifidev[cpt].dev, input_proc, (void  *)&mypriv);
   }
 
   return 0;
@@ -181,14 +160,14 @@ static int __init wfb_nfkernel_init(void) {
 /******************************************************************************/
 static void __exit wfb_nfkernel_exit(void) {
 
-  if (strlen(devname)>0) {
+  for (uint8_t cpt=0; cpt < privp->wifinb; cpt++) {
 
     static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
-    char *argv[] = { "/usr/sbin/ip", "link", "set", devname, "down", NULL };
+    char *argv[] = { "/usr/sbin/ip", "link", "set", privp->wifidev[cpt].name, "down", NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
 
-    dev_set_promiscuity(mypriv.wifidev,0);
-    netdev_rx_handler_unregister(mypriv.wifidev);
+    dev_set_promiscuity(privp->wifidev[cpt].dev,0);
+    netdev_rx_handler_unregister(privp->wifidev[cpt].dev);
   }
 }
 
@@ -197,3 +176,4 @@ module_init(wfb_nfkernel_init);
 module_exit(wfb_nfkernel_exit);
 
 MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("Driver");
