@@ -16,8 +16,8 @@ typedef struct {
 
 typedef struct {
   uint8_t name[20]; 
-  uint16_t channb;
-  uint32_t chan[70];
+  uint8_t channb;
+  uint8_t chan[70];
   struct net_device *dev;
 } wifidev_t;
 
@@ -122,7 +122,7 @@ static int __init wfb_nfkernel_init(void) {
   char shell_cmd[5][80];
 
   sprintf(shell_cmd[0], "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | cut -c2)",phy_str);
-  sprintf(shell_cmd[1], "/usr/sbin/iw reg set US");
+  sprintf(shell_cmd[1], "iw reg set US");
   for (uint8_t cpt=0; cpt<2; cpt++) {
     char *argv[] = { "/bin/sh", "-c", shell_cmd[cpt], NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
@@ -133,21 +133,25 @@ static int __init wfb_nfkernel_init(void) {
     wiphy = mypriv.wifidev[cpt].dev->ieee80211_ptr->wiphy;
     for (int i = 0; i < wiphy->bands[NL80211_BAND_2GHZ]->n_channels; i++) {
       chan = &wiphy->bands[NL80211_BAND_2GHZ]->channels[i];
-      if ((IEEE80211_CHAN_DISABLED & chan->flags) && (IEEE80211_CHAN_NO_IR & chan->flags))
+      if (!(IEEE80211_CHAN_DISABLED & chan->flags) && !(IEEE80211_CHAN_NO_IR & chan->flags))
         mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb++] = 
 		wiphy->bands[NL80211_BAND_2GHZ]->channels[i].hw_value;
+    }
+    for (int i = 0; i < wiphy->bands[NL80211_BAND_5GHZ]->n_channels; i++) {
+      chan = &wiphy->bands[NL80211_BAND_5GHZ]->channels[i];
+      mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb++] = 
+		wiphy->bands[NL80211_BAND_5GHZ]->channels[i].hw_value;
     }
   }
 
   for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
     uint8_t *name = mypriv.wifidev[cpt].name;
-    uint32_t chan =  mypriv.wifidev[cpt].chan[cpt];
-
-    sprintf(shell_cmd[0], "/usr/sbin/ip link set %s down",name);
-    sprintf(shell_cmd[1], "/usr/sbin/iw dev %s set type monitor",name);
-    sprintf(shell_cmd[2], "/usr/sbin/ip link set %s up",name);
-    sprintf(shell_cmd[3], "/sbin/sysctl -w net.ipv6.conf.%s.disable_ipv6=1",name);
-    sprintf(shell_cmd[4], "/usr/sbin/iw dev %s set channel %d",name,chan);
+    uint8_t chan =  mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb - 1];
+    sprintf(shell_cmd[0], "ip link set %s down",name);
+    sprintf(shell_cmd[1], "iw dev %s set type monitor",name);
+    sprintf(shell_cmd[2], "ip link set %s up",name);
+    sprintf(shell_cmd[3], "sysctl -w net.ipv6.conf.%s.disable_ipv6=1",name);
+    sprintf(shell_cmd[4], "iw dev %s set channel %d",name,chan);
     for (uint8_t cpt=0; cpt<5; cpt++) {
       char *argv[] = { "/bin/sh", "-c", shell_cmd[cpt], NULL };
       call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
@@ -165,7 +169,7 @@ static void __exit wfb_nfkernel_exit(void) {
 
   static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
   for (uint8_t cpt=0; cpt < mypriv.wifinb; cpt++) {
-    char *argv[] = { "/usr/sbin/ip", "link", "set", mypriv.wifidev[cpt].name, "down", NULL };
+    char *argv[] = { "ip", "link", "set", mypriv.wifidev[cpt].name, "down", NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
     dev_set_promiscuity(mypriv.wifidev[cpt].dev,0);
     netdev_rx_handler_unregister(mypriv.wifidev[cpt].dev);
