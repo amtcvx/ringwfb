@@ -18,15 +18,13 @@ gst-launch-1.0 udpsrc port=5700 ! application/x-rtp, encoding-name=H265, payload
 
 #include <net/dst_metadata.h>
 
-//#include <net/mac80211.h>
-//#include <net/cfg80211.h>
-//#include <linux/nl80211.h>
+#include <net/mac80211.h>
+#include <net/cfg80211.h>
 
 #include <net/ip.h>
 
 /******************************************************************************/
 uint8_t *localname = "lo";
-uint8_t *devname = "wlx3c7c3fa9bfbb";
 uint16_t indestport = 5700;
 
 uint16_t ethport = 5650;
@@ -41,9 +39,17 @@ typedef struct {
 } __attribute__((packed)) pph_t;
 
 typedef struct {
-  uint32_t localipint;
+  uint8_t name[20]; 
+  uint16_t channb;
+  uint32_t chan[70];
+  struct net_device *dev;
+} wifidev_t;
+
+typedef struct {
+  uint8_t wifinb;
+  uint32_t localipint; 
   struct net_device *localdev;
-  struct net_device *wifidev;
+  struct wifidev_t  wifidev[4];
 } priv_t;
 
 static priv_t mypriv;
@@ -71,20 +77,6 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
   skb_trim(nskb,skb->len-4);
   skb_pull(nskb, radiotaplg + 26 + sizeof(pph_t));
-
-/*
-  iph = ip_hdr(skb);
-  if ((iph->version != 4) || (iph->protocol != IPPROTO_UDP)) return RX_HANDLER_CONSUMED;
-  skb->transport_header = skb->network_header + iph->ihl*4;
-  uph = udp_hdr(skb);
-  if ((ntohs(uph->dest) != ethport)) return RX_HANDLER_CONSUMED;
-  pph_t *pph = (pph_t *)(skb->data + sizeof(struct iphdr) + sizeof(struct udphdr));
-  pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
-          pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
-  uint16_t paylen = pph->msglen;
-  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
-  skb_pull(nskb, sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(pph_t));
-*/
 
 
   uph = (struct udphdr*)skb_push(nskb, sizeof(*uph));
@@ -125,22 +117,63 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 /******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
 
-  mypriv.localdev = dev_get_by_name(&init_net, localname);
-  mypriv.wifidev  = dev_get_by_name(&init_net, devname);
-
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  dev_change_flags(mypriv.wifidev, mypriv.wifidev->flags & ~IFF_UP, NULL);
-/*
-  struct ieee80211_hw *wdev = mypriv.wifidev->ieee80211_ptr;
-  if (!(wdev->wiphy->interface_modes & BIT(NL80211_IFTYPE_MONITOR))) {
-    wdev->wiphy->iftype = NL80211_IFTYPE_MONITOR;
-  }
-*/
-  dev_change_flags(mypriv.wifidev, mypriv.wifidev->flags | IFF_UP, NULL);
+  char phy_str[4*5];
+  struct net_device *dev;
+  for_each_netdev_rcu(&init_net, dev) {
+    if (dev->flags & IFF_LOOPBACK) { mypriv.localdev = dev, continue; }
 
-  dev_set_promiscuity(mypriv.wifidev,1);
-  netdev_rx_handler_register(mypriv.wifidev, input_proc, NULL);
+    struct device *extparent = dev->dev.parent;
+    if (extparent && extparent->driver) {
+      if (strcmp(extparent->driver->name, "rtw88_8812au")) continue;
+      if (mypriv.wifinb == 4) continue;
+      struct wiphy *wiphy = dev->ieee80211_ptr->wiphy;
+      const char *phy_name = wiphy_name(wiphy);
+      sprintf(phy_str + strlen(phy_str), "%s\\|", phy_name);
+
+      strcpy(&mypriv.wifidev[mypriv.wifinb].name, dev->name);
+      mypriv.wifidev[mypriv.wifinb++].dev = dev;
+    }
+  }
+  if (!(mypriv.wifinb)) return -1;
+  phy_str[strlen(phy_str)-2] = '\0';
+ 
+  static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
+
+  char shell_cmd[100];
+  sprintf(shell_cmd, "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | cut -c2)",phy_str);
+
+  char *argv[6][80];
+  argv[0][] = { "/bin/sh", "-c", shell_cmd, NULL };
+  argv[1][] = { "/usr/sbin/iw", "reg", "set","US", NULL };
+  for (uint8_t cmd=0; cmd<2; cmd++) 
+    call_usermodehelper(argv[], argv, envp, UMH_WAIT_PROC);
+
+  struct wiphy *wiphy;  struct ieee80211_channel *chan;
+  for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
+    wiphy = mypriv.wifidev[cpt].dev->ieee80211_ptr->wiphy;
+    for (int i = 0; i < wiphy->bands[NL80211_BAND_2GHZ]->n_channels; i++) {
+      chan = &wiphy->bands[NL80211_BAND_2GHZ]->channels[i];
+      if ((IEEE80211_CHAN_DISABLED & chan->flag) && (IEEE80211_CHAN_NO_IR & chan->flags))
+        mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb++] = 
+		wiphy->bands[NL80211_BAND_2GHZ]->channels[i].hw_value;
+      }
+    }
+  }
+
+  for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
+    uint8_t *name = mypriv.wifidev[cpt].name;
+    uint32_t chan =  mypriv.wifidev[cpt].chan;
+    argv[0] = { "/usr/sbin/ip", "link", "set",         name, "down", NULL };
+    argv[1] = { "/usr/sbin/iw", "dev",                 name, "set", "type", "monitor", NULL };
+    argv[2] = { "/usr/sbin/ip", "link", "set",         name, "up", NULL };
+    argv[3] = { "/sbin/sysctl", "-w", "net.ipv6.conf.",name, ".disable_ipv6=1", NULL };
+    argv[4] = { "/usr/sbin/iw", "dev",                 name, "set", "channel", chan, NULL };
+    for (uint8_t cmd=0; cmd<5; cmd++)   call_usermodehelper(argv[cmd][0], argv[cmd], envp, UMH_WAIT_PROC);
+    dev_set_promiscuity(mypriv.wifidev[cpt],1);
+    netdev_rx_handler_register(mypriv.wifidev[cpt], input_proc[cpt], NULL);
+  }
 
   return 0;
 }
@@ -148,9 +181,15 @@ static int __init wfb_nfkernel_init(void) {
 /******************************************************************************/
 static void __exit wfb_nfkernel_exit(void) {
 
-  dev_set_promiscuity(mypriv.wifidev,0);
-  netdev_rx_handler_unregister(mypriv.wifidev);
+  if (strlen(devname)>0) {
 
+    static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
+    char *argv[] = { "/usr/sbin/ip", "link", "set", devname, "down", NULL };
+    call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+
+    dev_set_promiscuity(mypriv.wifidev,0);
+    netdev_rx_handler_unregister(mypriv.wifidev);
+  }
 }
 
 /******************************************************************************/
