@@ -28,7 +28,7 @@ typedef struct {
   wifidev_t  wifidev[4];
 } priv_t;
 
-static priv_t *privp;
+static  priv_t mypriv;
 
 /******************************************************************************/
 static rx_handler_result_t input_proc(struct sk_buff **pskb) {
@@ -40,7 +40,6 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   pr_info("INi1 input_proc kb->len (%d)\n",skb->len);
 
   priv_t *priv = (priv_t *)rcu_dereference(skb->dev->rx_handler_data);
-  privp = priv;
 
   struct iphdr *iph;
   struct udphdr* uph;
@@ -95,8 +94,6 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
 /******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
-
-  priv_t mypriv;
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
@@ -160,15 +157,16 @@ static int __init wfb_nfkernel_init(void) {
 /******************************************************************************/
 static void __exit wfb_nfkernel_exit(void) {
 
-  for (uint8_t cpt=0; cpt < privp->wifinb; cpt++) {
+  for (uint8_t cpt=0; cpt < mypriv.wifinb; cpt++) {
 
     static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
-    char *argv[] = { "/usr/sbin/ip", "link", "set", privp->wifidev[cpt].name, "down", NULL };
+    char *argv[] = { "/usr/sbin/ip", "link", "set", mypriv.wifidev[cpt].name, "down", NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
 
-    dev_set_promiscuity(privp->wifidev[cpt].dev,0);
-    netdev_rx_handler_unregister(privp->wifidev[cpt].dev);
+    dev_set_promiscuity(mypriv.wifidev[cpt].dev,0);
+    netdev_rx_handler_unregister(mypriv.wifidev[cpt].dev);
   }
+
 }
 
 /******************************************************************************/
