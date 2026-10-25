@@ -119,11 +119,14 @@ static int __init wfb_nfkernel_init(void) {
 
   static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
 
-  char shell_cmd[5][50];
+  char shell_cmd[5][80];
+
   sprintf(shell_cmd[0], "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | cut -c2)",phy_str);
   sprintf(shell_cmd[1], "/usr/sbin/iw reg set US");
-  char argv[2][3][100] = {{ "/bin/sh", "-c", { shell_cmd[0][0] }  },{ "/bin/sh", "-c", { shell_cmd[1][0] } }};
-  for (uint8_t cmd=0; cmd<2; cmd++)  call_usermodehelper(argv[cmd][0], (char **)argv[cmd], envp, UMH_WAIT_PROC);
+  for (uint8_t cpt=0; cpt<2; cpt++) {
+    char *argv[] = { "/bin/sh", "-c", shell_cmd[cpt], NULL };
+    call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+  }
 
   struct wiphy *wiphy;  struct ieee80211_channel *chan;
   for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
@@ -145,7 +148,10 @@ static int __init wfb_nfkernel_init(void) {
     sprintf(shell_cmd[2], "/usr/sbin/ip link set %s up",name);
     sprintf(shell_cmd[3], "/sbin/sysctl -w net.ipv6.conf.%s.disable_ipv6=1",name);
     sprintf(shell_cmd[4], "/usr/sbin/iw dev %s set channel %d",name,chan);
-    for (uint8_t cmd=0; cmd<5; cmd++)  call_usermodehelper(argv[cmd][0], (char **)argv[cmd], envp, UMH_WAIT_PROC);
+    for (uint8_t cpt=0; cpt<5; cpt++) {
+      char *argv[] = { "/bin/sh", "-c", shell_cmd[cpt], NULL };
+      call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+    }
 
     dev_set_promiscuity(mypriv.wifidev[cpt].dev,1);
     netdev_rx_handler_register(mypriv.wifidev[cpt].dev, input_proc, (void  *)&mypriv);
@@ -157,16 +163,13 @@ static int __init wfb_nfkernel_init(void) {
 /******************************************************************************/
 static void __exit wfb_nfkernel_exit(void) {
 
+  static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
   for (uint8_t cpt=0; cpt < mypriv.wifinb; cpt++) {
-
-    static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
     char *argv[] = { "/usr/sbin/ip", "link", "set", mypriv.wifidev[cpt].name, "down", NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
-
     dev_set_promiscuity(mypriv.wifidev[cpt].dev,0);
     netdev_rx_handler_unregister(mypriv.wifidev[cpt].dev);
   }
-
 }
 
 /******************************************************************************/
