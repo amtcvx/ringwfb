@@ -63,7 +63,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   if (!skb) return NF_ACCEPT;
 
-  pr_info("IN output_proc kb->len (%d)\n",skb->len);
+  pr_info("OUT_A (%d)\n",skb->len);
 
   struct iphdr *iph = ip_hdr(skb);
 
@@ -100,7 +100,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   dev_direct_xmit(nskb, 0);
 
-  pr_info("IN output_proc msglen (%d) (%d) (%d) (%lu)\n",
+  pr_info("OUT_B (%d) (%d) (%d) (%lu)\n",
     ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
 
   return NF_ACCEPT;
@@ -113,7 +113,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct sk_buff *skb = *pskb;
   if (!skb) return RX_HANDLER_CONSUMED;
 
-  pr_info("INi1 input_proc kb->len (%d)\n",skb->len);
+  pr_info("IN_A (%d)\n",skb->len);
 
   priv_t *priv = (priv_t *)rcu_dereference(skb->dev->rx_handler_data);
 
@@ -158,7 +158,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   netif_receive_skb(nskb);
   kfree_skb(skb);
 
-  pr_info("OUT input_proc  tot_len(%hu) ips(%pI4) ipd(%pI4) ulen(%hu) ups(%hu) upd(%hu) \n",
+  pr_info("IN_B (%hu) (%pI4) (%pI4) (%hu) (%hu) (%hu) \n",
           ntohs(iph->tot_len),
           &(iph->saddr), &(iph->daddr),
           ntohs(uph->len),
