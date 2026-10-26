@@ -1,5 +1,6 @@
 #include <linux/inet.h>
 #include <linux/netfilter_ipv4.h>
+#include <linux/timer.h>
 #include <net/dst_metadata.h>
 #include <net/cfg80211.h>
 #include <net/ieee80211_radiotap.h>
@@ -23,9 +24,15 @@ typedef struct {
 } chan_t;
 
 typedef struct {
+  uint8_t curchan; 
+  uint16_t pkrcv; 
+} log_t;
+
+typedef struct {
   uint8_t name[20]; 
   uint8_t channb;
   chan_t chan[40];
+  log_t log;
   struct net_device *dev;
 } wifidev_t;
 
@@ -40,6 +47,16 @@ static uint64_t curseq = 0;
 static  priv_t mypriv;
 static struct nf_hook_ops *output_hk = NULL;
 
+struct timer_list wfb_timer;
+#define TIMEOUT 1000
+
+static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
+/*
+struct work_cont {
+  struct work_struct real_work;
+  char cmd[80];
+};
+*/
 /************************************************************************************************/
 #define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
 
@@ -62,6 +79,38 @@ uint8_t ieeehd[] = {
 	0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
 	0x00, 0x00, 0x20, 0x00
 };
+
+/******************************************************************************/
+static void wfb_timercb(struct timer_list *t) {
+/*
+        struct work_cont *c_ptr = container_of(work, struct work_cont, real_work);
+        set_current_state(TASK_INTERRUPTIBLE);
+
+        char *argv[] = { "/bin/sh", "-c", c_ptr->cmd, NULL };
+        static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/bin:/usr/sbin:/usr/bin", NULL };
+
+        call_usermodehelper( argv[0], argv, envp, UMH_WAIT_PROC);
+*/
+  wifidev_t *wifidev = &mypriv.wifidev[0];
+
+  uint8_t chan =  wifidev->chan[wifidev->log.curchan].value;
+  uint16_t  freq = wifidev->chan[wifidev->log.curchan].freq;
+
+  pr_info("beep (%d)(%d) (%d)\n",  chan, freq, wifidev->log.pkrcv);
+
+  wifidev->log.pkrcv = 0;
+
+  if (wifidev->log.curchan < (wifidev->channb - 1)) wifidev->log.curchan++;
+  else wifidev->log.curchan = 0;
+
+  chan = wifidev->chan[wifidev->log.curchan].value;
+
+  char shell_cmd[100]; sprintf(shell_cmd, "iw dev %s set channel %d",wifidev->name,chan);
+  char *argv[] = { "/bin/sh", "-c", shell_cmd, NULL };
+  call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
+
+  mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
+}
 
 /******************************************************************************/
 static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
@@ -118,9 +167,11 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct sk_buff *skb = *pskb;
   if (!skb) return RX_HANDLER_CONSUMED;
 
-  pr_info("IN_A (%d)\n",skb->len);
+//  pr_info("IN_A (%d)\n",skb->len);
 
   priv_t *priv = (priv_t *)rcu_dereference(skb->dev->rx_handler_data);
+
+  priv->wifidev[0].log.pkrcv++;
 
   struct iphdr *iph;
   struct udphdr* uph;
@@ -197,8 +248,6 @@ static int __init wfb_nfkernel_init(void) {
   if (!(mypriv.wifinb)) return -1;
   phy_str[strlen(phy_str)-2] = '\0';
 
-  static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
-
   char shell_cmd[5][80];
 
   sprintf(shell_cmd[0], "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | cut -c2)",phy_str);
@@ -226,7 +275,8 @@ static int __init wfb_nfkernel_init(void) {
  
   for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
     uint8_t *name = mypriv.wifidev[cpt].name;
-    uint8_t chan =  mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb - 1].value;
+    mypriv.wifidev[cpt].log.curchan = 0;
+    uint8_t chan =  mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].log.curchan].value;
     sprintf(shell_cmd[0], "ip link set %s down",name);
     sprintf(shell_cmd[1], "iw dev %s set type monitor",name);
     sprintf(shell_cmd[2], "ip link set %s up",name);
@@ -239,8 +289,9 @@ static int __init wfb_nfkernel_init(void) {
 
     dev_set_promiscuity(mypriv.wifidev[cpt].dev,1);
     netdev_rx_handler_register(mypriv.wifidev[cpt].dev, input_proc, (void  *)&mypriv);
-  }
 
+  }
+/*
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(output_hk != NULL) {
     output_hk->hook     = (nf_hookfn*)output_proc;
@@ -250,6 +301,9 @@ static int __init wfb_nfkernel_init(void) {
     output_hk->priv      = (void  *)&mypriv;     
     nf_register_net_hook(&init_net, output_hk);
   }
+*/
+  timer_setup(&wfb_timer, wfb_timercb, 0);
+  mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
 
   return 0;
 }
@@ -257,7 +311,6 @@ static int __init wfb_nfkernel_init(void) {
 /******************************************************************************/
 static void __exit wfb_nfkernel_exit(void) {
 
-  static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
   for (uint8_t cpt=0; cpt < mypriv.wifinb; cpt++) {
     char *argv[] = { "ip", "link", "set", mypriv.wifidev[cpt].name, "down", NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
@@ -269,6 +322,8 @@ static void __exit wfb_nfkernel_exit(void) {
     nf_unregister_net_hook(&init_net, output_hk);
     kfree(output_hk);
   }
+
+  timer_shutdown_sync(&wfb_timer);
 }
 
 /******************************************************************************/
