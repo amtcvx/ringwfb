@@ -18,9 +18,14 @@ typedef struct {
 } __attribute__((packed)) pph_t;
 
 typedef struct {
+  uint8_t value; 
+  uint16_t freq; 
+} chan_t;
+
+typedef struct {
   uint8_t name[20]; 
   uint8_t channb;
-  uint8_t chan[70];
+  chan_t chan[40];
   struct net_device *dev;
 } wifidev_t;
 
@@ -206,22 +211,22 @@ static int __init wfb_nfkernel_init(void) {
   struct wiphy *wiphy;  struct ieee80211_channel *chan;
   for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
     wiphy = mypriv.wifidev[cpt].dev->ieee80211_ptr->wiphy;
-    for (int i = 0; i < wiphy->bands[NL80211_BAND_2GHZ]->n_channels; i++) {
+    for (uint8_t i = 0; i < wiphy->bands[NL80211_BAND_2GHZ]->n_channels; i++) {
       chan = &wiphy->bands[NL80211_BAND_2GHZ]->channels[i];
-      if (!(IEEE80211_CHAN_DISABLED & chan->flags) && !(IEEE80211_CHAN_NO_IR & chan->flags))
-        mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb++] = 
-		wiphy->bands[NL80211_BAND_2GHZ]->channels[i].hw_value;
+      if (!(IEEE80211_CHAN_DISABLED & chan->flags) && !(IEEE80211_CHAN_NO_IR & chan->flags)) {
+        mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb].value = wiphy->bands[NL80211_BAND_2GHZ]->channels[i].hw_value;
+        mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb++].freq = wiphy->bands[NL80211_BAND_2GHZ]->channels[i].center_freq;
+      }
     }
-    for (int i = 0; i < wiphy->bands[NL80211_BAND_5GHZ]->n_channels; i++) {
-      chan = &wiphy->bands[NL80211_BAND_5GHZ]->channels[i];
-      mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb++] = 
-		wiphy->bands[NL80211_BAND_5GHZ]->channels[i].hw_value;
+    for (uint8_t i = 0; i < wiphy->bands[NL80211_BAND_5GHZ]->n_channels; i++) {
+      mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb].value = wiphy->bands[NL80211_BAND_5GHZ]->channels[i].hw_value;
+      mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb++].freq = wiphy->bands[NL80211_BAND_5GHZ]->channels[i].center_freq;
     }
   }
-
+ 
   for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
     uint8_t *name = mypriv.wifidev[cpt].name;
-    uint8_t chan =  mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb - 1];
+    uint8_t chan =  mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].channb - 1].value;
     sprintf(shell_cmd[0], "ip link set %s down",name);
     sprintf(shell_cmd[1], "iw dev %s set type monitor",name);
     sprintf(shell_cmd[2], "ip link set %s up",name);
