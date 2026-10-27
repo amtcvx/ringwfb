@@ -225,33 +225,34 @@ static int __init wfb_nfkernel_init(void) {
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
   char phy_str[4*5];
-  struct net_device *dev;
-  for_each_netdev_rcu(&init_net, dev) {
-    if (dev->flags & IFF_LOOPBACK) { mypriv.localdev = dev; continue; }
-    struct device *extparent = dev->dev.parent;
+  
+  uint8_t cpt = 0;
+  struct net_device *dev[4], *pdev; 
+  for_each_netdev_rcu(&init_net, pdev) {
+    if (pdev->flags & IFF_LOOPBACK) { mypriv.localdev = pdev; continue; }
+    struct device *extparent = pdev->dev.parent;
     if (extparent && extparent->driver) {
       if (strcmp(extparent->driver->name, "rtw88_8812au")) continue;
-      if (mypriv.wifinb == 4) continue;
-      mypriv.wifidev[mypriv.wifinb++].dev = dev;
+      if (cpt == 4) continue;
+      dev[cpt] = pdev;
     }
   }
-  if (!(mypriv.wifinb)) return -1;
+  if (cpt == 0 ) return -1;
+  pr_info("(%d)\n",cpt);
+/*
+  for (uint8_t i=0;i<cpt;i++) device_reprobe(dev[i]->dev.parent);
 
-  for (uint8_t i=0;i<mypriv.wifinb;i++) device_release_driver(mypriv.wifidev[i].dev->dev.parent);
-  ssleep(1);
-  for (uint8_t i=0;i<mypriv.wifinb;i++) device_attach(mypriv.wifidev[i].dev->dev.parent);
-  ssleep(1);
 
-  for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    dev = mypriv.wifidev[i].dev;
-    struct wiphy *wiphy = dev->ieee80211_ptr->wiphy;
+  for (uint8_t i=0;i<cpt;i++) {
+    mypriv.wifidev[i].dev = dev[i];
+    struct wiphy *wiphy = dev[i]->ieee80211_ptr->wiphy;
     const char *phy_name = wiphy_name(wiphy);
     sprintf(phy_str + strlen(phy_str), "%s\\|", phy_name);
-    strcpy(mypriv.wifidev[mypriv.wifinb].name, dev->name);
+    strcpy(mypriv.wifidev[i].name, dev[i]->name);
   }
   phy_str[strlen(phy_str)-2] = '\0';
   pr_info("(%s)\n",phy_str);
-/*
+
   char shell_cmd[5][80];
   sprintf(shell_cmd[0], "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | cut -c2)",phy_str);
   sprintf(shell_cmd[1], "iw reg set US");
