@@ -81,7 +81,6 @@ static void wfb_work_handler(struct work_struct *work) {
   wifidev_t *wifidev = &mypriv.wifidev[0];
   char shell_cmd[100]; sprintf(shell_cmd, "iw dev %s set channel %d",
 		  wifidev->name,wifidev->chan[wifidev->log.curchan].value);
-
   char *argv[] = { "/bin/sh", "-c", shell_cmd, NULL };
   call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
 }
@@ -96,13 +95,10 @@ static void wfb_timer_callback(struct timer_list *t) {
     wifidev->chan[wifidev->log.curchan].freq,
     wifidev->log.pkrcv); 
 
-  wifidev->log.pkrcv = 0;
-
   if (wifidev->log.curchan < (wifidev->channb - 1)) wifidev->log.curchan++;
   else wifidev->log.curchan = 0;
-
+  wifidev->log.pkrcv = 0;
   schedule_work(&wfb_work);
-
   mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
 }
 
