@@ -47,16 +47,11 @@ static uint64_t curseq = 0;
 static  priv_t mypriv;
 static struct nf_hook_ops *output_hk = NULL;
 
-struct timer_list wfb_timer;
+static struct timer_list wfb_timer;
+static struct work_struct wfb_work;
 #define TIMEOUT 1000
 
 static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
-/*
-struct work_cont {
-  struct work_struct real_work;
-  char cmd[80];
-};
-*/
 /************************************************************************************************/
 #define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
 
@@ -81,33 +76,32 @@ uint8_t ieeehd[] = {
 };
 
 /******************************************************************************/
-static void wfb_timercb(struct timer_list *t) {
-/*
-        struct work_cont *c_ptr = container_of(work, struct work_cont, real_work);
-        set_current_state(TASK_INTERRUPTIBLE);
+static void wfb_work_handler(struct work_struct *work) {
 
-        char *argv[] = { "/bin/sh", "-c", c_ptr->cmd, NULL };
-        static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/bin:/usr/sbin:/usr/bin", NULL };
+  wifidev_t *wifidev = &mypriv.wifidev[0];
+  char shell_cmd[100]; sprintf(shell_cmd, "iw dev %s set channel %d",
+		  wifidev->name,wifidev->chan[wifidev->log.curchan].value);
 
-        call_usermodehelper( argv[0], argv, envp, UMH_WAIT_PROC);
-*/
+  char *argv[] = { "/bin/sh", "-c", shell_cmd, NULL };
+  call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
+}
+
+/******************************************************************************/
+static void wfb_timer_callback(struct timer_list *t) {
+
   wifidev_t *wifidev = &mypriv.wifidev[0];
 
-  uint8_t chan =  wifidev->chan[wifidev->log.curchan].value;
-  uint16_t  freq = wifidev->chan[wifidev->log.curchan].freq;
-
-  pr_info("beep (%d)(%d) (%d)\n",  chan, freq, wifidev->log.pkrcv);
+  pr_info("beep (%d)(%d) (%d)\n", 
+    wifidev->chan[wifidev->log.curchan].value, 
+    wifidev->chan[wifidev->log.curchan].freq,
+    wifidev->log.pkrcv); 
 
   wifidev->log.pkrcv = 0;
 
   if (wifidev->log.curchan < (wifidev->channb - 1)) wifidev->log.curchan++;
   else wifidev->log.curchan = 0;
 
-  chan = wifidev->chan[wifidev->log.curchan].value;
-
-  char shell_cmd[100]; sprintf(shell_cmd, "iw dev %s set channel %d",wifidev->name,chan);
-  char *argv[] = { "/bin/sh", "-c", shell_cmd, NULL };
-  call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
+  schedule_work(&wfb_work);
 
   mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
 }
@@ -291,7 +285,7 @@ static int __init wfb_nfkernel_init(void) {
     netdev_rx_handler_register(mypriv.wifidev[cpt].dev, input_proc, (void  *)&mypriv);
 
   }
-/*
+
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(output_hk != NULL) {
     output_hk->hook     = (nf_hookfn*)output_proc;
@@ -301,8 +295,9 @@ static int __init wfb_nfkernel_init(void) {
     output_hk->priv      = (void  *)&mypriv;     
     nf_register_net_hook(&init_net, output_hk);
   }
-*/
-  timer_setup(&wfb_timer, wfb_timercb, 0);
+
+  INIT_WORK(&wfb_work, wfb_work_handler);
+  timer_setup(&wfb_timer, wfb_timer_callback, 0);
   mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
 
   return 0;
@@ -324,6 +319,8 @@ static void __exit wfb_nfkernel_exit(void) {
   }
 
   timer_shutdown_sync(&wfb_timer);
+  cancel_work_sync(&wfb_work);
+
 }
 
 /******************************************************************************/
