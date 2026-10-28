@@ -262,7 +262,7 @@ static int __init wfb_nfkernel_init(void) {
     char *argv[] = { "/bin/sh", "-c", shell_tab[i], NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
   }
-/*
+
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
     struct wiphy *wiphy = mypriv.wifidev[i].dev->ieee80211_ptr->wiphy;
     for (uint8_t j=0;j<wiphy->bands[NL80211_BAND_2GHZ]->n_channels;j++) {
@@ -278,27 +278,26 @@ static int __init wfb_nfkernel_init(void) {
     }
   }
 
+  char shell_cmd[5][50];
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
     uint8_t *name = mypriv.wifidev[i].dev->name;
     mypriv.wifidev[i].log.curchan = 0;
-
-    pr_info("(%s)\n",name);
-
-    uint8_t chan =  mypriv.wifidev[cpt].chan[mypriv.wifidev[cpt].log.curchan].value;
+    uint8_t chan =  mypriv.wifidev[i].chan[mypriv.wifidev[i].log.curchan].value;
     sprintf(shell_cmd[0], "ip link set %s down",name);
     sprintf(shell_cmd[1], "iw dev %s set type monitor",name);
     sprintf(shell_cmd[2], "ip link set %s up",name);
     sprintf(shell_cmd[3], "sysctl -w net.ipv6.conf.%s.disable_ipv6=1",name);
     sprintf(shell_cmd[4], "iw dev %s set channel %d",name,chan);
-    for (uint8_t cpt=0; cpt<5; cpt++) {
-      char *argv[] = { "/bin/sh", "-c", shell_cmd[cpt], NULL };
+    for (uint8_t j=0;j<5;j++) {
+      char *argv[] = { "/bin/sh", "-c", shell_cmd[j], NULL };
       call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
     }
-
+/*
     dev_set_promiscuity(mypriv.wifidev[cpt].dev,1);
     netdev_rx_handler_register(mypriv.wifidev[cpt].dev, input_proc, (void  *)&mypriv);
+*/
   }
-
+/*
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(output_hk != NULL) {
     output_hk->hook     = (nf_hookfn*)output_proc;
