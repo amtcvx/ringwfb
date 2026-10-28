@@ -224,26 +224,27 @@ static int __init wfb_nfkernel_init(void) {
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  char phy_str[4*5];
-  
-  uint8_t cpt = 0;
-  struct net_device *dev[4], *pdev; 
+  struct net_device *pdev;
   for_each_netdev_rcu(&init_net, pdev) {
     if (pdev->flags & IFF_LOOPBACK) { mypriv.localdev = pdev; continue; }
     struct device *extparent = pdev->dev.parent;
     if (extparent && extparent->driver) {
       if (strcmp(extparent->driver->name, "rtw88_8812au")) continue;
-      if (cpt == 4) continue;
-      dev[cpt] = pdev;
+      if (mypriv.wifinb == 4) continue;
+      mypriv.wifidev[mypriv.wifinb++].dev = pdev;
     }
   }
-  if (cpt == 0 ) return -1;
-  pr_info("(%d)\n",cpt);
+  if (mypriv.wifinb == 0) return -1;
+  for (uint8_t i=0;i<mypriv.wifinb;i++) device_reprobe(mypriv.wifidev[i].dev->dev.parent);
+
+  for (uint8_t i=0;i<mypriv.wifinb;i++) {
+    pr_info("C(%s)\n", mypriv.wifidev[i].dev->name);
+    struct wireless_dev *wdev = mypriv.wifidev[i].dev->ieee80211_ptr; 
+  }
+//    pr_info("Interface %s liée au wiphy %s\n", mypriv.wifidev[i].dev->name, wiphy_name(wdev->wiphy));
 /*
-  for (uint8_t i=0;i<cpt;i++) device_reprobe(dev[i]->dev.parent);
-
-
-  for (uint8_t i=0;i<cpt;i++) {
+  char phy_str[4*5];
+  for (uint8_t i=0;i<nb;i++) {
     mypriv.wifidev[i].dev = dev[i];
     struct wiphy *wiphy = dev[i]->ieee80211_ptr->wiphy;
     const char *phy_name = wiphy_name(wiphy);
