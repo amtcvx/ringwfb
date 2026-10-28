@@ -1,3 +1,13 @@
+clear;make clean;make
+sudo cp wfb_nfkernel.ko /lib/modules/7.0.0-38-generic/
+sudo depmod -A
+
+sudo modprobe wfb_nfkernel 
+modprobe: ERROR: could not insert 'wfb_nfkernel': Operation not permitted
+
+sudo modprobe -r wfb_nfkernel 
+
+
 0	1	2412
 1	2	2417
 2	3	2422
