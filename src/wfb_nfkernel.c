@@ -223,37 +223,43 @@ static int __init wfb_nfkernel_init(void) {
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
-  uint8_t devname[4][10];
-  struct net_device *pdev;
+  uint8_t nb=0;
+  struct net_device *pdev, *devtab[4];
+  for_each_netdev_rcu(&init_net, pdev) {
+    struct device *extparent = pdev->dev.parent;
+    if (extparent && extparent->driver) {
+      if (strcmp(extparent->driver->name, "rtw88_8812au")) continue;
+      if (nb == 4) continue;
+      devtab[nb++] = pdev;
+    }
+  }
+  if (nb == 0) return -1;
+  for (uint8_t i=0;i<nb;i++) device_reprobe(devtab[i]->dev.parent);
+
   for_each_netdev_rcu(&init_net, pdev) {
     if (pdev->flags & IFF_LOOPBACK) { mypriv.localdev = pdev; continue; }
     struct device *extparent = pdev->dev.parent;
     if (extparent && extparent->driver) {
       if (strcmp(extparent->driver->name, "rtw88_8812au")) continue;
       if (mypriv.wifinb == 4) continue;
-      sprintf(devname[mypriv.wifinb], pdev->name);
       mypriv.wifidev[mypriv.wifinb++].dev = pdev;
     }
   }
 
-  if (mypriv.wifinb == 0) return -1;
-  for (uint8_t i=0;i<mypriv.wifinb;i++) device_reprobe(mypriv.wifidev[i].dev->dev.parent);
-  for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    if (strcmp(devname[i],mypriv.wifidev[i].dev->name)!=0) return -1;
-  };
-
   char phy_str[4*5];
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
     struct wireless_dev *wdev = mypriv.wifidev[i].dev->ieee80211_ptr; 
-    sprintf(phy_str + strlen(phy_str), "%s\\|", wiphy_name(wdev->wiphy));
+    strcat(phy_str,wiphy_name(wdev->wiphy));
+    if (i+1 < mypriv.wifinb) strcat(phy_str, "\\|");
   }
-  phy_str[strlen(phy_str)-3] = '\0';
-
-  char shell_cmd[4][80];
-  sprintf(shell_cmd[0], "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | cut -c2)",phy_str);
-  sprintf(shell_cmd[1], "iw reg set US");
+  char shell_cmd0[150], shell_cmd1[20];
+  char *shell_tab[2]= {shell_cmd0, shell_cmd1};
+  sprintf(shell_cmd0, "rfkill unblock $(rfkill -n -o ID,DEVICE | grep \"%s\" | "
+    "sed -E 's/^([^0-9.]*)([0-9]+).*$/\\2/')",
+    phy_str);
+  sprintf(shell_cmd1, "iw reg set US");
   for (uint8_t i=0;i<2;i++) {
-    char *argv[] = { "/bin/sh", "-c", shell_cmd[i], NULL };
+    char *argv[] = { "/bin/sh", "-c", shell_tab[i], NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
   }
 /*
