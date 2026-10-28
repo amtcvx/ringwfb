@@ -30,7 +30,6 @@ typedef struct {
 } log_t;
 
 typedef struct {
-  uint8_t name[20]; 
   uint8_t channb;
   chan_t chan[40];
   log_t log;
@@ -224,6 +223,7 @@ static int __init wfb_nfkernel_init(void) {
 
   in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
 
+  uint8_t devname[4][10];
   struct net_device *pdev;
   for_each_netdev_rcu(&init_net, pdev) {
     if (pdev->flags & IFF_LOOPBACK) { mypriv.localdev = pdev; continue; }
@@ -231,25 +231,22 @@ static int __init wfb_nfkernel_init(void) {
     if (extparent && extparent->driver) {
       if (strcmp(extparent->driver->name, "rtw88_8812au")) continue;
       if (mypriv.wifinb == 4) continue;
+      sprintf(devname[mypriv.wifinb], pdev->name);
       mypriv.wifidev[mypriv.wifinb++].dev = pdev;
     }
   }
   if (mypriv.wifinb == 0) return -1;
-  for (uint8_t i=0;i<mypriv.wifinb;i++) device_reprobe(mypriv.wifidev[i].dev->dev.parent);
+  int8_t ret[2];
+  for (uint8_t i=0;i<mypriv.wifinb;i++) ret[i] = device_reprobe(mypriv.wifidev[i].dev->dev.parent);
 
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    pr_info("C(%s)\n", mypriv.wifidev[i].dev->name);
-    struct wireless_dev *wdev = mypriv.wifidev[i].dev->ieee80211_ptr; 
-  }
-//    pr_info("Interface %s liée au wiphy %s\n", mypriv.wifidev[i].dev->name, wiphy_name(wdev->wiphy));
-/*
+    if (strcmp(devname[i],mypriv.wifidev[i].dev->name)!=0) return -1;
+  };
+
   char phy_str[4*5];
-  for (uint8_t i=0;i<nb;i++) {
-    mypriv.wifidev[i].dev = dev[i];
-    struct wiphy *wiphy = dev[i]->ieee80211_ptr->wiphy;
-    const char *phy_name = wiphy_name(wiphy);
-    sprintf(phy_str + strlen(phy_str), "%s\\|", phy_name);
-    strcpy(mypriv.wifidev[i].name, dev[i]->name);
+  for (uint8_t i=0;i<mypriv.wifinb;i++) {
+    struct wireless_dev *wdev = mypriv.wifidev[i].dev->ieee80211_ptr; 
+    sprintf(phy_str + strlen(phy_str), "%s\\|", wiphy_name(wdev->wiphy));
   }
   phy_str[strlen(phy_str)-2] = '\0';
   pr_info("(%s)\n",phy_str);
@@ -261,7 +258,7 @@ static int __init wfb_nfkernel_init(void) {
     char *argv[] = { "/bin/sh", "-c", shell_cmd[cpt], NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
   }
-
+/*
   struct wiphy *wiphy;  struct ieee80211_channel *chan;
   for (uint8_t cpt=0; cpt<mypriv.wifinb; cpt++) {
     wiphy = mypriv.wifidev[cpt].dev->ieee80211_ptr->wiphy;
