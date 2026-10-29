@@ -96,12 +96,14 @@ static void wfb_timer_callback(struct timer_list *t) {
     wifidev->chan[wifidev->log.curchan].value, 
     wifidev->chan[wifidev->log.curchan].freq,
     wifidev->log.pkrcv); 
-
+/*
   if (wifidev->log.curchan < (wifidev->channb - 1)) wifidev->log.curchan++;
   else wifidev->log.curchan = 0;
+*/
   wifidev->log.pkrcv = 0;
-
+/*
   schedule_work(&wfb_work);
+*/
   mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
 }
 
@@ -279,7 +281,7 @@ static int __init wfb_nfkernel_init(void) {
   char shell_cmd[5][60];
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
     uint8_t *name = mypriv.wifidev[i].ndev->name;
-    mypriv.wifidev[i].log.curchan = 0;
+    mypriv.wifidev[i].log.curchan = 22;
     uint8_t chan =  mypriv.wifidev[i].chan[mypriv.wifidev[i].log.curchan].value;
     sprintf(shell_cmd[0], "ip link set %s down",name);
     sprintf(shell_cmd[1], "iw dev %s set type monitor",name);
@@ -295,7 +297,7 @@ static int __init wfb_nfkernel_init(void) {
     netdev_rx_handler_register(mypriv.wifidev[i].ndev, input_proc, (void  *)&mypriv);
 
   }
-/*
+
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(output_hk != NULL) {
     output_hk->hook     = (nf_hookfn*)output_proc;
@@ -305,7 +307,7 @@ static int __init wfb_nfkernel_init(void) {
     output_hk->priv      = (void  *)&mypriv;     
     nf_register_net_hook(&init_net, output_hk);
   }
-*/
+
   INIT_WORK(&wfb_work, wfb_work_handler);
   timer_setup(&wfb_timer, wfb_timer_callback, 0);
   mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
@@ -320,12 +322,12 @@ static void __exit wfb_nfkernel_exit(void) {
 
   timer_shutdown_sync(&wfb_timer);
   cancel_work_sync(&wfb_work);
-/*
+
   if(output_hk != NULL) {
     nf_unregister_net_hook(&init_net, output_hk);
     kfree(output_hk); output_hk = NULL;
   }
-*/
+
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
 
     dev_set_promiscuity(mypriv.wifidev[i].ndev,0);
