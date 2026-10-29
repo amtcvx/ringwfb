@@ -7,6 +7,8 @@ modprobe: ERROR: could not insert 'wfb_nfkernel': Operation not permitted
 
 sudo modprobe -r wfb_nfkernel 
 
+gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=127.0.0.1
+
 
 0	1	2412
 1	2	2417

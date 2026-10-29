@@ -33,7 +33,7 @@ typedef struct {
   uint8_t channb;
   chan_t chan[40];
   log_t log;
-  struct net_device *dev;
+  struct net_device *ndev;
 } wifidev_t;
 
 typedef struct {
@@ -78,19 +78,17 @@ uint8_t ieeehd[] = {
 /******************************************************************************/
 static void wfb_work_handler(struct work_struct *work) {
 
-  pr_info("TEEP\n");
-/*
   wifidev_t *wifidev = &mypriv.wifidev[0];
-  char shell_cmd[100]; sprintf(shell_cmd, "iw dev %s set channel %d",
-		  wifidev->name,wifidev->chan[wifidev->log.curchan].value);
+  char shell_cmd[40]; sprintf(shell_cmd, "iw dev %s set channel %d",
+		  wifidev->ndev->name,
+		  wifidev->chan[wifidev->log.curchan].value);
   char *argv[] = { "/bin/sh", "-c", shell_cmd, NULL };
   call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
-*/
 }
 
 /******************************************************************************/
 static void wfb_timer_callback(struct timer_list *t) {
-/*
+
   wifidev_t *wifidev = &mypriv.wifidev[0];
 
   pr_info("beep (%d)(%d)(%d) (%d)\n", 
@@ -102,7 +100,7 @@ static void wfb_timer_callback(struct timer_list *t) {
   if (wifidev->log.curchan < (wifidev->channb - 1)) wifidev->log.curchan++;
   else wifidev->log.curchan = 0;
   wifidev->log.pkrcv = 0;
-*/
+
   schedule_work(&wfb_work);
   mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
 }
@@ -145,7 +143,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   ptr = skb_push(nskb, sizeof(radiotaphd));
   memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
 
-  nskb->dev = mypriv.wifidev[0].dev;
+  nskb->dev = mypriv.wifidev[0].ndev;
 
   dev_direct_xmit(nskb, 0);
 
@@ -242,13 +240,13 @@ static int __init wfb_nfkernel_init(void) {
     if (extparent && extparent->driver) {
       if (strcmp(extparent->driver->name, "rtw88_8812au")) continue;
       if (mypriv.wifinb == 4) continue;
-      mypriv.wifidev[mypriv.wifinb++].dev = pdev;
+      mypriv.wifidev[mypriv.wifinb++].ndev = pdev;
     }
   }
 
   char phy_str[4*5];
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    struct wireless_dev *wdev = mypriv.wifidev[i].dev->ieee80211_ptr; 
+    struct wireless_dev *wdev = mypriv.wifidev[i].ndev->ieee80211_ptr; 
     strcat(phy_str,wiphy_name(wdev->wiphy));
     if (i+1 < mypriv.wifinb) strcat(phy_str, "\\|");
   }
@@ -264,7 +262,7 @@ static int __init wfb_nfkernel_init(void) {
   }
 
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    struct wiphy *wiphy = mypriv.wifidev[i].dev->ieee80211_ptr->wiphy;
+    struct wiphy *wiphy = mypriv.wifidev[i].ndev->ieee80211_ptr->wiphy;
     for (uint8_t j=0;j<wiphy->bands[NL80211_BAND_2GHZ]->n_channels;j++) {
       struct ieee80211_channel *chan = &wiphy->bands[NL80211_BAND_2GHZ]->channels[j];
       if (!(IEEE80211_CHAN_DISABLED & chan->flags) && !(IEEE80211_CHAN_NO_IR & chan->flags)) {
@@ -278,9 +276,9 @@ static int __init wfb_nfkernel_init(void) {
     }
   }
 
-  char shell_cmd[5][50];
+  char shell_cmd[5][60];
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    uint8_t *name = mypriv.wifidev[i].dev->name;
+    uint8_t *name = mypriv.wifidev[i].ndev->name;
     mypriv.wifidev[i].log.curchan = 0;
     uint8_t chan =  mypriv.wifidev[i].chan[mypriv.wifidev[i].log.curchan].value;
     sprintf(shell_cmd[0], "ip link set %s down",name);
@@ -292,10 +290,10 @@ static int __init wfb_nfkernel_init(void) {
       char *argv[] = { "/bin/sh", "-c", shell_cmd[j], NULL };
       call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
     }
-/*
-    dev_set_promiscuity(mypriv.wifidev[cpt].dev,1);
-    netdev_rx_handler_register(mypriv.wifidev[cpt].dev, input_proc, (void  *)&mypriv);
-*/
+
+    dev_set_promiscuity(mypriv.wifidev[i].ndev,1);
+    netdev_rx_handler_register(mypriv.wifidev[i].ndev, input_proc, (void  *)&mypriv);
+
   }
 /*
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
@@ -320,22 +318,23 @@ static void __exit wfb_nfkernel_exit(void) {
 
   printk(KERN_EMERG "WFB ENDING\n");
 
-  for (uint8_t i=0;i<mypriv.wifinb;i++) {
-/*
-    dev_set_promiscuity(mypriv.wifidev[cpt].dev,0);
-    netdev_rx_handler_unregister(mypriv.wifidev[cpt].dev);
-    dev_close(mypriv.wifidev[i].dev);
-    unregister_netdev(mypriv.wifidev[cpt].dev);
-*/
-  }
+  timer_shutdown_sync(&wfb_timer);
+  cancel_work_sync(&wfb_work);
 /*
   if(output_hk != NULL) {
     nf_unregister_net_hook(&init_net, output_hk);
-    kfree(output_hk);
+    kfree(output_hk); output_hk = NULL;
   }
 */
-  timer_shutdown_sync(&wfb_timer);
-  cancel_work_sync(&wfb_work);
+  for (uint8_t i=0;i<mypriv.wifinb;i++) {
+
+    dev_set_promiscuity(mypriv.wifidev[i].ndev,0);
+    netdev_rx_handler_unregister(mypriv.wifidev[i].ndev);
+//    dev_close(mypriv.wifidev[i].ndev);
+//    unregister_netdev(mypriv.wifidev[i].ndev);
+
+  }
+
 }
 
 /******************************************************************************/
