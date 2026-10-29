@@ -124,7 +124,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   if (!((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)))
     return NF_ACCEPT;
-
+/*
   struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
   skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
   uint16_t paylen = nskb->len;
@@ -152,7 +152,50 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   pr_info("OUT_B (%d) (%d) (%d) (%lu)\n",
     ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
 
-  return NF_ACCEPT;
+      //if (tx_err == NETDEV_TX_OK) {
+        // 4. Return NF_STOLEN because dev_direct_xmit takes ownership of the skb
+        // and handles its memory management. Netfilter must not touch it anymore.
+*/
+
+  uint16_t paylen = skb->len;
+  skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
+  
+  uint8_t headroom = sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t);
+  pskb_expand_head(skb, headroom, 0, GFP_KERNEL);
+
+  skb_push(skb, sizeof(pph_t));
+  pph_t *pph = (pph_t *)skb->data;
+  memset((void *)pph, 0, sizeof(pph_t));
+  pph->droneid =  0xff;
+  pph->seq = curseq;
+  pph->msglen = htons(paylen);
+
+  curseq++;
+
+  uint8_t *ptr = skb_push(skb, sizeof(ieeehd));
+  memcpy(skb->data, ieeehd, sizeof(ieeehd));
+  ptr = skb_push(skb, sizeof(radiotaphd));
+  memcpy(skb->data, radiotaphd, sizeof(radiotaphd));
+
+
+  skb->dev = mypriv.wifidev[0].ndev;
+  skb->protocol = htons(0x0019); // Mode moniteur brut
+  skb->pkt_type = PACKET_OUTGOING;
+/*
+  skb_reset_mac_header(skb);
+  skb_set_network_header(skb, headroom);
+*/
+  dev_direct_xmit(skb, 0);
+
+  dev_put(mypriv.wifidev[0].ndev);
+
+  pr_info("OUT_B (%d) (%d) (%d) (%lu)\n",
+    ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
+/*
+  kfree_skb(skb);
+  return NF_STOLEN;
+*/
+  return NF_DROP;
 }
 
 /******************************************************************************/
@@ -234,7 +277,8 @@ static int __init wfb_nfkernel_init(void) {
     }
   }
   if (nb == 0) return -1;
-  for (uint8_t i=0;i<nb;i++) device_reprobe(devtab[i]->dev.parent);
+  int8_t ret;
+  for (uint8_t i=0;i<nb;i++) ret=device_reprobe(devtab[i]->dev.parent);
 
   for_each_netdev_rcu(&init_net, pdev) {
     if (pdev->flags & IFF_LOOPBACK) { mypriv.localdev = pdev; continue; }
