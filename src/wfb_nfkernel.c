@@ -51,6 +51,8 @@ static struct timer_list wfb_timer;
 static struct work_struct wfb_work;
 #define TIMEOUT 1000
 
+#define MAGIC_MARK 0x10
+
 static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
 /************************************************************************************************/
 #define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
@@ -149,11 +151,21 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   skb->dev = mypriv.wifidev[0].ndev;
   skb->protocol = htons(ETH_P_802_2); // Mode moniteur brut
   skb->pkt_type = PACKET_OUTGOING;
+  skb->mark = MAGIC_MARK;
+
+//  skb_dst_drop(skb);
+//  skb->skb_iif = mypriv.wifidev[0].ndev->ifindex;
+//  skb->sk = NULL;
 
   skb_reset_mac_header(skb);
   skb_set_network_header(skb, headroom);
 
-  dev_queue_xmit(skb); //dev_direct_xmit(skb, 0);
+  //dev_queue_xmit(skb); 
+  //dev_direct_xmit(skb, 0);
+  u16 txq_index = 0;
+  struct netdev_queue *xq = netdev_get_tx_queue(mypriv.wifidev[0].ndev, txq_index);
+  dev_direct_xmit(skb, txq_index);
+
 
   pr_info("OUT_B (%d) (%d) (%d) (%lu)\n",
     ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
@@ -167,6 +179,9 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   if (!*pskb) return RX_HANDLER_CONSUMED;
   struct sk_buff *skb = *pskb;
   if (!skb) return RX_HANDLER_CONSUMED;
+
+  if (skb->pkt_type == PACKET_OUTGOING) return RX_HANDLER_CONSUMED;
+  if (skb->mark == MAGIC_MARK) return RX_HANDLER_CONSUMED;
 
   pr_info("IN_A (%d)\n",skb->len);
 
@@ -339,7 +354,7 @@ static void __exit wfb_nfkernel_exit(void) {
 
     dev_set_promiscuity(mypriv.wifidev[i].ndev,0);
     netdev_rx_handler_unregister(mypriv.wifidev[i].ndev);
-    dev_put(mypriv.wifidev[i].ndev);
+//    dev_put(mypriv.wifidev[i].ndev);
 //    dev_close(mypriv.wifidev[i].ndev);
 //    unregister_netdev(mypriv.wifidev[i].ndev);
 
