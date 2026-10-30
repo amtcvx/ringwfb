@@ -124,38 +124,6 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   if (!((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)))
     return NF_ACCEPT;
-/*
-  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
-  skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
-  uint16_t paylen = nskb->len;
-
-  pskb_expand_head(nskb, sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t), 0, GFP_KERNEL);
-
-  skb_push(nskb, sizeof(pph_t));
-  pph_t *pph = (pph_t *)nskb->data;
-  memset((void *)pph, 0, sizeof(pph_t));
-  pph->droneid =  0xff;
-  pph->seq = curseq;
-  pph->msglen = htons(paylen);
-
-  curseq++;
-
-  uint8_t *ptr = skb_push(nskb, sizeof(ieeehd));
-  memcpy(nskb->data, ieeehd, sizeof(ieeehd));
-  ptr = skb_push(nskb, sizeof(radiotaphd));
-  memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
-
-  nskb->dev = mypriv.wifidev[0].ndev;
-
-  dev_direct_xmit(nskb, 0);
-
-  pr_info("OUT_B (%d) (%d) (%d) (%lu)\n",
-    ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
-
-      //if (tx_err == NETDEV_TX_OK) {
-        // 4. Return NF_STOLEN because dev_direct_xmit takes ownership of the skb
-        // and handles its memory management. Netfilter must not touch it anymore.
-*/
 
   uint16_t paylen = skb->len;
   skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
@@ -179,15 +147,13 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
 
   skb->dev = mypriv.wifidev[0].ndev;
-  skb->protocol = htons(0x0019); // Mode moniteur brut
+  skb->protocol = htons(ETH_P_802_2); // Mode moniteur brut
   skb->pkt_type = PACKET_OUTGOING;
 
   skb_reset_mac_header(skb);
   skb_set_network_header(skb, headroom);
 
-  dev_direct_xmit(skb, 0);
-
-//  dev_put(mypriv.wifidev[0].ndev);
+  dev_queue_xmit(skb); //dev_direct_xmit(skb, 0);
 
   pr_info("OUT_B (%d) (%d) (%d) (%lu)\n",
     ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
@@ -342,7 +308,7 @@ static int __init wfb_nfkernel_init(void) {
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(output_hk != NULL) {
     output_hk->hook     = (nf_hookfn*)output_proc;
-    output_hk->hooknum  = NF_INET_POST_ROUTING;
+    output_hk->hooknum  = NF_INET_LOCAL_OUT; // NF_INET_POST_ROUTING;
     output_hk->pf       = NFPROTO_IPV4;
     output_hk->priority = NF_IP_PRI_FIRST;
     output_hk->priv      = (void  *)&mypriv;     
@@ -373,6 +339,7 @@ static void __exit wfb_nfkernel_exit(void) {
 
     dev_set_promiscuity(mypriv.wifidev[i].ndev,0);
     netdev_rx_handler_unregister(mypriv.wifidev[i].ndev);
+    dev_put(mypriv.wifidev[i].ndev);
 //    dev_close(mypriv.wifidev[i].ndev);
 //    unregister_netdev(mypriv.wifidev[i].ndev);
 
