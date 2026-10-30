@@ -1,3 +1,6 @@
+nf_hook_ops NF_INET_POST_ROUTING radiotap pskb_expand_head dev_direct_xmit NF_STOLEN
+
+
 #include <linux/netfilter.h>
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
