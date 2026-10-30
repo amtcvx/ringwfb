@@ -151,8 +151,8 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   skb->dev = mypriv.wifidev[0].ndev;
   skb->protocol = htons(ETH_P_802_2); // Mode moniteur brut
   skb->pkt_type = PACKET_OUTGOING;
-  skb->mark = MAGIC_MARK;
 
+//  skb->mark = MAGIC_MARK;
 //  skb_dst_drop(skb);
 //  skb->skb_iif = mypriv.wifidev[0].ndev->ifindex;
 //  skb->sk = NULL;
@@ -160,11 +160,13 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   skb_reset_mac_header(skb);
   skb_set_network_header(skb, headroom);
 
+  dev_direct_xmit(skb, 0);
+
   //dev_queue_xmit(skb); 
   //dev_direct_xmit(skb, 0);
-  u16 txq_index = 0;
-  struct netdev_queue *xq = netdev_get_tx_queue(mypriv.wifidev[0].ndev, txq_index);
-  dev_direct_xmit(skb, txq_index);
+  //u16 txq_index = 0;
+  //struct netdev_queue *xq = netdev_get_tx_queue(mypriv.wifidev[0].ndev, txq_index);
+  //dev_direct_xmit(skb, txq_index);
 
 
   pr_info("OUT_B (%d) (%d) (%d) (%lu)\n",
@@ -180,8 +182,8 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   struct sk_buff *skb = *pskb;
   if (!skb) return RX_HANDLER_CONSUMED;
 
-  if (skb->pkt_type == PACKET_OUTGOING) return RX_HANDLER_CONSUMED;
-  if (skb->mark == MAGIC_MARK) return RX_HANDLER_CONSUMED;
+//  if (skb->pkt_type == PACKET_OUTGOING) return RX_HANDLER_CONSUMED;
+//  if (skb->mark == MAGIC_MARK) return RX_HANDLER_CONSUMED;
 
   pr_info("IN_A (%d)\n",skb->len);
 
