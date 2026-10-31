@@ -102,13 +102,12 @@ unsigned int output_proc(void *priv,
                                 struct sk_buff *skb,
                                 const struct nf_hook_state *state) {
 
-  pr_info("output_proc\n"); return NF_ACCEPT; 
-
-/*
   struct net_device *monitor_dev = ppriv->wifidev[0].ndev;
   if (!monitor_dev) return NF_ACCEPT; 
     
   if (!skb) return NF_ACCEPT;
+
+  pr_info("OUT_A (%d)\n",skb->len);
 
   struct iphdr *iph = ip_hdr(skb);
   if (!iph || iph->protocol != IPPROTO_UDP) return NF_ACCEPT;
@@ -167,9 +166,9 @@ unsigned int output_proc(void *priv,
 
   dev_queue_xmit(skb);
 
-//  dev_put(monitor_dev);
+  pr_info("OUT_B (%d)\n",skb->len);
+
   return NF_STOLEN;
-*/
 }
 
 /*****************************************************************************/
