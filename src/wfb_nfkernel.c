@@ -1,11 +1,5 @@
 #include <linux/inet.h>
-#include <linux/netfilter_ipv4.h>
-#include <linux/timer.h>
-#include <linux/device.h>
-#include <net/dst_metadata.h>
 #include <net/cfg80211.h>
-#include <net/ieee80211_radiotap.h>
-
 #define TIMEOUT 1000
 
 /************************************************************************************************/
@@ -115,6 +109,7 @@ static int __init wfb_nfkernel_init(void) {
   for (uint8_t i=0;i<2;i++) {
     char *argv[] = { "/bin/sh", "-c", shell_tab[i], NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+    ssleep(2);
   }
 
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
