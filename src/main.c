@@ -1,41 +1,21 @@
 #include <linux/inet.h>
 #include <net/cfg80211.h>
-#include <linux/rtnetlink.h> // Historique
+#include <linux/rtnetlink.h>
+#include <linux/netfilter_ipv4.h>
+
 			     
 #include "mon_module.h"
 
 #define TIMEOUT 1000
 
 /************************************************************************************************/
-typedef struct {
-  uint8_t value; 
-  uint16_t freq; 
-} chan_t;
-
-typedef struct {
-  uint8_t curchan; 
-  uint16_t pkrcv; 
-} log_t;
-
-typedef struct {
-  uint8_t channb;
-  chan_t chan[40];
-  log_t log;
-  struct net_device *ndev;
-} wifidev_t;
-
-typedef struct {
-  uint8_t wifinb;
-  uint32_t localipint; 
-  struct net_device *localdev;
-  wifidev_t  wifidev[4];
-} priv_t;
-
-/************************************************************************************************/
 static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
 static struct timer_list wfb_timer;
 static struct work_struct wfb_work;
+static struct nf_hook_ops *output_hk = NULL;
+
 static priv_t mypriv;
+priv_t *ppriv = &mypriv;
 
 /******************************************************************************/
 static void wfb_work_handler(struct work_struct *work) {
@@ -151,17 +131,16 @@ static int __init wfb_nfkernel_init(void) {
     netdev_rx_handler_register(mypriv.wifidev[i].ndev, input_proc, (void  *)&mypriv);
     rtnl_unlock();
   }
-/*
+
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(output_hk != NULL) {
     output_hk->hook     = (nf_hookfn*)output_proc;
-    output_hk->hooknum  = NF_INET_LOCAL_OUT; // NF_INET_POST_ROUTING;
+    output_hk->hooknum  = NF_INET_LOCAL_OUT;
     output_hk->pf       = NFPROTO_IPV4;
     output_hk->priority = NF_IP_PRI_FIRST;
-    output_hk->priv      = (void  *)&mypriv;     
     nf_register_net_hook(&init_net, output_hk);
   }
-*/
+
   INIT_WORK(&wfb_work, wfb_work_handler);
   timer_setup(&wfb_timer, wfb_timer_callback, 0);
   mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
@@ -176,12 +155,12 @@ static void __exit wfb_nfkernel_exit(void) {
 
   timer_shutdown_sync(&wfb_timer);
   cancel_work_sync(&wfb_work);
-/*
+
   if(output_hk != NULL) {
     nf_unregister_net_hook(&init_net, output_hk);
     kfree(output_hk); output_hk = NULL;
   }
-*/
+
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
 
     dev_set_promiscuity(mypriv.wifidev[i].ndev,0);

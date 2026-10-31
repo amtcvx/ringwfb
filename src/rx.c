@@ -7,6 +7,9 @@
 #include "mon_module.h"
 
 /******************************************************************************/
+uint16_t indestport = 5700;
+
+/******************************************************************************/
 // sudo insmod mon_module.ko target_mac=0x00,0x11,0x22,0x33,0x44,0x55
 //
 //static unsigned char target_mac[6] = {0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
@@ -17,7 +20,7 @@ MODULE_PARM_DESC(target_mac, "Adresse MAC de la cible à intercepter (6 octets)"
 /******************************************************************************/
 rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
-  pr_info("HELLO\n");
+  pr_info("input_proc\n");
 /*
   struct sk_buff *skb = *pskb;
 
