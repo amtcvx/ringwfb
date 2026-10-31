@@ -6,19 +6,9 @@
 #include <net/cfg80211.h>
 #include <net/ieee80211_radiotap.h>
 
-/******************************************************************************/
-uint16_t indestport = 5700;
-uint16_t outdestport = 5600;
+#define TIMEOUT 1000
 
-typedef struct {
-  uint8_t padding;
-  uint8_t droneid;
-  uint16_t msglen;
-  int32_t backfreq;
-  uint64_t seq;
-  uint16_t dummy;
-} __attribute__((packed)) pph_t;
-
+/************************************************************************************************/
 typedef struct {
   uint8_t value; 
   uint16_t freq; 
@@ -43,39 +33,11 @@ typedef struct {
   wifidev_t  wifidev[4];
 } priv_t;
 
-static uint64_t curseq = 0;
-static  priv_t mypriv;
-static struct nf_hook_ops *output_hk = NULL;
-
+/************************************************************************************************/
+static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
 static struct timer_list wfb_timer;
 static struct work_struct wfb_work;
-#define TIMEOUT 1000
-
-#define MAGIC_MARK 0x10
-
-static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
-/************************************************************************************************/
-#define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
-
-#define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI | (IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT))
-
-#define MCS_INDEX  2
-
-uint8_t radiotaphd[] = {
-        0x00, 0x00, // <-- radiotap version
-        0x0d, 0x00, // <- radiotap header length
-        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
-        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
-        MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
-};
-uint8_t ieeehd[] = {
-	0x88, 0x00,                         // Data (type=2) with QOS (subtype=8)
-	0x00, 0x00,
-	0x36, 0x35, 0x34, 0x33, 0x32, 0x31, // Receiver MAC
-	0x26, 0x25, 0x24, 0x23, 0x22, 0x21, // Transmitter MAC
-	0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
-	0x00, 0x00, 0x20, 0x00
-};
+static priv_t mypriv;
 
 /******************************************************************************/
 static void wfb_work_handler(struct work_struct *work) {
@@ -107,138 +69,6 @@ static void wfb_timer_callback(struct timer_list *t) {
   schedule_work(&wfb_work);
 */
   mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
-}
-
-/******************************************************************************/
-static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
-
-  if (!skb) return NF_ACCEPT;
-
-  pr_info("OUT_A (%d)\n",skb->len);
-
-  struct iphdr *iph = ip_hdr(skb);
-
-  if(iph && iph->protocol != IPPROTO_UDP) return NF_ACCEPT;
-
-  skb->transport_header = skb->network_header + iph->ihl*4;
-
-  struct udphdr* uph = udp_hdr(skb);
-
-  if (!((mypriv.localipint == iph->saddr) && (mypriv.localipint == iph->daddr) &&  (ntohs(uph->dest)== outdestport)))
-    return NF_ACCEPT;
-
-  uint16_t paylen = skb->len;
-  skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
-  
-  uint8_t headroom = sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t);
-  pskb_expand_head(skb, headroom, 0, GFP_ATOMIC);
-
-  skb_push(skb, sizeof(pph_t));
-  pph_t *pph = (pph_t *)skb->data;
-  memset((void *)pph, 0, sizeof(pph_t));
-  pph->droneid =  0xff;
-  pph->seq = curseq;
-  pph->msglen = htons(paylen);
-
-  curseq++;
-
-  uint8_t *ptr = skb_push(skb, sizeof(ieeehd));
-  memcpy(skb->data, ieeehd, sizeof(ieeehd));
-  ptr = skb_push(skb, sizeof(radiotaphd));
-  memcpy(skb->data, radiotaphd, sizeof(radiotaphd));
-
-
-  skb->dev = mypriv.wifidev[0].ndev;
-  skb->protocol = htons(ETH_P_802_2); // Mode moniteur brut
-  skb->pkt_type = PACKET_OUTGOING;
-
-//  skb->mark = MAGIC_MARK;
-//  skb_dst_drop(skb);
-//  skb->skb_iif = mypriv.wifidev[0].ndev->ifindex;
-//  skb->sk = NULL;
-
-  skb_reset_mac_header(skb);
-  skb_set_network_header(skb, headroom);
-
-  dev_direct_xmit(skb, 0);
-
-  //dev_queue_xmit(skb); 
-  //dev_direct_xmit(skb, 0);
-  //u16 txq_index = 0;
-  //struct netdev_queue *xq = netdev_get_tx_queue(mypriv.wifidev[0].ndev, txq_index);
-  //dev_direct_xmit(skb, txq_index);
-
-
-  pr_info("OUT_B (%d) (%d) (%d) (%lu)\n",
-    ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
-
-  return NF_STOLEN;
-}
-
-/******************************************************************************/
-static rx_handler_result_t input_proc(struct sk_buff **pskb) {
-
-  if (!*pskb) return RX_HANDLER_CONSUMED;
-  struct sk_buff *skb = *pskb;
-  if (!skb) return RX_HANDLER_CONSUMED;
-
-//  if (skb->pkt_type == PACKET_OUTGOING) return RX_HANDLER_CONSUMED;
-//  if (skb->mark == MAGIC_MARK) return RX_HANDLER_CONSUMED;
-
-  pr_info("IN_A (%d)\n",skb->len);
-
-  priv_t *priv = (priv_t *)rcu_dereference(skb->dev->rx_handler_data);
-
-  priv->wifidev[0].log.pkrcv++;
-
-  struct iphdr *iph;
-  struct udphdr* uph;
-
-  uint16_t radiotaplg = (uint16_t)skb->data[2];
-  if (!((radiotaplg == 32) || (radiotaplg == 38) || (radiotaplg == 41))) return RX_HANDLER_CONSUMED;
-  pph_t *pph = (pph_t *)(skb->data + radiotaplg + 26);
-  if ((pph->droneid != 255) || htons(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
-  pr_info("pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n",
-          pph->droneid, htons(pph->msglen), pph->backfreq, pph->seq);
-  uint16_t paylen = pph->msglen;
-  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
-  skb_trim(nskb,skb->len-4);
-  skb_pull(nskb, radiotaplg + 26 + sizeof(pph_t));
-
-
-  uph = (struct udphdr*)skb_push(nskb, sizeof(*uph));
-  skb_reset_transport_header(nskb);
-  memset((void *)uph, 0,sizeof(*uph));
-  uph->dest = htons(indestport);
-  uph->len = htons(8 + htons(paylen));
-
-  iph = (struct iphdr*)skb_push(nskb, sizeof(*iph));
-  skb_reset_network_header(nskb);
-  memset((void *)iph, 0,sizeof(*iph));
-  iph->version = IPVERSION;
-  iph->ihl = sizeof(struct iphdr) / 4;
-  iph->protocol = IPPROTO_UDP;
-  iph->ttl = 64;
-  iph->tot_len = htons(20+ntohs(uph->len));
-  iph->check = 0;
-  iph->check = ip_fast_csum((uint8_t *)iph, iph->ihl);
-
-  skb_reset_mac_header(nskb);
-
-  nskb->dev = priv->localdev;
-  nskb->pkt_type = PACKET_HOST;
-  nskb->protocol = htons(ETH_P_IP);
-
-  netif_receive_skb(nskb);
-  kfree_skb(skb);
-
-  pr_info("IN_B (%hu) (%pI4) (%pI4) (%hu) (%hu) (%hu) \n",
-          ntohs(iph->tot_len),
-          &(iph->saddr), &(iph->daddr),
-          ntohs(uph->len),
-          ntohs(uph->source), ntohs(uph->dest));
-
-  return RX_HANDLER_CONSUMED; 
 }
 
 /******************************************************************************/
@@ -316,12 +146,12 @@ static int __init wfb_nfkernel_init(void) {
       char *argv[] = { "/bin/sh", "-c", shell_cmd[j], NULL };
       call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
     }
-
+/*
     dev_set_promiscuity(mypriv.wifidev[i].ndev,1);
     netdev_rx_handler_register(mypriv.wifidev[i].ndev, input_proc, (void  *)&mypriv);
-
+*/
   }
-
+/*
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(output_hk != NULL) {
     output_hk->hook     = (nf_hookfn*)output_proc;
@@ -331,7 +161,7 @@ static int __init wfb_nfkernel_init(void) {
     output_hk->priv      = (void  *)&mypriv;     
     nf_register_net_hook(&init_net, output_hk);
   }
-
+*/
   INIT_WORK(&wfb_work, wfb_work_handler);
   timer_setup(&wfb_timer, wfb_timer_callback, 0);
   mod_timer(&wfb_timer, jiffies + msecs_to_jiffies(TIMEOUT));
@@ -346,7 +176,7 @@ static void __exit wfb_nfkernel_exit(void) {
 
   timer_shutdown_sync(&wfb_timer);
   cancel_work_sync(&wfb_work);
-
+/*
   if(output_hk != NULL) {
     nf_unregister_net_hook(&init_net, output_hk);
     kfree(output_hk); output_hk = NULL;
@@ -361,7 +191,7 @@ static void __exit wfb_nfkernel_exit(void) {
 //    unregister_netdev(mypriv.wifidev[i].ndev);
 
   }
-
+  */
 }
 
 /******************************************************************************/
