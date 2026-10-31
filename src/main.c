@@ -125,11 +125,12 @@ static int __init wfb_nfkernel_init(void) {
       char *argv[] = { "/bin/sh", "-c", shell_cmd[j], NULL };
       call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
     }
-
+/*
     dev_set_promiscuity(mypriv.wifidev[i].ndev,1);
     rtnl_lock();
     netdev_rx_handler_register(mypriv.wifidev[i].ndev, input_proc, (void  *)&mypriv);
     rtnl_unlock();
+*/
   }
 
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
@@ -162,12 +163,12 @@ static void __exit wfb_nfkernel_exit(void) {
   }
 
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
-
+/*
     dev_set_promiscuity(mypriv.wifidev[i].ndev,0);
     rtnl_lock();
     netdev_rx_handler_unregister(mypriv.wifidev[i].ndev);
     rtnl_unlock();
-
+*/
 //    dev_put(mypriv.wifidev[i].ndev);
 //    dev_close(mypriv.wifidev[i].ndev);
 //    unregister_netdev(mypriv.wifidev[i].ndev);

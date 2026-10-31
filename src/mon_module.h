@@ -5,6 +5,16 @@
 
 /************************************************************************************************/
 typedef struct {
+  uint8_t padding;
+  uint8_t droneid;
+  uint16_t msglen;
+  int32_t backfreq;
+  uint64_t seq;
+  uint16_t dummy;
+} __attribute__((packed)) pph_t;
+
+/************************************************************************************************/
+typedef struct {
   uint8_t value;
   uint16_t freq;
 } chan_t;
