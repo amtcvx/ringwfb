@@ -1,6 +1,7 @@
 #include <linux/inet.h>
 #include <net/cfg80211.h>
-
+#include <linux/rtnetlink.h> // Historique
+			     
 #include "mon_module.h"
 
 #define TIMEOUT 1000
@@ -146,8 +147,9 @@ static int __init wfb_nfkernel_init(void) {
     }
 
     dev_set_promiscuity(mypriv.wifidev[i].ndev,1);
+    rtnl_lock();
     netdev_rx_handler_register(mypriv.wifidev[i].ndev, input_proc, (void  *)&mypriv);
-
+    rtnl_unlock();
   }
 /*
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
@@ -179,17 +181,19 @@ static void __exit wfb_nfkernel_exit(void) {
     nf_unregister_net_hook(&init_net, output_hk);
     kfree(output_hk); output_hk = NULL;
   }
-
+*/
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
 
     dev_set_promiscuity(mypriv.wifidev[i].ndev,0);
+    rtnl_lock();
     netdev_rx_handler_unregister(mypriv.wifidev[i].ndev);
+    rtnl_unlock();
+
 //    dev_put(mypriv.wifidev[i].ndev);
 //    dev_close(mypriv.wifidev[i].ndev);
 //    unregister_netdev(mypriv.wifidev[i].ndev);
-
   }
-  */
+  
 }
 
 /******************************************************************************/
