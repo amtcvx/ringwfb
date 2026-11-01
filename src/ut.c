@@ -1,3 +1,6 @@
+#include <linux/inet.h>
+#include <net/cfg80211.h>
+
 #include "mon_module.h"
 
 #define TIMEOUT 1000
@@ -10,7 +13,7 @@ static struct work_struct wfb_work;
 /******************************************************************************/
 static void wfb_work_handler(struct work_struct *work) {
 
-  wifidev_t *wifidev = &mypriv.wifidev[0];
+  wifidev_t *wifidev = &ppriv->wifidev[0];
   char shell_cmd[40]; sprintf(shell_cmd, "iw dev %s set channel %d",
                   wifidev->ndev->name,
                   wifidev->chan[wifidev->log.curchan].value);
@@ -21,7 +24,7 @@ static void wfb_work_handler(struct work_struct *work) {
 /******************************************************************************/
 static void wfb_timer_callback(struct timer_list *t) {
 
-  wifidev_t *wifidev = &mypriv.wifidev[0];
+  wifidev_t *wifidev = &ppriv->wifidev[0];
 
   pr_info("beep (%d)(%d)(%d) (%d)\n",
     wifidev->log.curchan,
@@ -40,7 +43,7 @@ static void wfb_timer_callback(struct timer_list *t) {
 }
 
 /******************************************************************************/
-static void utils_init(priv_t *ppriv) {
+bool utils_init(void) {
 
   in4_pton("127.0.0.1", 9, (u8 *)&(ppriv->localipint), '\n', NULL);
 
@@ -54,7 +57,7 @@ static void utils_init(priv_t *ppriv) {
       devtab[nb++] = pdev;
     }
   }
-  if (nb == 0) return -1;
+  if (nb == 0) return false;
   int8_t ret;
   for (uint8_t i=0;i<nb;i++) ret=device_reprobe(devtab[i]->dev.parent);
 
@@ -116,6 +119,8 @@ static void utils_init(priv_t *ppriv) {
       call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
     }
   }
+
+  return true;
 }
 
 /******************************************************************************/

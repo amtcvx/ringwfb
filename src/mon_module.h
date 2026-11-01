@@ -42,11 +42,11 @@ typedef struct {
 extern priv_t *ppriv;
 
 /************************************************************************************************/
-bool utils_init(priv_t *ppriv);
-bool utils_start(void);
-bool utils_exit(void);
-bool input_init(priv_t *ppriv);
-void input_exit(priv_t *ppriv);
+bool utils_init(void);
+void utils_start(void);
+void utils_exit(void);
+bool input_init(void);
+void input_exit(void);
 bool output_init(void); 
 void output_exit(void); 
 

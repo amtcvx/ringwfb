@@ -1,8 +1,4 @@
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/skbuff.h>
 #include <linux/unaligned.h>
-
 #include <linux/rtnetlink.h>
 
 #include "mon_module.h"
@@ -68,11 +64,11 @@ rx_handler_result_t input_proc(struct sk_buff **pskb) {
 }
 
 /*****************************************************************************/
-bool input_init(priv_t *ppriv) {
+bool input_init(void) {
   int8_t ret = -1;
 
   for (uint8_t i=0;i<ppriv->wifinb;i++) {
-    struct net_device *ndev = ppriv->wifidev[i]->ndev
+    struct net_device *ndev = ppriv->wifidev[i].ndev;
     dev_set_promiscuity(ndev,1);
     rtnl_lock();
     ret = netdev_rx_handler_register(ndev, input_proc, NULL);
@@ -83,10 +79,10 @@ bool input_init(priv_t *ppriv) {
 }
 
 /*****************************************************************************/
-void input_exit(priv_t *ppriv) {
+void input_exit(void) {
 
-  for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    struct net_device *ndev = ppriv->wifidev[i]->ndev
+  for (uint8_t i=0;i<ppriv->wifinb;i++) {
+    struct net_device *ndev = ppriv->wifidev[i].ndev;
     dev_set_promiscuity(ndev,0);
     rtnl_lock();
     netdev_rx_handler_unregister(ndev);

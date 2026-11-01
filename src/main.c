@@ -1,8 +1,3 @@
-#include <linux/inet.h>
-#include <net/cfg80211.h>
-#include <linux/rtnetlink.h>
-
-			     
 #include "mon_module.h"
 
 static priv_t mypriv;
@@ -13,13 +8,13 @@ static int __init wfb_nfkernel_init(void) {
 
   memset(ppriv, 0, sizeof(priv_t));
 
-  utils_init(ppriv);
+  if (utils_init()) return -1;
 
   if (ppriv->wifinb) return -1;
 
-  input_init(ppriv);
+  if (input_init()) return -1;
 
-  if (!(output_init(ppriv))) return -1;
+  if (!(output_init())) return -1;
 
   utils_start();
 
@@ -32,9 +27,8 @@ static void __exit wfb_nfkernel_exit(void) {
   printk(KERN_EMERG "WFB ENDING\n");
 
   utils_exit();
-
-  output_exit(ppriv);
-
+  input_exit();
+  output_exit();
 }
 
 /******************************************************************************/
