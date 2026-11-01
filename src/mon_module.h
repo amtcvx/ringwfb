@@ -42,7 +42,7 @@ typedef struct {
 extern priv_t *ppriv;
 
 /************************************************************************************************/
-bool utils_init(void);
+bool utils_init(struct net *);
 void utils_start(void);
 void utils_exit(void);
 bool input_init(void);

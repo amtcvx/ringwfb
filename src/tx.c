@@ -75,7 +75,7 @@ unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_s
 
   local_bh_disable(); dev_direct_xmit(nskb, 0); local_bh_enable();
 
-  pr_info("IN output_proc msglen (%d) (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
+  pr_info("OUT_B output_proc msglen (%d) (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
 
   return NF_STOLEN;
 }

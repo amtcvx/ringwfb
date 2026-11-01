@@ -43,7 +43,7 @@ static void wfb_timer_callback(struct timer_list *t) {
 }
 
 /******************************************************************************/
-bool utils_init(void) {
+bool utils_init(struct net *net) {
 
   in4_pton("127.0.0.1", 9, (u8 *)&(ppriv->localipint), '\n', NULL);
 
@@ -58,6 +58,7 @@ bool utils_init(void) {
     }
   }
   if (nb == 0) return false;
+
   int8_t ret;
   for (uint8_t i=0;i<nb;i++) ret=device_reprobe(devtab[i]->dev.parent);
 
@@ -86,7 +87,7 @@ bool utils_init(void) {
   for (uint8_t i=0;i<2;i++) {
     char *argv[] = { "/bin/sh", "-c", shell_tab[i], NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
-    ssleep(2);
+    call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC); // two time on purpose 
   }
 
   for (uint8_t i=0;i<ppriv->wifinb;i++) {
@@ -107,7 +108,7 @@ bool utils_init(void) {
   char shell_cmd[5][60];
   for (uint8_t i=0;i<ppriv->wifinb;i++) {
     uint8_t *name = ppriv->wifidev[i].ndev->name;
-    ppriv->wifidev[i].log.curchan = 22;
+    ppriv->wifidev[i].log.curchan = ppriv->wifidev[i].channb - 1;
     uint8_t chan =  ppriv->wifidev[i].chan[ppriv->wifidev[i].log.curchan].value;
     sprintf(shell_cmd[0], "ip link set %s down",name);
     sprintf(shell_cmd[1], "iw dev %s set type monitor",name);
