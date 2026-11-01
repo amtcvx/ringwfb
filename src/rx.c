@@ -68,11 +68,11 @@ rx_handler_result_t input_proc(struct sk_buff **pskb) {
 }
 
 /*****************************************************************************/
-bool input_init(struct net_device *ndev) {
+bool input_init(priv_t *ppriv) {
   int8_t ret = -1;
 
-  for (uint8_t i=0;i<mypriv.wifinb;i++) {
-
+  for (uint8_t i=0;i<ppriv->wifinb;i++) {
+    struct net_device *ndev = ppriv->wifidev[i]->ndev
     dev_set_promiscuity(ndev,1);
     rtnl_lock();
     ret = netdev_rx_handler_register(ndev, input_proc, NULL);
@@ -83,10 +83,10 @@ bool input_init(struct net_device *ndev) {
 }
 
 /*****************************************************************************/
-void input_exit(struct net_device *ndev) {
+void input_exit(priv_t *ppriv) {
 
   for (uint8_t i=0;i<mypriv.wifinb;i++) {
-
+    struct net_device *ndev = ppriv->wifidev[i]->ndev
     dev_set_promiscuity(ndev,0);
     rtnl_lock();
     netdev_rx_handler_unregister(ndev);

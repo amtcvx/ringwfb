@@ -5,18 +5,23 @@
 			     
 #include "mon_module.h"
 
-#define TIMEOUT 1000
+static priv_t mypriv;
+priv_t *ppriv = &mypriv;
 
 /******************************************************************************/
 static int __init wfb_nfkernel_init(void) {
 
-  utils_init(&mypriv);
+  memset(ppriv, 0, sizeof(priv_t));
 
-  input_init(mypriv);
+  utils_init(ppriv);
 
-  if (!(output_init(&mypriv))) return -1;
+  if (ppriv->wifinb) return -1;
 
-  utils_init();
+  input_init(ppriv);
+
+  if (!(output_init(ppriv))) return -1;
+
+  utils_start();
 
   return 0;
 }
@@ -28,7 +33,7 @@ static void __exit wfb_nfkernel_exit(void) {
 
   utils_exit();
 
-  output_exit(&mypriv);
+  output_exit(ppriv);
 
 }
 

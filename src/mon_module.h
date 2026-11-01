@@ -3,8 +3,6 @@
 
 #include <linux/netdevice.h>
 
-//#include <linux/netfilter.h>
-
 /************************************************************************************************/
 typedef struct {
   uint8_t padding;
@@ -44,9 +42,11 @@ typedef struct {
 extern priv_t *ppriv;
 
 /************************************************************************************************/
-bool utils_init(void);
-bool input_init(struct net_device *); 
-void input_exit(struct net_device *); 
+bool utils_init(priv_t *ppriv);
+bool utils_start(void);
+bool utils_exit(void);
+bool input_init(priv_t *ppriv);
+void input_exit(priv_t *ppriv);
 bool output_init(void); 
 void output_exit(void); 
 

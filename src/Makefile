@@ -1,6 +1,6 @@
 obj-m += mymodule.o
 
-mymodule-y := main.o rx.o tx.o
+mymodule-y := main.o rx.o tx.o ut.o
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build/ M=$(PWD) modules

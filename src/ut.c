@@ -1,10 +1,11 @@
+#include "mon_module.h"
+
+#define TIMEOUT 1000
+
 /************************************************************************************************/
 static char *envp[] = { "HOME=/", "TERM=linux", "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
 static struct timer_list wfb_timer;
 static struct work_struct wfb_work;
-
-static priv_t mypriv;
-priv_t *ppriv = &mypriv;
 
 /******************************************************************************/
 static void wfb_work_handler(struct work_struct *work) {
@@ -39,9 +40,9 @@ static void wfb_timer_callback(struct timer_list *t) {
 }
 
 /******************************************************************************/
-static int utils_init(void) {
+static void utils_init(priv_t *ppriv) {
 
-  in4_pton("127.0.0.1", 9, (u8 *)&(mypriv.localipint), '\n', NULL);
+  in4_pton("127.0.0.1", 9, (u8 *)&(ppriv->localipint), '\n', NULL);
 
   uint8_t nb=0;
   struct net_device *pdev, *devtab[4];
@@ -58,20 +59,20 @@ static int utils_init(void) {
   for (uint8_t i=0;i<nb;i++) ret=device_reprobe(devtab[i]->dev.parent);
 
   for_each_netdev_rcu(&init_net, pdev) {
-    if (pdev->flags & IFF_LOOPBACK) { mypriv.localdev = pdev; continue; }
+    if (pdev->flags & IFF_LOOPBACK) { ppriv->localdev = pdev; continue; }
     struct device *extparent = pdev->dev.parent;
     if (extparent && extparent->driver) {
       if (strcmp(extparent->driver->name, "rtw88_8812au")) continue;
-      if (mypriv.wifinb == 4) continue;
-      mypriv.wifidev[mypriv.wifinb++].ndev = pdev;
+      if (ppriv->wifinb == 4) continue;
+      ppriv->wifidev[ppriv->wifinb++].ndev = pdev;
     }
   }
 
   char phy_str[4*5];
-  for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    struct wireless_dev *wdev = mypriv.wifidev[i].ndev->ieee80211_ptr; 
+  for (uint8_t i=0;i<ppriv->wifinb;i++) {
+    struct wireless_dev *wdev = ppriv->wifidev[i].ndev->ieee80211_ptr; 
     strcat(phy_str,wiphy_name(wdev->wiphy));
-    if (i+1 < mypriv.wifinb) strcat(phy_str, "\\|");
+    if (i+1 < ppriv->wifinb) strcat(phy_str, "\\|");
   }
   char shell_cmd0[150], shell_cmd1[20];
   char *shell_tab[2]= {shell_cmd0, shell_cmd1};
@@ -85,26 +86,26 @@ static int utils_init(void) {
     ssleep(2);
   }
 
-  for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    struct wiphy *wiphy = mypriv.wifidev[i].ndev->ieee80211_ptr->wiphy;
+  for (uint8_t i=0;i<ppriv->wifinb;i++) {
+    struct wiphy *wiphy = ppriv->wifidev[i].ndev->ieee80211_ptr->wiphy;
     for (uint8_t j=0;j<wiphy->bands[NL80211_BAND_2GHZ]->n_channels;j++) {
       struct ieee80211_channel *chan = &wiphy->bands[NL80211_BAND_2GHZ]->channels[j];
       if (!(IEEE80211_CHAN_DISABLED & chan->flags) && !(IEEE80211_CHAN_NO_IR & chan->flags)) {
-        mypriv.wifidev[i].chan[mypriv.wifidev[i].channb].value = wiphy->bands[NL80211_BAND_2GHZ]->channels[j].hw_value;
-        mypriv.wifidev[i].chan[mypriv.wifidev[i].channb++].freq = wiphy->bands[NL80211_BAND_2GHZ]->channels[j].center_freq;
+        ppriv->wifidev[i].chan[ppriv->wifidev[i].channb].value = wiphy->bands[NL80211_BAND_2GHZ]->channels[j].hw_value;
+        ppriv->wifidev[i].chan[ppriv->wifidev[i].channb++].freq = wiphy->bands[NL80211_BAND_2GHZ]->channels[j].center_freq;
       }
     }
     for (uint8_t j=0;j<wiphy->bands[NL80211_BAND_5GHZ]->n_channels;j++) {
-      mypriv.wifidev[i].chan[mypriv.wifidev[i].channb].value = wiphy->bands[NL80211_BAND_5GHZ]->channels[j].hw_value;
-      mypriv.wifidev[i].chan[mypriv.wifidev[i].channb++].freq = wiphy->bands[NL80211_BAND_5GHZ]->channels[j].center_freq;
+      ppriv->wifidev[i].chan[ppriv->wifidev[i].channb].value = wiphy->bands[NL80211_BAND_5GHZ]->channels[j].hw_value;
+      ppriv->wifidev[i].chan[ppriv->wifidev[i].channb++].freq = wiphy->bands[NL80211_BAND_5GHZ]->channels[j].center_freq;
     }
   }
 
   char shell_cmd[5][60];
-  for (uint8_t i=0;i<mypriv.wifinb;i++) {
-    uint8_t *name = mypriv.wifidev[i].ndev->name;
-    mypriv.wifidev[i].log.curchan = 22;
-    uint8_t chan =  mypriv.wifidev[i].chan[mypriv.wifidev[i].log.curchan].value;
+  for (uint8_t i=0;i<ppriv->wifinb;i++) {
+    uint8_t *name = ppriv->wifidev[i].ndev->name;
+    ppriv->wifidev[i].log.curchan = 22;
+    uint8_t chan =  ppriv->wifidev[i].chan[ppriv->wifidev[i].log.curchan].value;
     sprintf(shell_cmd[0], "ip link set %s down",name);
     sprintf(shell_cmd[1], "iw dev %s set type monitor",name);
     sprintf(shell_cmd[2], "ip link set %s up",name);
@@ -114,13 +115,11 @@ static int utils_init(void) {
       char *argv[] = { "/bin/sh", "-c", shell_cmd[j], NULL };
       call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
     }
-
-    if (input_init(mypriv.wifidev[i].ndev)) return -1;
   }
 }
 
 /******************************************************************************/
-static int utils_init(void) {
+void utils_start(void) {
 
   INIT_WORK(&wfb_work, wfb_work_handler);
   timer_setup(&wfb_timer, wfb_timer_callback, 0);
@@ -128,7 +127,7 @@ static int utils_init(void) {
 }
 
 /******************************************************************************/
-static int utils_exit(void) {
+void utils_exit(void) {
 
   timer_shutdown_sync(&wfb_timer);
   cancel_work_sync(&wfb_work);
