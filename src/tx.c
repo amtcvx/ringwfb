@@ -1,5 +1,6 @@
 #include <net/ieee80211_radiotap.h>
 #include <net/ip.h>
+#include <linux/netfilter_ipv4.h>
 
 #include "mon_module.h"
 
@@ -26,13 +27,14 @@ uint8_t ieeehd[] = {
         0x00, 0x00, 0x20, 0x00
 };
 
+static struct nf_hook_ops *output_hk = NULL;
 static uint16_t outdestport = 5600;
 static uint64_t curseq = 0;
 
+unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
+
 /*****************************************************************************/
-unsigned int output_proc(void *priv,
-                                struct sk_buff *skb,
-                                const struct nf_hook_state *state) {
+unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
   struct net_device *monitor_dev = ppriv->wifidev[0].ndev;
   if (!monitor_dev) return NF_ACCEPT; 
@@ -47,7 +49,9 @@ unsigned int output_proc(void *priv,
   struct udphdr *uph = udp_hdr(skb);
   if (!uph || ntohs(uph->dest) != outdestport) return NF_ACCEPT;
 
-  struct sk_buff *nskb = skb_clone(skb, GFP_KERNEL);
+  struct sk_buff *nskb;
+  if (!(nskb=skb_clone(skb, GFP_ATOMIC))) return NF_ACCEPT;
+
   skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
   uint16_t paylen = nskb->len;
 
@@ -68,9 +72,31 @@ unsigned int output_proc(void *priv,
   memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
   nskb->dev = monitor_dev;
 
-  dev_direct_xmit(nskb, 0);
+  local_bh_disable(); dev_direct_xmit(nskb, 0); local_bh_enable();
 
   pr_info("IN output_proc msglen (%d) (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
 
   return NF_STOLEN;
+}
+
+/*****************************************************************************/
+bool output_init(void) {
+		
+  output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
+  if(output_hk != NULL) {
+    output_hk->hook     = (nf_hookfn*)output_proc;
+    output_hk->hooknum  = NF_INET_LOCAL_OUT;
+    output_hk->pf       = NFPROTO_IPV4;
+    output_hk->priority = NF_IP_PRI_FIRST;
+    nf_register_net_hook(&init_net, output_hk);
+    return true;
+  }
+  return false;
+}
+
+/*****************************************************************************/
+void output_exit(void) {
+
+  nf_unregister_net_hook(&init_net, output_hk);
+  kfree(output_hk); output_hk = NULL;
 }

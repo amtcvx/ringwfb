@@ -1,8 +1,9 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/netdevice.h>
 #include <linux/skbuff.h>
 #include <linux/unaligned.h>
+
+#include <linux/rtnetlink.h>
 
 #include "mon_module.h"
 
@@ -17,6 +18,9 @@ static unsigned char target_mac[6] = {0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
 module_param_array(target_mac, byte, NULL, 0644);
 MODULE_PARM_DESC(target_mac, "Adresse MAC de la cible à intercepter (6 octets)");
 */
+
+rx_handler_result_t input_proc(struct sk_buff **pskb);
+
 /******************************************************************************/
 rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
@@ -63,3 +67,29 @@ rx_handler_result_t input_proc(struct sk_buff **pskb) {
  return RX_HANDLER_PASS;
 }
 
+/*****************************************************************************/
+bool input_init(struct net_device *ndev) {
+  int8_t ret = -1;
+
+  for (uint8_t i=0;i<mypriv.wifinb;i++) {
+
+    dev_set_promiscuity(ndev,1);
+    rtnl_lock();
+    ret = netdev_rx_handler_register(ndev, input_proc, NULL);
+    rtnl_unlock();
+  }
+
+  return(ret);
+}
+
+/*****************************************************************************/
+void input_exit(struct net_device *ndev) {
+
+  for (uint8_t i=0;i<mypriv.wifinb;i++) {
+
+    dev_set_promiscuity(ndev,0);
+    rtnl_lock();
+    netdev_rx_handler_unregister(ndev);
+    rtnl_unlock();
+  }
+}

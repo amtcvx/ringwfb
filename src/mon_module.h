@@ -1,7 +1,9 @@
 #ifndef MON_MODULE_H
 #define MON_MODULE_H
 
-#include <linux/netfilter.h>
+#include <linux/netdevice.h>
+
+//#include <linux/netfilter.h>
 
 /************************************************************************************************/
 typedef struct {
@@ -42,7 +44,10 @@ typedef struct {
 extern priv_t *ppriv;
 
 /************************************************************************************************/
-rx_handler_result_t input_proc(struct sk_buff **pskb);
-unsigned int output_proc(void *priv, struct sk_buff *skb,  const struct nf_hook_state *state);
+bool utils_init(void);
+bool input_init(struct net_device *); 
+void input_exit(struct net_device *); 
+bool output_init(void); 
+void output_exit(void); 
 
 #endif // MON_MODULE_H
