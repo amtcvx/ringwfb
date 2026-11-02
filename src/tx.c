@@ -48,6 +48,9 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   if (!iph || iph->protocol != IPPROTO_UDP) return NF_ACCEPT;
 
   struct udphdr *uph = udp_hdr(skb);
+
+  pr_info("OUT_C (%d)\n",ntohs(uph->dest));
+
   if (!uph || ntohs(uph->dest) != outdestport) return NF_ACCEPT;
 
   uint16_t paylen = skb->len;

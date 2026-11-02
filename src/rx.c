@@ -49,6 +49,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   memset(&msg, 0, sizeof(msg));
   msg.msg_name = &dest_addr;
   msg.msg_namelen = sizeof(dest_addr);
+  msg.msg_flags = MSG_DONTWAIT; 
 
   kernel_sendmsg(udp_sock, &msg, &iov, 1, len);
 
