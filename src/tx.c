@@ -34,10 +34,8 @@ static struct nf_hook_ops *output_hk = NULL;
 static uint16_t outdestport = 5600;
 static uint64_t curseq = 0;
 
-unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
-
 /*****************************************************************************/
-unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
   struct net_device *monitor_dev = ppriv->wifidev[0].ndev;
   if (!monitor_dev) return NF_ACCEPT; 

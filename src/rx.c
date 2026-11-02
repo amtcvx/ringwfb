@@ -15,24 +15,22 @@ module_param_array(target_mac, byte, NULL, 0644);
 MODULE_PARM_DESC(target_mac, "Adresse MAC de la cible à intercepter (6 octets)");
 */
 
-rx_handler_result_t input_proc(struct sk_buff **pskb);
-
 /******************************************************************************/
-rx_handler_result_t input_proc(struct sk_buff **pskb) {
+static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   struct sk_buff *skb = *pskb;
 
   if (unlikely(!skb)) return RX_HANDLER_CONSUMED;
 
   pr_info("IN_A (%d)\n",skb->len);
-
+/*
   if (unlikely(skb->len < 36)) return RX_HANDLER_PASS;
 
   u16 rt_len = get_unaligned_le16(skb->data + 2);
   if (unlikely(rt_len + 24 > skb->len)) return RX_HANDLER_PASS;
 
   u8 *ieee_hdr = skb->data + rt_len;
-  if (unlikely(ieee_hdr[10] == 0x00 && ieee_hdr[11] == 0x11 && ieee_hdr[12] == 0x22))
+ if (unlikely(ieee_hdr[10] == 0x00 && ieee_hdr[11] == 0x11 && ieee_hdr[12] == 0x22))
     return RX_HANDLER_PASS;
 
   u8 *dst_mac = ieee_hdr + 4;
@@ -46,7 +44,7 @@ rx_handler_result_t input_proc(struct sk_buff **pskb) {
         skb = nst;
         ieee_hdr = skb->data + rt_len;
     }
-/*
+
     ieee_hdr[10] = 0x00;
     ieee_hdr[11] = 0x11;
     ieee_hdr[12] = 0x22;
@@ -54,18 +52,18 @@ rx_handler_result_t input_proc(struct sk_buff **pskb) {
     skb->ip_summed = CHECKSUM_NONE;
     skb->dev = monitor_dev;
     dev_direct_xmit(skb, 0); 
-*/
+
     pr_info("IN_B (%d)\n",skb->len);
 
     return RX_HANDLER_CONSUMED;
   }
-
+*/
  return RX_HANDLER_PASS;
 }
 
 /*****************************************************************************/
 bool input_init(void) {
-  int8_t ret = -1;
+  bool ret = false;
 
   for (uint8_t i=0;i<ppriv->wifinb;i++) {
     struct net_device *ndev = ppriv->wifidev[i].ndev;
@@ -73,6 +71,7 @@ bool input_init(void) {
     rtnl_lock();
     ret = netdev_rx_handler_register(ndev, input_proc, NULL);
     rtnl_unlock();
+    ret = true;
   }
 
   return(ret);
