@@ -61,7 +61,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   skb_push(nskb, sizeof(pph_t));
   pph_t *pph = (pph_t *)nskb->data;
   memset((void *)pph, 0, sizeof(pph_t));
-  pph->droneid =  0xff;
+  pph->droneid = 0x01;
   pph->seq = curseq;
   pph->msglen = htons(paylen);
 
