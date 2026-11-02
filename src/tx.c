@@ -6,6 +6,8 @@
 #include "mon_module.h"
 
 /*****************************************************************************/
+#define ETH_P_802_11 0x0019  /* Trame IEEE 802.11 */
+
 #define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
 
 #define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI | (IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT))
@@ -50,13 +52,13 @@ unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_s
   struct udphdr *uph = udp_hdr(skb);
   if (!uph || ntohs(uph->dest) != outdestport) return NF_ACCEPT;
 
+  uint16_t paylen = skb->len;
+  uint8_t headroom = sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t);
+
+  skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
+
   struct sk_buff *nskb;
-  if (!(nskb=skb_clone(skb, GFP_ATOMIC))) return NF_ACCEPT;
-
-  skb_pull(nskb, sizeof(struct iphdr) + sizeof (struct udphdr));
-  uint16_t paylen = nskb->len;
-
-  pskb_expand_head(nskb, sizeof(radiotaphd) + sizeof(ieeehd) + sizeof(pph_t), 0, GFP_KERNEL);
+  if (!(nskb = skb_copy_expand(skb, headroom, 0, GFP_ATOMIC))) return NF_DROP;
 
   skb_push(nskb, sizeof(pph_t));
   pph_t *pph = (pph_t *)nskb->data;
@@ -71,9 +73,12 @@ unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_s
   memcpy(nskb->data, ieeehd, sizeof(ieeehd));
   ptr = skb_push(nskb, sizeof(radiotaphd));
   memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
-  nskb->dev = monitor_dev;
 
-  local_bh_disable(); dev_direct_xmit(nskb, 0); local_bh_enable();
+  nskb->dev = monitor_dev;
+  nskb->protocol = htons(ETH_P_802_11);
+  dev_queue_xmit(nskb);
+
+  kfree_skb(skb);
 
   pr_info("OUT_B output_proc msglen (%d) (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
 
