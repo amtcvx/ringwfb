@@ -1,19 +1,15 @@
 #include <linux/unaligned.h>
 #include <linux/rtnetlink.h>
 
+#include <linux/ip.h>
+#include <linux/udp.h>
+
 #include "mon_module.h"
 
 /******************************************************************************/
-uint16_t indestport = 5700;
-
-/******************************************************************************/
-// sudo insmod mon_module.ko target_mac=0x00,0x11,0x22,0x33,0x44,0x55
-//
-static unsigned char target_mac[6] = {0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
-/*
-module_param_array(target_mac, byte, NULL, 0644);
-MODULE_PARM_DESC(target_mac, "Adresse MAC de la cible à intercepter (6 octets)");
-*/
+static uint16_t indestport = 5700;
+static struct socket *udp_sock = NULL;
+static struct sockaddr_in dest_addr;
 
 /******************************************************************************/
 static rx_handler_result_t input_proc(struct sk_buff **pskb) {
@@ -31,51 +27,45 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   if (unlikely(rtlen == 0x0D || rtlen == 0x0E)) return RX_HANDLER_PASS;
 
-  pr_info("IN_B (%d)\n",skb->len);
-
   pph_t *pph = (pph_t *)(skb->data + rtlen + 26);
-  if ((pph->droneid != 255) || ntohs(pph->msglen) < skb->len) return RX_HANDLER_CONSUMED;
+
+  if ((pph->droneid > 5) || ntohs(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
+
   pr_info("(%d) pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n", skb->len,
           pph->droneid, ntohs(pph->msglen), pph->backfreq, pph->seq);
 
-/*
-  u8 *ieee_hdr = skb->data + rt_len;
- if (unlikely(ieee_hdr[10] == 0x00 && ieee_hdr[11] == 0x11 && ieee_hdr[12] == 0x22))
-    return RX_HANDLER_PASS;
+//  unsigned int pull_len = 36 + 24 + 8; // Radiotap + 802.11 + LLC/SNAP
 
-  u8 *dst_mac = ieee_hdr + 4;
-  if (likely(memcmp(dst_mac, target_mac, 6) != 0)) return RX_HANDLER_PASS; 
 
-  if ((*ieee_hdr & 0x0C) == 0x08) {
-    if (skb_cloned(skb) || skb_shared(skb)) {
-       struct sk_buff *nst = skb_unshare(skb, GFP_ATOMIC);
-       if (unlikely(!nst)) return RX_HANDLER_CONSUMED;
-       *pskb = nst;
-        skb = nst;
-        ieee_hdr = skb->data + rt_len;
-    }
+//  skb_pull(skb, rtlen + 26 + sizeof(pph_t));
+  skb_pull(skb, rtlen);
 
-    ieee_hdr[10] = 0x00;
-    ieee_hdr[11] = 0x11;
-    ieee_hdr[12] = 0x22;
+  int len = skb->len;
+  
+  struct kvec iov;
+  iov.iov_base = skb->data;
+  iov.iov_len = len;
+  struct msghdr msg;
+  memset(&msg, 0, sizeof(msg));
+  msg.msg_name = &dest_addr;
+  msg.msg_namelen = sizeof(dest_addr);
 
-    skb->ip_summed = CHECKSUM_NONE;
-    skb->dev = monitor_dev;
-    dev_direct_xmit(skb, 0); 
+  kernel_sendmsg(udp_sock, &msg, &iov, 1, len);
 
-    pr_info("IN_B (%d)\n",skb->len);
-
-    return RX_HANDLER_CONSUMED;
-  }
-*/
- return RX_HANDLER_PASS;
+  return RX_HANDLER_CONSUMED;
 }
 
 /*****************************************************************************/
 bool input_init(void) {
   bool ret = false;
 
+  memset(&dest_addr, 0, sizeof(dest_addr));
+  dest_addr.sin_family = AF_INET;
+  dest_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); 
+  dest_addr.sin_port = htons(indestport);
+
   for (uint8_t i=0;i<ppriv->wifinb;i++) {
+    sock_create_kern(&init_net, PF_INET, SOCK_DGRAM, IPPROTO_UDP, &udp_sock);
     struct net_device *ndev = ppriv->wifidev[i].ndev;
     dev_set_promiscuity(ndev,1);
     rtnl_lock();
@@ -96,5 +86,6 @@ void input_exit(void) {
     rtnl_lock();
     netdev_rx_handler_unregister(ndev);
     rtnl_unlock();
+    sock_release(udp_sock);
   }
 }
