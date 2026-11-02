@@ -22,13 +22,17 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   if (unlikely(!skb)) return RX_HANDLER_CONSUMED;
 
-  pr_info("IN_A (%d)\n",skb->len);
-/*
+//  pr_info("IN_A (%d)\n",skb->len);
+
   if (unlikely(skb->len < 36)) return RX_HANDLER_PASS;
 
-  u16 rt_len = get_unaligned_le16(skb->data + 2);
-  if (unlikely(rt_len + 24 > skb->len)) return RX_HANDLER_PASS;
+  u16 rtlen = get_unaligned_le16(skb->data + 2);
+  if (unlikely(rtlen + 24 > skb->len)) return RX_HANDLER_PASS;
 
+  if (unlikely(rtlen == 0x0D || rtlen == 0x0E)) return RX_HANDLER_PASS;
+
+  pr_info("IN_B (%d)\n",skb->len);
+/*
   u8 *ieee_hdr = skb->data + rt_len;
  if (unlikely(ieee_hdr[10] == 0x00 && ieee_hdr[11] == 0x11 && ieee_hdr[12] == 0x22))
     return RX_HANDLER_PASS;
