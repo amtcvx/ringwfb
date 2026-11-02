@@ -32,6 +32,12 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   if (unlikely(rtlen == 0x0D || rtlen == 0x0E)) return RX_HANDLER_PASS;
 
   pr_info("IN_B (%d)\n",skb->len);
+
+  pph_t *pph = (pph_t *)(skb->data + rtlen + 26);
+  if ((pph->droneid != 255) || ntohs(pph->msglen) < skb->len) return RX_HANDLER_CONSUMED;
+  pr_info("(%d) pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n", skb->len,
+          pph->droneid, ntohs(pph->msglen), pph->backfreq, pph->seq);
+
 /*
   u8 *ieee_hdr = skb->data + rt_len;
  if (unlikely(ieee_hdr[10] == 0x00 && ieee_hdr[11] == 0x11 && ieee_hdr[12] == 0x22))
