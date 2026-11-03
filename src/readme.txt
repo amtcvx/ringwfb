@@ -30,7 +30,21 @@ gst-launch-1.0 videotestsrc ... host=127.0.0.1
 
 gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5600  ...
 
+CAMERA
+------
+v4l2-ctl --device=/dev/video0 --list-formats-ext
+...
+[1]: 'YUYV' (YUYV 4:2:2)
+  Size: Discrete 640x480
+  Interval: Discrete 0.033s (30.000 fps)
 
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,format=YUY2 ! videoconvert ! autovideosink
+
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,format=YUY2 ! videoconvert ! x265enc ... 
+
+
+CHANNELS / FREQ
+----------------
 0	1	2412
 1	2	2417
 2	3	2422
