@@ -34,24 +34,21 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   pr_info("(%d) pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n", skb->len,
           pph->droneid, ntohs(pph->msglen), pph->backfreq, pph->seq);
 
-//  unsigned int pull_len = 36 + 24 + 8; // Radiotap + 802.11 + LLC/SNAP
+  u16 udp_len = ntohs(pph->msglen);
+  u8 *udp_pay = skb->data + rtlen + 26 + sizeof(pph_t);
 
-
-//  skb_pull(skb, rtlen + 26 + sizeof(pph_t));
-  skb_pull(skb, rtlen);
-
-  int len = skb->len;
-  
   struct kvec iov;
-  iov.iov_base = skb->data;
-  iov.iov_len = len;
+  iov.iov_base = udp_pay;
+  iov.iov_len = udp_len;
+
   struct msghdr msg;
   memset(&msg, 0, sizeof(msg));
   msg.msg_name = &dest_addr;
   msg.msg_namelen = sizeof(dest_addr);
   msg.msg_flags = MSG_DONTWAIT; 
 
-  kernel_sendmsg(udp_sock, &msg, &iov, 1, len);
+  kernel_sendmsg(udp_sock, &msg, &iov, 1, udp_len);
+  kfree_skb(skb);
 
   return RX_HANDLER_CONSUMED;
 }
