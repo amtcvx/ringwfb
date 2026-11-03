@@ -5,9 +5,19 @@ sudo depmod -A
 sudo modprobe mymodule 
 sudo modprobe r mymodule 
 
-gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=127.0.0.1
+REMOTE
+------
+gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=192.168.1.214
 
-gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5700 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
+gst-launch-1.0 udpsrc uri=udp://192.168.1.113:5600 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
+
+gst-launch-1.0 udpsrc uri=udp://0.0.0.0:5600 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
+
+LOCAL
+-----
+gst-launch-1.0 videotestsrc ... host=127.0.0.1
+
+gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5600  ...
 
 
 0	1	2412
