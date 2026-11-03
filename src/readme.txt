@@ -5,6 +5,17 @@ sudo depmod -A
 sudo modprobe mymodule 
 sudo modprobe r mymodule 
 
+
+RATES
+-----
+gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5600  ! identity drop-allocation=true ! fdsink fd=1 | pv > /dev/null
+
+gst-launch-1.0 videotestsrc ...  x265enc bitrate=1
+[3,83KiB/s]
+
+gst-launch-1.0 videotestsrc ...  x265enc bitrate=102400 
+[2,30MiB/s]
+
 REMOTE
 ------
 gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=192.168.1.214
