@@ -115,6 +115,11 @@ bool utils_init(struct net *net) {
     sprintf(shell_cmd[2], "ip link set %s up",name);
     sprintf(shell_cmd[3], "sysctl -w net.ipv6.conf.%s.disable_ipv6=1",name);
     sprintf(shell_cmd[4], "iw dev %s set channel %d",name,chan);
+/*
+sudo ip tuntap add dev tun0 mode tun
+sudo ip addr add 10.0.0.1/24 dev tun0
+sudo ip link set tun0 up
+*/
     for (uint8_t j=0;j<5;j++) {
       char *argv[] = { "/bin/sh", "-c", shell_cmd[j], NULL };
       call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
@@ -134,7 +139,9 @@ void utils_start(void) {
 
 /******************************************************************************/
 void utils_exit(void) {
-
+/*
+sudo ip link del tun0
+*/
   timer_shutdown_sync(&wfb_timer);
   cancel_work_sync(&wfb_work);
 }

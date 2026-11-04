@@ -58,11 +58,11 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   struct iphdr *iph = ip_hdr(skb);
   if (!iph) return NF_ACCEPT;
 
-
-  if  ((iph->protocol != IPPROTO_UDP) && (!(state->out && strcmp(state->out->name, "tun0") == 0))) 
-      return NF_ACCEPT;
-
   struct udphdr *uph = udp_hdr(skb);
+
+  if (state->out && strcmp(state->out->name, "tun0") == 0) uph->dest = tunport;
+  else if (iph->protocol == IPPROTO_UDP) uph->dest = outdestport;
+  else return NF_ACCEPT;
 
   pr_info("OUT_C (%d)\n",ntohs(uph->dest));
 

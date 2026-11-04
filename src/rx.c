@@ -37,6 +37,8 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   u16 udp_len = ntohs(pph->msglen);
   u8 *udp_pay = skb->data + rtlen + 26 + sizeof(pph_t);
 
+//  if (!udph || ntohs(udph->dest) != 9999) return RX_HANDLER_PASS; TUN
+
   struct kvec iov;
   iov.iov_base = udp_pay;
   iov.iov_len = udp_len;
