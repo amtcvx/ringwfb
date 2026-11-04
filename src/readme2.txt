@@ -1,3 +1,12 @@
+
+sudo ip tuntap add dev tun0 mode tun
+sudo ip addr add 10.0.0.1/24 dev tun0
+sudo ip link set tun0 up
+
+sudo ip link del tun0
+
+
+
 EMISSION
 
 sudo ip tuntap add dev tap0 mode tap
