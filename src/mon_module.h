@@ -8,6 +8,7 @@ typedef struct {
   uint8_t padding;
   uint8_t droneid;
   uint16_t msglen;
+  int32_t daddr;
   int32_t backfreq;
   uint64_t seq;
   uint16_t dummy;

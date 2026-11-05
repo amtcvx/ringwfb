@@ -48,25 +48,16 @@ static uint64_t curseq = 0;
 /*****************************************************************************/
 static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
 
-  struct net_device *monitor_dev = ppriv->wifidev[0].ndev;
-  if (!monitor_dev) return NF_ACCEPT; 
-    
-  if (!skb) return NF_ACCEPT;
-
-  pr_info("OUT_A (%d)\n",skb->len);
+  if (!skb) return NF_DROP;
 
   struct iphdr *iph = ip_hdr(skb);
-  if (!iph) return NF_ACCEPT;
-
   struct udphdr *uph = udp_hdr(skb);
 
-  if (state->out && strcmp(state->out->name, "tun0") == 0) uph->dest = tunport;
-  else if (iph->protocol == IPPROTO_UDP) uph->dest = outdestport;
-  else return NF_ACCEPT;
-
-  pr_info("OUT_C (%d)\n",ntohs(uph->dest));
-
-  if (!uph || ntohs(uph->dest) != outdestport) return NF_ACCEPT;
+  u32 daddr = 0;
+  if (iph->protocol != IPPROTO_UDP) {
+    if (iph->daddr == __constant_htonl(0x0A000002)) { daddr = iph->daddr; }
+    else return NF_ACCEPT;
+  } else if ((ntohs(uph->dest) != outdestport)) return NF_ACCEPT;
 
   uint16_t paylen = skb->len;
   uint8_t headroom = sizeof(struct radiotap_hdr) + sizeof(struct ieee80211_data_hdr) 
@@ -81,16 +72,19 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   pph_t *pph = (pph_t *)nskb->data;
   memset((void *)pph, 0, sizeof(pph_t));
   pph->droneid = 0x01;
+  pph->daddr = daddr; 
   pph->seq = curseq;
   pph->msglen = htons(paylen);
 
   curseq++;
+
 /*
   skb_push(nskb, sizeof(struct llc_snap_hdr));
   struct llc_snap_hdr *llc = (struct llc_snap_hdr *)nskb->data;
   memset((void *)llc, 0, sizeof(struct llc_snap_hdr));
   llc->proto = htons(ETH_P_IP); 
 */
+
   skb_push(nskb, sizeof(struct ieee80211_data_hdr));
   struct ieee80211_data_hdr *wfi = (struct ieee80211_data_hdr *)nskb->data;
   memset((void *)wfi, 0, sizeof(struct ieee80211_data_hdr));
@@ -107,14 +101,14 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   rtap->mcs_flags = 0x10;
   rtap->mcs_index = 0x07;
 
-  nskb->dev = monitor_dev;
+  nskb->dev = ppriv->wifidev[0].ndev;
   nskb->protocol = htons(ETH_P_802_11);
 
   dev_direct_xmit(nskb, 0);
   //dev_queue_xmit(nskb);
 
 
-  pr_info("OUT_B output_proc msglen (%d) (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(uph->len),ntohs(iph->tot_len),sizeof(pph_t));
+  pr_info("OUT_B output_proc msglen (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(iph->tot_len),sizeof(pph_t));
 
   kfree_skb(skb);
   return NF_STOLEN;
