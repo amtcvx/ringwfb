@@ -45,7 +45,7 @@ static void wfb_timer_callback(struct timer_list *t) {
 /******************************************************************************/
 bool utils_init(struct net *net) {
 
-  in4_pton("127.0.0.1", 9, (u8 *)&(ppriv->localipint), '\n', NULL);
+  in4_pton(pipstr,9, (u8 *)&(ppriv->ipint), '\n', NULL);
 
   uint8_t nb=0;
   struct net_device *pdev, *devtab[4];
@@ -120,6 +120,11 @@ bool utils_init(struct net *net) {
       call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
     }
   }
+
+  char shell_cmd2[60];
+  sprintf(shell_cmd2, "ip addr add %s/24 dev %s",pipstr,ppriv->wifidev[0].ndev->name);
+  char *argv[] = { "/bin/sh", "-c", shell_cmd2, NULL };
+  call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
 
   return true;
 }

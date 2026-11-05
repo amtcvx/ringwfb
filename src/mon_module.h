@@ -34,14 +34,14 @@ typedef struct {
 
 typedef struct {
   uint8_t wifinb;
-  uint32_t localipint;
+  uint32_t ipint;
   struct net_device *localdev;
   wifidev_t  wifidev[4];
 } priv_t;
 
 /************************************************************************************************/
 extern priv_t *ppriv;
-extern uint16_t tunport; 
+extern u8 *pipstr;
 
 
 /************************************************************************************************/

@@ -55,7 +55,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   u32 daddr = 0;
   if (iph->protocol != IPPROTO_UDP) {
-    if (iph->daddr == __constant_htonl(0x0A000002)) { daddr = iph->daddr; }
+    if (iph->daddr == __constant_htonl(ppriv->ipint)) { daddr = iph->daddr; }
     else return NF_ACCEPT;
   } else if ((ntohs(uph->dest) != outdestport)) return NF_ACCEPT;
 
