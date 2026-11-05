@@ -42,7 +42,7 @@ struct llc_snap_hdr {
 /*****************************************************************************/
 
 static struct nf_hook_ops *output_hk = NULL;
-static uint16_t outdestport = 5600;
+static u16 outdestport = 0XE015; // 5600;
 static uint64_t curseq = 0;
 
 /*****************************************************************************/
@@ -55,9 +55,9 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   u32 daddr = 0;
   if (iph->protocol != IPPROTO_UDP) {
-    if (iph->daddr == __constant_htonl(ppriv->ipint)) { daddr = iph->daddr; }
+    if ((iph->daddr != ppriv->ipint) && ((iph->daddr & 0x00FFFFFF) == 0x0000000A)) { daddr = iph->daddr; }
     else return NF_ACCEPT;
-  } else if ((ntohs(uph->dest) != outdestport)) return NF_ACCEPT;
+  } else if (uph->dest != outdestport) return NF_ACCEPT;
 
   uint16_t paylen = skb->len;
   uint8_t headroom = sizeof(struct radiotap_hdr) + sizeof(struct ieee80211_data_hdr) 

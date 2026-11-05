@@ -1,6 +1,6 @@
 #include "mon_module.h"
 
-u8 *pipstr = "10.0.0.2";
+u8 *pipstr = "10.0.0.1";
 
 static priv_t mypriv;
 priv_t *ppriv = &mypriv;
@@ -22,10 +22,9 @@ static void __exit wfb_nfkernel_exit(void) {
 
   printk(KERN_EMERG "WFB ENDING\n");
 
-  utils_exit();
   output_exit();
   input_exit();
-
+  utils_exit();
 }
 
 /******************************************************************************/

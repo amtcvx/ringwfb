@@ -142,5 +142,18 @@ void utils_exit(void) {
 
   timer_shutdown_sync(&wfb_timer);
   cancel_work_sync(&wfb_work);
+
+  if (ppriv->wifinb > 0) {
+    uint8_t *name = ppriv->wifidev[0].ndev->name;
+
+    char shell_cmd[2][60];
+    sprintf(shell_cmd[0], "ip link set %s down",name);
+    sprintf(shell_cmd[1], "ip addr flush dev %s",name);
+
+    for (uint8_t j=0;j<2;j++) {
+      char *argv[] = { "/bin/sh", "-c", shell_cmd[j], NULL };
+      call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+    }
+  }
 }
 
