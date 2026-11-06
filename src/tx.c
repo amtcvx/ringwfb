@@ -13,11 +13,10 @@ struct radiotap_hdr {
     u8  it_pad;
     u16 it_len;
     u32 present;
-    u16 tx_flags;
     u8 mcs_known;
     u8 mcs_flags;
     u8 mcs_index;
-    u8 final_pad[3];
+    u8 final_pad;
 } __attribute__((packed));
 
 struct ieee80211_data_hdr {
@@ -40,7 +39,6 @@ struct llc_snap_hdr {
 */
 
 /*****************************************************************************/
-
 static struct nf_hook_ops *output_hk = NULL;
 static u16 outdestport = 0XE015; // 5600;
 static uint64_t curseq = 0;
@@ -88,25 +86,27 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   skb_push(nskb, sizeof(struct ieee80211_data_hdr));
   struct ieee80211_data_hdr *wfi = (struct ieee80211_data_hdr *)nskb->data;
   memset((void *)wfi, 0, sizeof(struct ieee80211_data_hdr));
-  wfi->frame_control = cpu_to_le16(0x0088);
-  wfi->qos_ctrl = cpu_to_le16(0x0020);
+  wfi->frame_control = cpu_to_le16(0x0088); // Frame Control: QoS Data
+  wfi->qos_ctrl = cpu_to_le16(0x0700);      // Priorité matérielle maximale
 
   skb_push(nskb, sizeof(struct radiotap_hdr));
   struct radiotap_hdr *rtap = (struct radiotap_hdr *)nskb->data;
   memset((void *)rtap, 0, sizeof(struct radiotap_hdr));
   rtap->it_len = cpu_to_le16(sizeof(struct radiotap_hdr));
-  rtap->present = cpu_to_le32((1 << 15) | (1 << 19));
-  rtap->tx_flags = cpu_to_le16(0x0008);
-  rtap->mcs_known = 0x07;
-  rtap->mcs_flags = 0x10;
-  rtap->mcs_index = 0x07;
+  rtap->present = cpu_to_le32((1 << 19)); // 0x00, 0x00, 0x08, 0x00 
+  rtap->mcs_known = 0x07; // follow Bandwidth and GI
+  rtap->mcs_flags = 0x01; // Short GI activé + Largeur 20 MHz (HT20) 
+  rtap->mcs_index = 0x07; // Index MCS : 0x07 (Débit de 72.2 Mbps en HT20 SGI)   
 
+  skb_shinfo(nskb)->tx_flags = 0;
+  nskb->priority = 7;  //  TC_PRIO_CONTROL / Voice (Priorité maximale)
+
+  nskb->ip_summed = CHECKSUM_NONE;
   nskb->dev = ppriv->wifidev[0].ndev;
   nskb->protocol = htons(ETH_P_802_11);
 
-  dev_direct_xmit(nskb, 0);
-  //dev_queue_xmit(nskb);
-
+  struct netdev_queue *txq = netdev_get_tx_queue(ppriv->wifidev[0].ndev, 0);
+  if (dev_direct_xmit(nskb, txq->queue_index) != NETDEV_TX_OK) kfree_skb(nskb); 
 
   pr_info("OUT_B output_proc msglen (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(iph->tot_len),sizeof(pph_t));
 

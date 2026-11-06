@@ -1,3 +1,4 @@
+#include <net/udp.h>
 #include <linux/unaligned.h>
 #include <linux/rtnetlink.h>
 
@@ -7,9 +8,8 @@
 #include "mon_module.h"
 
 /******************************************************************************/
+#define TARGET_UDP_PORT 5600
 static uint16_t indestport = 5700;
-static struct socket *udp_sock = NULL;
-static struct sockaddr_in dest_addr;
 
 /******************************************************************************/
 static rx_handler_result_t input_proc(struct sk_buff **pskb) {
@@ -37,19 +37,12 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   u16 udp_len = ntohs(pph->msglen);
   u8 *udp_pay = skb->data + rtlen + 26 + sizeof(pph_t);
 
-//  if (!udph || ntohs(udph->dest) != 9999) return RX_HANDLER_PASS; TUN
+  struct sock *sk = __udp4_lib_lookup(&init_net,
+    htonl(INADDR_LOOPBACK), htons(TARGET_UDP_PORT),
+    htonl(INADDR_LOOPBACK), htons(TARGET_UDP_PORT),
+    0, 0, &udp_table, NULL);
+  if (!sk) RX_HANDLER_CONSUMED;
 
-  struct kvec iov;
-  iov.iov_base = udp_pay;
-  iov.iov_len = udp_len;
-
-  struct msghdr msg;
-  memset(&msg, 0, sizeof(msg));
-  msg.msg_name = &dest_addr;
-  msg.msg_namelen = sizeof(dest_addr);
-  msg.msg_flags = MSG_DONTWAIT; 
-
-  kernel_sendmsg(udp_sock, &msg, &iov, 1, udp_len);
   kfree_skb(skb);
 
   return RX_HANDLER_CONSUMED;
@@ -59,13 +52,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 bool input_init(void) {
   bool ret = false;
 
-  memset(&dest_addr, 0, sizeof(dest_addr));
-  dest_addr.sin_family = AF_INET;
-  dest_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); 
-  dest_addr.sin_port = htons(indestport);
-
   for (uint8_t i=0;i<ppriv->wifinb;i++) {
-    sock_create_kern(&init_net, PF_INET, SOCK_DGRAM, IPPROTO_UDP, &udp_sock);
     struct net_device *ndev = ppriv->wifidev[i].ndev;
     dev_set_promiscuity(ndev,1);
     rtnl_lock();
@@ -86,6 +73,5 @@ void input_exit(void) {
     rtnl_lock();
     netdev_rx_handler_unregister(ndev);
     rtnl_unlock();
-    sock_release(udp_sock);
   }
 }
