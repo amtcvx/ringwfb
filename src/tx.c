@@ -6,8 +6,40 @@
 #include "mon_module.h"
 
 /*****************************************************************************/
-#define ETH_P_802_11 0x0019
+/*
+#define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
+#define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI | (IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT))
+#define MCS_INDEX  2
+uint8_t radiotaphd[] = {
+        0x00, 0x00, // <-- radiotap version
+        0x0d, 0x00, // <- radiotap header length
+        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
+        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
+        MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
+};
+*/
+uint8_t radiotaphd[] = {
+  0x00, 0x00,
+  0x0c, 0x00,
+  0x00, 0x00, 0x08, 0x00,
+  // 0x07, 0x01, 0x02, KO
+  0x27, 0x24, 0x02,   // OK
+  0x00
+};
 
+uint8_t ieeehd[] = {
+        0x88, 0x00,                         // Data (type=2) with QOS (subtype=8)
+        0x00, 0x00,
+        0x36, 0x35, 0x34, 0x33, 0x32, 0x31, // Receiver MAC
+        0x26, 0x25, 0x24, 0x23, 0x22, 0x21, // Transmitter MAC
+        0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
+        0x00, 0x00, 0x20, 0x00
+};
+
+
+
+#define ETH_P_802_11 0x0019
+/*
 struct radiotap_hdr {
     u8  it_version;
     u8  it_pad;
@@ -28,6 +60,7 @@ struct ieee80211_data_hdr {
     u16 seq_ctrl;
     u16 qos_ctrl;
 } __attribute__((packed));
+*/
 /*
 struct llc_snap_hdr {
     u8  dsap;
@@ -58,9 +91,14 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   } else if (uph->dest != outdestport) return NF_ACCEPT;
 
   uint16_t paylen = skb->len;
+/*
   uint8_t headroom = sizeof(struct radiotap_hdr) + sizeof(struct ieee80211_data_hdr) 
 	             + sizeof(pph_t); // + sizeof(struct llc_snap_hdr)
-
+*/
+  uint8_t headroom = sizeof(radiotaphd) + sizeof(ieeehd) 
+	             + sizeof(pph_t);
+				      
+				      
   skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
 
   struct sk_buff *nskb;
@@ -82,7 +120,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   memset((void *)llc, 0, sizeof(struct llc_snap_hdr));
   llc->proto = htons(ETH_P_IP); 
 */
-
+/*
   skb_push(nskb, sizeof(struct ieee80211_data_hdr));
   struct ieee80211_data_hdr *wfi = (struct ieee80211_data_hdr *)nskb->data;
   memset((void *)wfi, 0, sizeof(struct ieee80211_data_hdr));
@@ -112,11 +150,31 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   kfree_skb(skb);
   return NF_STOLEN;
+*/
+  uint8_t *ptr = skb_push(nskb, sizeof(ieeehd));
+  memcpy(nskb->data, ieeehd, sizeof(ieeehd));
+  ptr = skb_push(nskb, sizeof(radiotaphd));
+  memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
+
+  skb_shinfo(nskb)->tx_flags = 0;
+  nskb->priority = 7;  //  TC_PRIO_CONTROL / Voice (Priorité maximale)
+
+  nskb->ip_summed = CHECKSUM_NONE;
+  nskb->dev = ppriv->wifidev[0].ndev;
+  nskb->protocol = htons(ETH_P_802_11);
+
+  int queue_index = skb_get_queue_mapping(skb);
+  if (dev_direct_xmit(nskb, queue_index) != NETDEV_TX_OK) kfree_skb(nskb); 
+
+  pr_info("OUT_B output_proc msglen (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(iph->tot_len),sizeof(pph_t));
+
+  kfree_skb(skb);
+  return NF_STOLEN;
 }
 
 /*****************************************************************************/
 bool output_init(void) {
-		
+
   output_hk = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
   if(output_hk != NULL) {
     output_hk->hook     = (nf_hookfn*)output_proc;
