@@ -6,70 +6,20 @@
 #include "mon_module.h"
 
 /*****************************************************************************/
-/*
-#define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
-#define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI | (IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT))
 #define MCS_INDEX  2
-uint8_t radiotaphd[] = {
-        0x00, 0x00, // <-- radiotap version
-        0x0d, 0x00, // <- radiotap header length
-        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
-        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
-        MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
-};
-*/
-uint8_t radiotaphd[] = {
-  0x00, 0x00,
-  0x0c, 0x00,
-  0x00, 0x00, 0x08, 0x00,
-  // 0x07, 0x01, 0x02, KO
-  0x27, 0x24, 0x02,   // OK
-  0x00
-};
-
-uint8_t ieeehd[] = {
-        0x88, 0x00,                         // Data (type=2) with QOS (subtype=8)
-        0x00, 0x00,
-        0x36, 0x35, 0x34, 0x33, 0x32, 0x31, // Receiver MAC
-        0x26, 0x25, 0x24, 0x23, 0x22, 0x21, // Transmitter MAC
-        0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
-        0x00, 0x00, 0x20, 0x00
-};
-
-
-
 #define ETH_P_802_11 0x0019
-/*
-struct radiotap_hdr {
-    u8  it_version;
-    u8  it_pad;
-    u16 it_len;
-    u32 present;
-    u8 mcs_known;
-    u8 mcs_flags;
-    u8 mcs_index;
-    u8 final_pad;
-} __attribute__((packed));
+uint8_t rtap[24];
 
-struct ieee80211_data_hdr {
-    u16 frame_control;
-    u16 duration_id;
-    u8  addr1[6];
-    u8  addr2[6];
-    u8  addr3[6];
-    u16 seq_ctrl;
-    u16 qos_ctrl;
+// Structure de l'en-tête MAC 802.11 QoS Data (26 octets au lieu de 24)
+struct ieee80211_qos_header {
+    u8 frame_control[2]; // Mis à 0x88, 0x00 (QoS Data)
+    u8 duration_id[2];   // Généralement 0x00, 0x00 ou calculé par le chipset
+    u8 addr1[6];         // Adresse MAC Destination (BSSID ou Récepteur)
+    u8 addr2[6];         // Adresse MAC Source (Émetteur)
+    u8 addr3[6];         // Adresse MAC Filtrage (BSSID)
+    u8 seq_ctrl[2];      // Numéro de séquence (laissé à 0, rtw88 le remplit)
+    u8 qos_ctrl[2];      // Contrôle QoS (ex: 0x07, 0x00 pour priorité Voice TID 7)
 } __attribute__((packed));
-*/
-/*
-struct llc_snap_hdr {
-    u8  dsap;
-    u8  ssap;
-    u8  ctrl;
-    u8  oui[3];
-    u16 proto;
-} __attribute__((packed));
-*/
 
 /*****************************************************************************/
 static struct nf_hook_ops *output_hk = NULL;
@@ -91,13 +41,9 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   } else if (uph->dest != outdestport) return NF_ACCEPT;
 
   uint16_t paylen = skb->len;
-/*
-  uint8_t headroom = sizeof(struct radiotap_hdr) + sizeof(struct ieee80211_data_hdr) 
-	             + sizeof(pph_t); // + sizeof(struct llc_snap_hdr)
-*/
-  uint8_t headroom = sizeof(radiotaphd) + sizeof(ieeehd) 
+
+  uint8_t headroom = sizeof(rtap) + sizeof(struct ieee80211_qos_header) 
 	             + sizeof(pph_t);
-				      
 				      
   skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
 
@@ -114,47 +60,59 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   curseq++;
 
+
 /*
-  skb_push(nskb, sizeof(struct llc_snap_hdr));
-  struct llc_snap_hdr *llc = (struct llc_snap_hdr *)nskb->data;
-  memset((void *)llc, 0, sizeof(struct llc_snap_hdr));
-  llc->proto = htons(ETH_P_IP); 
+  u8 *ptr = skb_push(nskb, sizeof(struct ieee80211_qos_header));
+
+  u8 tid_priority = 0x07;
+
+  // Remplissage du Frame Control : QoS Data
+  ptr[0] = 0x88;
+  ptr[1] = 0x00;
+
+  // Duration ID
+  ptr[2] = 0x00; ptr[3] = 0x00;
+
+  // Adresses MAC (Exemple factice, à remplacer par vos variables)
+  memset(&ptr[4], 0xFF, 6);  // Addr1: Broadcast (FF:FF:FF:FF:FF:FF)
+  memset(&ptr[10], 0x11, 6); // Addr2: Source (11:11:11:11:11:11)
+  memset(&ptr[16], 0x22, 6); // Addr3: BSSID (22:22:22:22:22:22)
+
+  // Sequence Control
+  ptr[22] = 0x00; ptr[23] = 0x00;
+
+  // Remplissage du champ QoS Control dynamique (TID 0-7)
+  ptr[24] = tid_priority & 0x07; // Assure que le TID ne dépasse pas 3 bits
+  ptr[25] = 0x00;                // Flags additionnels (TXOP, etc.) à 0
 */
-/*
-  skb_push(nskb, sizeof(struct ieee80211_data_hdr));
-  struct ieee80211_data_hdr *wfi = (struct ieee80211_data_hdr *)nskb->data;
-  memset((void *)wfi, 0, sizeof(struct ieee80211_data_hdr));
-  wfi->frame_control = cpu_to_le16(0x0088); // Frame Control: QoS Data
-  wfi->qos_ctrl = cpu_to_le16(0x0700);      // Priorité matérielle maximale
 
-  skb_push(nskb, sizeof(struct radiotap_hdr));
-  struct radiotap_hdr *rtap = (struct radiotap_hdr *)nskb->data;
-  memset((void *)rtap, 0, sizeof(struct radiotap_hdr));
-  rtap->it_len = cpu_to_le16(sizeof(struct radiotap_hdr));
-  rtap->present = cpu_to_le32((1 << 19)); // 0x00, 0x00, 0x08, 0x00 
-  rtap->mcs_known = 0x07; // follow Bandwidth and GI
-  rtap->mcs_flags = 0x01; // Short GI activé + Largeur 20 MHz (HT20) 
-  rtap->mcs_index = 0x07; // Index MCS : 0x07 (Débit de 72.2 Mbps en HT20 SGI)   
 
-  skb_shinfo(nskb)->tx_flags = 0;
-  nskb->priority = 7;  //  TC_PRIO_CONTROL / Voice (Priorité maximale)
+  u8 mcs_nss_octet = (u8)((MCS_INDEX << 4) | 1);
 
-  nskb->ip_summed = CHECKSUM_NONE;
-  nskb->dev = ppriv->wifidev[0].ndev;
-  nskb->protocol = htons(ETH_P_802_11);
+  // 1. En-tête fixe Radiotap + Flags d'injection (12 octets)
+  rtap[0] = 0x00; rtap[1] = 0x00;                         // it_version, it_pad
+  rtap[2] = sizeof(rtap); rtap[3] = 0x00;             // it_len (24 octets en Little-Endian)
+  rtap[4] = 0x00; rtap[5] = 0x40; rtap[6] = 0x20; rtap[7] = 0x00; // it_present: TX_FLAGS + VHT
+  rtap[8] = 0x08; rtap[9] = 0x00;                         // TX_FLAGS: RADIOTAP_F_TX_NOACK
+  rtap[10] = 0x00; rtap[11] = 0x00;                       // Internal Padding (Alignement)
 
-  int queue_index = skb_get_queue_mapping(skb);
-  if (dev_direct_xmit(nskb, queue_index) != NETDEV_TX_OK) kfree_skb(nskb); 
+  // 2. Bloc VHT dynamique (12 octets) basé sur vos spécifications
+  rtap[12] = 0x27; rtap[13] = 0x24;                       // known: Masque VHT (0x2427)
+  rtap[14] = 0x02;                                        // flags: Short GI activé
+  rtap[15] = 0x00;                                        // bandwidth: Forcer le mode 20 MHz
 
-  pr_info("OUT_B output_proc msglen (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(iph->tot_len),sizeof(pph_t));
+  // Insertion du MCS calculé dynamiquement
+  rtap[16] = mcs_nss_octet;                               // User 0: MCS_NSS
+  rtap[17] = 0x00; rtap[18] = 0x00; rtap[19] = 0x00;       // Users 1, 2, 3 à zéro
 
-  kfree_skb(skb);
-  return NF_STOLEN;
-*/
-  uint8_t *ptr = skb_push(nskb, sizeof(ieeehd));
-  memcpy(nskb->data, ieeehd, sizeof(ieeehd));
-  ptr = skb_push(nskb, sizeof(radiotaphd));
-  memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
+  rtap[20] = 0x00;                                        // coding: BCC
+  rtap[21] = 0x00;                                        // group_id: Single User
+  rtap[22] = 0x00; rtap[23] = 0x00;                       // partial_aid
+
+  u8 *ptr = skb_push(nskb, sizeof(rtap));
+  memset(ptr, 0, sizeof(rtap));
+  memcpy(ptr, rtap, sizeof(rtap));
+
 
   skb_shinfo(nskb)->tx_flags = 0;
   nskb->priority = 7;  //  TC_PRIO_CONTROL / Voice (Priorité maximale)
