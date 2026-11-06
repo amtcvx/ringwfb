@@ -43,7 +43,9 @@ static void wfb_timer_callback(struct timer_list *t) {
 }
 
 /******************************************************************************/
-bool utils_init(struct net *net) {
+bool utils_init() {
+
+  ppriv->pnet = &init_net;
 
   in4_pton(pipstr,9, (u8 *)&(ppriv->ipint), '\n', NULL);
 

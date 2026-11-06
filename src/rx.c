@@ -8,43 +8,70 @@
 #include "mon_module.h"
 
 /******************************************************************************/
-#define TARGET_UDP_PORT 5600
-static uint16_t indestport = 5700;
+#define TARGET_UDP_PORT 5700
+
+/******************************************************************************/
+static __sum16 fast_ip_csum(struct iphdr *iph) {
+  iph->check = 0;
+  return ip_fast_csum((unsigned char *)iph, iph->ihl);
+}
 
 /******************************************************************************/
 static rx_handler_result_t input_proc(struct sk_buff **pskb) {
 
   struct sk_buff *skb = *pskb;
 
-  if (unlikely(!skb)) return RX_HANDLER_CONSUMED;
+  if (!skb) return RX_HANDLER_CONSUMED;
 
-//  pr_info("IN_A (%d)\n",skb->len);
+  u8 *ptr = skb->data;
+  u16 rtlen = le16_to_cpup((__le16 *)(ptr + 2));
 
-  if (unlikely(skb->len < 36)) return RX_HANDLER_PASS;
+  if (skb->len < rtlen + 26) return RX_HANDLER_PASS;
 
-  u16 rtlen = get_unaligned_le16(skb->data + 2);
-  if (unlikely(rtlen + 24 > skb->len)) return RX_HANDLER_PASS;
+  if (ptr[rtlen] != 0x88) return RX_HANDLER_PASS;
 
-  if (unlikely(rtlen == 0x0D || rtlen == 0x0E)) return RX_HANDLER_PASS;
-
-  pph_t *pph = (pph_t *)(skb->data + rtlen + 26);
+  u16 wifilen = rtlen + 26;
+  pph_t *pph = (pph_t *)(skb->data + wifilen);
 
   if ((pph->droneid > 5) || ntohs(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
 
   pr_info("(%d) pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n", skb->len,
           pph->droneid, ntohs(pph->msglen), pph->backfreq, pph->seq);
 
-  u16 udp_len = ntohs(pph->msglen);
-  u8 *udp_pay = skb->data + rtlen + 26 + sizeof(pph_t);
+  u16 paylen = ntohs(pph->msglen);
 
   struct sock *sk = __udp4_lib_lookup(&init_net,
     htonl(INADDR_LOOPBACK), htons(TARGET_UDP_PORT),
     htonl(INADDR_LOOPBACK), htons(TARGET_UDP_PORT),
-    0, 0, &udp_table, NULL);
-  if (!sk) RX_HANDLER_CONSUMED;
+    0, 0, ppriv->pnet->ipv4.udp_table, NULL);
+  if (!sk) return RX_HANDLER_CONSUMED;
 
-  kfree_skb(skb);
+  skb_pull(skb, wifilen + sizeof(pph_t));
 
+  struct iphdr *iph = (struct iphdr *)skb->data;
+  memset((void *)iph, 0, sizeof(struct iphdr));
+  iph->version  = 4;
+  iph->tot_len  = htons(sizeof(struct iphdr) + sizeof(struct udphdr) + paylen);
+  iph->protocol = IPPROTO_UDP;
+  iph->saddr    = htonl(INADDR_LOOPBACK);
+  iph->daddr    = htonl(INADDR_LOOPBACK);
+  iph->ttl      = 64;
+  iph->check    = fast_ip_csum(iph);
+
+  struct udphdr *udph = (struct udphdr *)(skb->data + sizeof(struct iphdr));
+  memset((void *)udph, 0, sizeof(struct udphdr));
+  udph->source  = htons(TARGET_UDP_PORT);
+  udph->dest    = htons(TARGET_UDP_PORT);
+  udph->len     = htons(sizeof(struct udphdr) + paylen);
+  udph->check   = 0; // Pas de checksum pour UDP local 
+		   
+  skb_reset_network_header(skb);
+  skb_set_transport_header(skb, sizeof(struct iphdr));
+  skb->ip_summed = CHECKSUM_UNNECESSARY;
+
+  if (sock_queue_rcv_skb(sk, skb) < 0) { sock_put(sk); return RX_HANDLER_CONSUMED; }
+
+  sock_put(sk);
   return RX_HANDLER_CONSUMED;
 }
 

@@ -36,6 +36,7 @@ typedef struct {
   uint8_t wifinb;
   uint32_t ipint;
   struct net_device *localdev;
+  struct net *pnet;
   wifidev_t  wifidev[4];
 } priv_t;
 
@@ -45,7 +46,7 @@ extern u8 *pipstr;
 
 
 /************************************************************************************************/
-bool utils_init(struct net *);
+bool utils_init(void);
 void utils_start(void);
 void utils_exit(void);
 bool input_init(void);

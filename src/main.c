@@ -9,7 +9,7 @@ priv_t *ppriv = &mypriv;
 static int __init wfb_nfkernel_init(void) {
 
   memset(ppriv, 0, sizeof(priv_t));
-  if (!(utils_init(&init_net))) return -1;
+  if (!(utils_init())) return -1;
   if (!(input_init())) return -1;
   if (!(output_init())) return -1;
   utils_start();

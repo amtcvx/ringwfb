@@ -105,8 +105,8 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   nskb->dev = ppriv->wifidev[0].ndev;
   nskb->protocol = htons(ETH_P_802_11);
 
-  struct netdev_queue *txq = netdev_get_tx_queue(ppriv->wifidev[0].ndev, 0);
-  if (dev_direct_xmit(nskb, txq->queue_index) != NETDEV_TX_OK) kfree_skb(nskb); 
+  int queue_index = skb_get_queue_mapping(skb);
+  if (dev_direct_xmit(nskb, queue_index) != NETDEV_TX_OK) kfree_skb(nskb); 
 
   pr_info("OUT_B output_proc msglen (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(iph->tot_len),sizeof(pph_t));
 
