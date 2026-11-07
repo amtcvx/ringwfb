@@ -1,25 +1,14 @@
 #include <net/ip.h>
 #include <linux/netfilter_ipv4.h>
-#include <net/ieee80211_radiotap.h>
-
 
 #include "mon_module.h"
 
 /*****************************************************************************/
-#define MCS_INDEX  2
-#define ETH_P_802_11 0x0019
-uint8_t rtap[24];
-
-// Structure de l'en-tête MAC 802.11 QoS Data (26 octets au lieu de 24)
-struct ieee80211_qos_header {
-    u8 frame_control[2]; // Mis à 0x88, 0x00 (QoS Data)
-    u8 duration_id[2];   // Généralement 0x00, 0x00 ou calculé par le chipset
-    u8 addr1[6];         // Adresse MAC Destination (BSSID ou Récepteur)
-    u8 addr2[6];         // Adresse MAC Source (Émetteur)
-    u8 addr3[6];         // Adresse MAC Filtrage (BSSID)
-    u8 seq_ctrl[2];      // Numéro de séquence (laissé à 0, rtw88 le remplit)
-    u8 qos_ctrl[2];      // Contrôle QoS (ex: 0x07, 0x00 pour priorité Voice TID 7)
-} __attribute__((packed));
+// mcs index from 0 to 7
+#define MCS_INDEX  		7
+#define RADIOTAP_VHT_LEN  	24
+#define IEEE80211_QOS_MAC_LEN 	26
+#define ETH_P_802_11 		0x0019
 
 /*****************************************************************************/
 static struct nf_hook_ops *output_hk = NULL;
@@ -42,12 +31,10 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   uint16_t paylen = skb->len;
 
-  uint8_t headroom = sizeof(rtap) + sizeof(struct ieee80211_qos_header) 
-	             + sizeof(pph_t);
-				      
   skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
 
   struct sk_buff *nskb;
+  uint8_t headroom = RADIOTAP_VHT_LEN + IEEE80211_QOS_MAC_LEN + sizeof(pph_t);
   if (!(nskb = skb_copy_expand(skb, headroom, 0, GFP_ATOMIC))) return NF_DROP;
 
   skb_push(nskb, sizeof(pph_t));
@@ -60,74 +47,59 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   curseq++;
 
+  u8 *ptr = skb_push(nskb, IEEE80211_QOS_MAC_LEN);
 
-/*
-  u8 *ptr = skb_push(nskb, sizeof(struct ieee80211_qos_header));
-
-  u8 tid_priority = 0x07;
-
-  // Remplissage du Frame Control : QoS Data
-  ptr[0] = 0x88;
-  ptr[1] = 0x00;
-
-  // Duration ID
-  ptr[2] = 0x00; ptr[3] = 0x00;
-
-  // Adresses MAC (Exemple factice, à remplacer par vos variables)
-  memset(&ptr[4], 0xFF, 6);  // Addr1: Broadcast (FF:FF:FF:FF:FF:FF)
-  memset(&ptr[10], 0x11, 6); // Addr2: Source (11:11:11:11:11:11)
-  memset(&ptr[16], 0x22, 6); // Addr3: BSSID (22:22:22:22:22:22)
-
-  // Sequence Control
-  ptr[22] = 0x00; ptr[23] = 0x00;
-
-  // Remplissage du champ QoS Control dynamique (TID 0-7)
-  ptr[24] = tid_priority & 0x07; // Assure que le TID ne dépasse pas 3 bits
-  ptr[25] = 0x00;                // Flags additionnels (TXOP, etc.) à 0
-*/
+  ptr[0] = 0x88; ptr[1] = 0x00; // frame control Subtype: QoS Data (0x08), Type: Data (0x02) -> 0x88
+  ptr[2] = 0x00; ptr[3] = 0x00; // mac duration id
+  memset(&ptr[4],  0xFF, 6);    // Destination : Broadcast
+  memset(&ptr[10], 0x11, 6);    // Source
+  memset(&ptr[16], 0x22, 6);    // BSSID
+  ptr[22] = 0x00; ptr[23] = 0x00; // Sequence
+  ptr[24] = (u8)(7 & 0x07);       // Injection de la priorité TID (0-7) - 7 Voice
+  ptr[25] = 0x00;
 
 
-  u8 mcs_nss_octet = (u8)((MCS_INDEX << 4) | 1);
+  ptr = skb_push(nskb, RADIOTAP_VHT_LEN);
 
   // 1. En-tête fixe Radiotap + Flags d'injection (12 octets)
-  rtap[0] = 0x00; rtap[1] = 0x00;                         // it_version, it_pad
-  rtap[2] = sizeof(rtap); rtap[3] = 0x00;             // it_len (24 octets en Little-Endian)
-  rtap[4] = 0x00; rtap[5] = 0x40; rtap[6] = 0x20; rtap[7] = 0x00; // it_present: TX_FLAGS + VHT
-  rtap[8] = 0x08; rtap[9] = 0x00;                         // TX_FLAGS: RADIOTAP_F_TX_NOACK
-  rtap[10] = 0x00; rtap[11] = 0x00;                       // Internal Padding (Alignement)
-
-  // 2. Bloc VHT dynamique (12 octets) basé sur vos spécifications
-  rtap[12] = 0x27; rtap[13] = 0x24;                       // known: Masque VHT (0x2427)
-  rtap[14] = 0x02;                                        // flags: Short GI activé
-  rtap[15] = 0x00;                                        // bandwidth: Forcer le mode 20 MHz
-
+  ptr[0] = 0x00; ptr[1] = 0x00;                         // it_version, it_pad
+  ptr[2] = RADIOTAP_VHT_LEN; ptr[3] = 0x00;             // it_len (24 octets en Little-Endian)
+  ptr[4] = 0x00; ptr[5] = 0x40; ptr[6] = 0x20; ptr[7] = 0x00; // it_present: TX_FLAGS + VHT
+  ptr[8] = 0x08; ptr[9] = 0x00;                         // TX_FLAGS: RADIOTAP_F_TX_NOACK
+  ptr[10] = 0x00; ptr[11] = 0x00;                       // Internal Padding (Alignement)
+  // 2. Bloc VHT dynamique (12 octets) 
+  ptr[12] = 0x27; ptr[13] = 0x24;                       // known: Masque VHT (0x2427)
+  ptr[14] = 0x02;                                       // flags: Short GI activé
+  ptr[15] = 0x00;                                       // bandwidth: Forcer le mode 20 MHz
   // Insertion du MCS calculé dynamiquement
-  rtap[16] = mcs_nss_octet;                               // User 0: MCS_NSS
-  rtap[17] = 0x00; rtap[18] = 0x00; rtap[19] = 0x00;       // Users 1, 2, 3 à zéro
+  ptr[16] = (u8)((MCS_INDEX << 4) | 1);                 // User 0: MCS_NSS
+  ptr[17] = 0x00; ptr[18] = 0x00; ptr[19] = 0x00;       // Users 1, 2, 3 à zéro
+  ptr[20] = 0x00;                                       // coding: BCC
+  ptr[21] = 0x00;                                       // group_id: Single User
+  ptr[22] = 0x00; ptr[23] = 0x00;                       // partial_aid
 
-  rtap[20] = 0x00;                                        // coding: BCC
-  rtap[21] = 0x00;                                        // group_id: Single User
-  rtap[22] = 0x00; rtap[23] = 0x00;                       // partial_aid
-
-  u8 *ptr = skb_push(nskb, sizeof(rtap));
-  memset(ptr, 0, sizeof(rtap));
-  memcpy(ptr, rtap, sizeof(rtap));
-
-
-  skb_shinfo(nskb)->tx_flags = 0;
-  nskb->priority = 7;  //  TC_PRIO_CONTROL / Voice (Priorité maximale)
-
-  nskb->ip_summed = CHECKSUM_NONE;
+  
+  skb_reset_mac_header(nskb);
   nskb->dev = ppriv->wifidev[0].ndev;
   nskb->protocol = htons(ETH_P_802_11);
 
-  int queue_index = skb_get_queue_mapping(skb);
-  if (dev_direct_xmit(nskb, queue_index) != NETDEV_TX_OK) kfree_skb(nskb); 
+  dev_direct_xmit(nskb, 0);
 
   pr_info("OUT_B output_proc msglen (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(iph->tot_len),sizeof(pph_t));
 
   kfree_skb(skb);
   return NF_STOLEN;
+
+/*
+  nskb->ip_summed = CHECKSUM_NONE;
+  skb_shinfo(nskb)->tx_flags = -1;
+  nskb->priority = 7;  //  TC_PRIO_CONTROL / Voice (Priorité maximale)
+  int queue_index = skb_get_queue_mapping(skb);
+  if (dev_direct_xmit(nskb, queue_index) != NETDEV_TX_OK) kfree_skb(nskb); 
+  pr_info("OUT_B output_proc msglen (%d) (%d) (%lu)\n",ntohs(pph->msglen),ntohs(iph->tot_len),sizeof(pph_t));
+  kfree_skb(skb);
+  return NF_STOLEN;
+*/
 }
 
 /*****************************************************************************/
