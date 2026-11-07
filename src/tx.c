@@ -3,11 +3,36 @@
 
 #include "mon_module.h"
 
+/************************************************************************************************/
+#include <net/ieee80211_radiotap.h>
+#define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI | IEEE80211_RADIOTAP_MCS_HAVE_STBC )
+#define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI | (IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT))
+#define MCS_INDEX  2
+uint8_t radiotaphd[] = {
+        0x00, 0x00, // <-- radiotap version
+        0x0d, 0x00, // <- radiotap header length
+        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
+        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
+        MCS_KNOWN , MCS_FLAGS, MCS_INDEX // bitmap, flags, mcs_index
+};
+
+uint8_t ieeehd[] = {
+        0x88, 0x00,                         // Data (type=2) with QOS (subtype=8)
+        0x00, 0x00,
+        0x36, 0x35, 0x34, 0x33, 0x32, 0x31, // Receiver MAC
+        0x26, 0x25, 0x24, 0x23, 0x22, 0x21, // Transmitter MAC
+        0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
+        0x00, 0x00, 0x20, 0x00
+};
+
 /*****************************************************************************/
+/*
 // mcs index from 0 to 7
 #define MCS_INDEX  		7
+
 #define RADIOTAP_VHT_LEN  	24
 #define IEEE80211_QOS_MAC_LEN 	26
+*/
 #define ETH_P_802_11 		0x0019
 
 /*****************************************************************************/
@@ -34,7 +59,8 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
 
   struct sk_buff *nskb;
-  uint8_t headroom = RADIOTAP_VHT_LEN + IEEE80211_QOS_MAC_LEN + sizeof(pph_t);
+  uint8_t headroom = sizeof(radiotaphd) +  sizeof(ieeehd) + sizeof(pph_t);
+//  uint8_t headroom = RADIOTAP_VHT_LEN + IEEE80211_QOS_MAC_LEN + sizeof(pph_t);
   if (!(nskb = skb_copy_expand(skb, headroom, 0, GFP_ATOMIC))) return NF_DROP;
 
   skb_push(nskb, sizeof(pph_t));
@@ -47,18 +73,25 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   curseq++;
 
-  u8 *ptr = skb_push(nskb, IEEE80211_QOS_MAC_LEN);
+  skb_push(nskb, sizeof(ieeehd));
+  u8 *ptr = nskb->data;
+  memcpy(ptr, ieeehd, sizeof(ieeehd));
 
+/*
   ptr[0] = 0x88; ptr[1] = 0x00; // frame control Subtype: QoS Data (0x08), Type: Data (0x02) -> 0x88
   ptr[2] = 0x00; ptr[3] = 0x00; // mac duration id
-  memset(&ptr[4],  0xFF, 6);    // Destination : Broadcast
-  memset(&ptr[10], 0x11, 6);    // Source
-  memset(&ptr[16], 0x22, 6);    // BSSID
+  memset(ptr+4,  0x11, 6);    // Destination : Broadcast
+  memset(ptr+10, 0x12, 6);    // Source
+  memset(ptr+16, 0x23, 6);    // BSSID
   ptr[22] = 0x00; ptr[23] = 0x00; // Sequence
   ptr[24] = (u8)(7 & 0x07);       // Injection de la priorité TID (0-7) - 7 Voice
+  ptr[24] = 0x20;                   // ?
   ptr[25] = 0x00;
+*/
+  ptr = skb_push(nskb, sizeof(radiotaphd));
+  memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
 
-
+/*
   ptr = skb_push(nskb, RADIOTAP_VHT_LEN);
 
   // 1. En-tête fixe Radiotap + Flags d'injection (12 octets)
@@ -78,8 +111,9 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   ptr[21] = 0x00;                                       // group_id: Single User
   ptr[22] = 0x00; ptr[23] = 0x00;                       // partial_aid
 
-  
   skb_reset_mac_header(nskb);
+*/
+
   nskb->dev = ppriv->wifidev[0].ndev;
   nskb->protocol = htons(ETH_P_802_11);
 
