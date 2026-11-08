@@ -33,6 +33,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   u16 wifilen = rtlen + 26;
   pph_t *pph = (pph_t *)(skb->data + wifilen);
 
+  if (pph->droneid == DRONEID) return RX_HANDLER_CONSUMED;
   if ((pph->droneid > 5) || ntohs(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
 
   pr_info("(%d) pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n", skb->len,

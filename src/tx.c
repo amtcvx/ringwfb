@@ -44,15 +44,12 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   u32 daddr = 0;
   if (iph->protocol != IPPROTO_UDP) {
-    if ((iph->daddr != ppriv->ipint) && ((iph->daddr & 0x00FFFFFF) == 0x0000000A)) { daddr = iph->daddr; }
-    else return NF_ACCEPT;
+    if ((iph->daddr != ppriv->ipint) && ((iph->daddr & 0x00FFFFFF) == 0x0000000A))
+    { daddr = iph->daddr; } else return NF_ACCEPT;
   } else if (uph->dest != outdestport) return NF_ACCEPT;
 
-  struct netdev_queue *txq = netdev_get_tx_queue(ppriv->wifidev[0].ndev, TXQUEUE); //  AC_VO / TC_PRIO_CONTROL
-  if (netif_xmit_stopped(txq)) { // DMA buffer full
-    pr_info("TX DMA queue full\n");
-    return NF_ACCEPT;
-  }
+  struct netdev_queue *txq = netdev_get_tx_queue(ppriv->wifidev[0].ndev, TXQUEUE);
+  if (netif_xmit_stopped(txq)) { pr_info("TX DMA queue buffer full\n"); return NF_ACCEPT; }
 
   uint16_t paylen = skb->len;
 
@@ -65,7 +62,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   skb_push(nskb, sizeof(pph_t));
   pph_t *pph = (pph_t *)nskb->data;
   memset((void *)pph, 0, sizeof(pph_t));
-  pph->droneid = 0x01;
+  pph->droneid = DRONEID;
   pph->daddr = daddr; 
   pph->seq = curseq;
   pph->msglen = htons(paylen);
@@ -83,12 +80,12 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   nskb->ip_summed = CHECKSUM_NONE;
   nskb->priority = TC_PRIO_CONTROL;
   nskb->dev = ppriv->wifidev[0].ndev;
-  nskb->priority = TC_PRIO_CONTROL;
-  skb_set_queue_mapping(skb, TXQUEUE); 
+  skb_set_queue_mapping(nskb, TXQUEUE); 
 
   skb_shinfo(nskb)->tx_flags = 0;
 
-  dev_direct_xmit(nskb, TXQUEUE); 
+  if (dev_direct_xmit(nskb, TXQUEUE) == NETDEV_TX_OK) ppriv->wifidev[0].log.txbytes += nskb->len;
+  else ppriv->wifidev[0].log.txpktko ++;
 
   kfree_skb(skb);
   return NF_STOLEN;

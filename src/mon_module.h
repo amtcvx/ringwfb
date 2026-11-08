@@ -4,6 +4,9 @@
 #include <linux/netdevice.h>
 
 /************************************************************************************************/
+#define DRONEID 1
+
+/************************************************************************************************/
 typedef struct {
   uint8_t padding;
   uint8_t droneid;
@@ -22,7 +25,8 @@ typedef struct {
 
 typedef struct {
   uint8_t curchan;
-  uint16_t pkrcv;
+  uint32_t txbytes;
+  uint32_t txpktko;
 } log_t;
 
 typedef struct {
