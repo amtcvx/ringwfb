@@ -55,9 +55,12 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   skb_pull(skb, sizeof(struct iphdr) + sizeof (struct udphdr));
 
-  struct sk_buff *nskb;
   uint8_t headroom = sizeof(radiotaphd) +  sizeof(ieeehd) + sizeof(pph_t);
-  if (!(nskb = skb_copy_expand(skb, headroom, 0, GFP_ATOMIC))) return NF_DROP;
+
+  struct sk_buff *nskb = skb_clone(skb, GFP_ATOMIC);
+  if (!nskb) return NF_ACCEPT;
+  if ((pskb_expand_head(nskb, headroom, 0, GFP_ATOMIC) < 0)) { 
+    kfree_skb(nskb); return NF_DROP; }
 
   skb_push(nskb, sizeof(pph_t));
   pph_t *pph = (pph_t *)nskb->data;
