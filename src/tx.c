@@ -5,8 +5,8 @@
 
 /************************************************************************************************/
 #define ETH_P_802_11    0x0019
+/*
 #define TXQUEUE		3
-
 uint8_t radiotaphd[] = {
   0x00, 0x00,              // it_version, it_pad
   0x0e, 0x00,              // it_len (14 octets en Little-Endian)
@@ -26,6 +26,29 @@ uint8_t ieeehd[] = {
   0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
   0x00, 0x00,              // Sequence
   0x27, 0x00               // Injection de la priorité TID (0-7) - 7 Voice
+};
+*/
+#include <net/ieee80211_radiotap.h>
+#define MCS_KNOWN (IEEE80211_RADIOTAP_MCS_HAVE_MCS | IEEE80211_RADIOTAP_MCS_HAVE_BW | IEEE80211_RADIOTAP_MCS_HAVE_GI)
+#define MCS_FLAGS  (IEEE80211_RADIOTAP_MCS_BW_20 | IEEE80211_RADIOTAP_MCS_SGI)
+#define MCS_INDEX  3
+uint8_t radiotaphd[] = {
+        0x00, 0x00, // <-- radiotap version
+        0x10, 0x00, // <- radiotap header length
+        0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
+        0x08, 0x00,  // RADIOTAP_F_TX_NOACK
+        0x00, 0x00, // rtap_pad1
+        MCS_KNOWN , MCS_FLAGS, MCS_INDEX, // bitmap, flags, mcs_index
+        0x00        // rtap_pad2
+};
+uint8_t ieeehd[] = {
+        0x88, 0x00,                         // Data (type=2) with QOS (subtype=8)
+        0x00, 0x00,                         // Duration
+        0x36, 0x35, 0x34, 0x33, 0x32, 0x31, // Receiver MAC
+        0x26, 0x25, 0x24, 0x23, 0x22, 0x21, // Transmitter MAC
+        0x16, 0x15, 0x14, 0x13, 0x12, 0x11, // Destination MAC
+        0x00, 0x00,                         // seq_ctl
+        0x07, 0x00                          // TID 7 = Priorité maximale (Voice
 };
 
 
@@ -48,8 +71,10 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
     { daddr = iph->daddr; } else return NF_ACCEPT;
   } else if (uph->dest != outdestport) return NF_ACCEPT;
 
+/*
   struct netdev_queue *txq = netdev_get_tx_queue(ppriv->wifidev[0].ndev, TXQUEUE);
   if (netif_xmit_stopped(txq)) { pr_info("TX DMA queue buffer full\n"); return NF_ACCEPT; }
+*/
 
   uint16_t paylen = skb->len;
 
@@ -78,18 +103,23 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
   skb_push(nskb, sizeof(radiotaphd));
   memcpy(nskb->data, radiotaphd, sizeof(radiotaphd));
 
-  skb_reset_mac_header(nskb);
+  nskb->dev = ppriv->wifidev[0].ndev;
 
+  nskb->priority = TC_PRIO_CONTROL;
+  skb_set_queue_mapping(skb, 0);
+  u16 txq_index = skb_get_queue_mapping(skb);
+  if ((dev_direct_xmit(nskb, txq_index) != NETDEV_TX_OK)) udelay(10); 
+
+/*
+  skb_reset_mac_header(nskb);
   nskb->ip_summed = CHECKSUM_NONE;
   nskb->priority = TC_PRIO_CONTROL;
   nskb->dev = ppriv->wifidev[0].ndev;
   skb_set_queue_mapping(nskb, TXQUEUE); 
-
   skb_shinfo(nskb)->tx_flags = 0;
-
   if (dev_direct_xmit(nskb, TXQUEUE) == NETDEV_TX_OK) ppriv->wifidev[0].log.txbytes += paylen;
   else ppriv->wifidev[0].log.txpktko ++;
-
+*/
   kfree_skb(skb);
   return NF_STOLEN;
 }
