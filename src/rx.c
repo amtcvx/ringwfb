@@ -47,6 +47,7 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   memset(&msg, 0, sizeof(msg));
   msg.msg_name = &gstaddr;
   msg.msg_namelen = sizeof(gstaddr);
+  msg.msg_flags = MSG_DONTWAIT;
 
   if (kernel_sendmsg(udpsock, &msg, &iov, 1, paylen)) ppriv->wifidev[0].log.rxbytes += paylen;
   else ppriv->wifidev[0].log.rxpktko ++;
