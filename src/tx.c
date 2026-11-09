@@ -87,7 +87,7 @@ static unsigned int output_proc(void *priv, struct sk_buff *skb, const struct nf
 
   skb_shinfo(nskb)->tx_flags = 0;
 
-  if (dev_direct_xmit(nskb, TXQUEUE) == NETDEV_TX_OK) ppriv->wifidev[0].log.txbytes += nskb->len;
+  if (dev_direct_xmit(nskb, TXQUEUE) == NETDEV_TX_OK) ppriv->wifidev[0].log.txbytes += paylen;
   else ppriv->wifidev[0].log.txpktko ++;
 
   kfree_skb(skb);
