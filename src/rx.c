@@ -10,11 +10,9 @@
 /******************************************************************************/
 #define TARGET_UDP_PORT 5700
 
-/******************************************************************************/
-static __sum16 fast_ip_csum(struct iphdr *iph) {
-  iph->check = 0;
-  return ip_fast_csum((unsigned char *)iph, iph->ihl);
-}
+static struct socket *udpsock = NULL;
+static struct sockaddr_in gstaddr;
+
 
 /******************************************************************************/
 static rx_handler_result_t input_proc(struct sk_buff **pskb) {
@@ -36,49 +34,36 @@ static rx_handler_result_t input_proc(struct sk_buff **pskb) {
   if (pph->droneid == DRONEID) return RX_HANDLER_CONSUMED;
   if ((pph->droneid > 5) || ntohs(pph->msglen) > skb->len) return RX_HANDLER_CONSUMED;
 
-  pr_info("(%d) pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n", skb->len,
-          pph->droneid, ntohs(pph->msglen), pph->backfreq, pph->seq);
+//  pr_info("(%d) pay  droneid(%u) msglen(%u) backfreq(%u) seq(%llu)\n", skb->len,
+//          pph->droneid, ntohs(pph->msglen), pph->backfreq, pph->seq);
 
   u16 paylen = ntohs(pph->msglen);
 
-  struct sock *sk = __udp4_lib_lookup(&init_net,
-    htonl(INADDR_LOOPBACK), htons(TARGET_UDP_PORT),
-    htonl(INADDR_LOOPBACK), htons(TARGET_UDP_PORT),
-    0, 0, ppriv->pnet->ipv4.udp_table, NULL);
-  if (!sk) return RX_HANDLER_CONSUMED;
+  struct kvec iov;
+  iov.iov_base = (void *)(skb->data + wifilen + sizeof(pph_t));
+  iov.iov_len = paylen;
 
-  skb_pull(skb, wifilen + sizeof(pph_t));
+  struct msghdr msg;
+  memset(&msg, 0, sizeof(msg));
+  msg.msg_name = &gstaddr;
+  msg.msg_namelen = sizeof(gstaddr);
 
-  struct iphdr *iph = (struct iphdr *)skb->data;
-  memset((void *)iph, 0, sizeof(struct iphdr));
-  iph->version  = 4;
-  iph->tot_len  = htons(sizeof(struct iphdr) + sizeof(struct udphdr) + paylen);
-  iph->protocol = IPPROTO_UDP;
-  iph->saddr    = htonl(INADDR_LOOPBACK);
-  iph->daddr    = htonl(INADDR_LOOPBACK);
-  iph->ttl      = 64;
-  iph->check    = fast_ip_csum(iph);
+  if (kernel_sendmsg(udpsock, &msg, &iov, 1, paylen)) ppriv->wifidev[0].log.rxbytes += paylen;
+  else ppriv->wifidev[0].log.rxpktko ++;
 
-  struct udphdr *udph = (struct udphdr *)(skb->data + sizeof(struct iphdr));
-  memset((void *)udph, 0, sizeof(struct udphdr));
-  udph->source  = htons(TARGET_UDP_PORT);
-  udph->dest    = htons(TARGET_UDP_PORT);
-  udph->len     = htons(sizeof(struct udphdr) + paylen);
-  udph->check   = 0; // Pas de checksum pour UDP local 
-		   
-  skb_reset_network_header(skb);
-  skb_set_transport_header(skb, sizeof(struct iphdr));
-  skb->ip_summed = CHECKSUM_UNNECESSARY;
-
-  if (sock_queue_rcv_skb(sk, skb) < 0) { sock_put(sk); return RX_HANDLER_CONSUMED; }
-
-  sock_put(sk);
-  return RX_HANDLER_CONSUMED;
+  return RX_HANDLER_PASS;
 }
 
 /*****************************************************************************/
 bool input_init(void) {
   bool ret = false;
+
+  if (sock_create_kern(ppriv->pnet, PF_INET, SOCK_DGRAM, IPPROTO_UDP, &udpsock) < 0)
+    return ret;
+  memset(&gstaddr, 0, sizeof(gstaddr));
+  gstaddr.sin_family = AF_INET;
+  gstaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  gstaddr.sin_port = htons(TARGET_UDP_PORT);
 
   for (uint8_t i=0;i<ppriv->wifinb;i++) {
     struct net_device *ndev = ppriv->wifidev[i].ndev;
@@ -94,6 +79,8 @@ bool input_init(void) {
 
 /*****************************************************************************/
 void input_exit(void) {
+
+  if (udpsock) sock_release(udpsock);
 
   for (uint8_t i=0;i<ppriv->wifinb;i++) {
     struct net_device *ndev = ppriv->wifidev[i].ndev;

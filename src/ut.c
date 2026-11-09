@@ -26,18 +26,22 @@ static void wfb_timer_callback(struct timer_list *t) {
 
   wifidev_t *wifidev = &ppriv->wifidev[0];
 
-  pr_info("beep (%d)(%d)(%d) (%d)(%d)\n",
+  pr_info("beep (%d)(%d)(%d) (%d)(%d)(%d)(%d)\n",
     wifidev->log.curchan,
     wifidev->chan[wifidev->log.curchan].value,
     wifidev->chan[wifidev->log.curchan].freq,
     wifidev->log.txpktko,
-    wifidev->log.txbytes);
+    wifidev->log.txbytes,
+    wifidev->log.rxpktko,
+    wifidev->log.rxbytes);
 /*
   if (wifidev->log.curchan < (wifidev->channb - 1)) wifidev->log.curchan++;
   else wifidev->log.curchan = 0;
 */
   wifidev->log.txbytes = 0;
   wifidev->log.txpktko = 0;
+  wifidev->log.rxbytes = 0;
+  wifidev->log.rxpktko = 0;
 /*
   schedule_work(&wfb_work);
 */

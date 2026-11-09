@@ -27,6 +27,8 @@ typedef struct {
   uint8_t curchan;
   uint32_t txbytes;
   uint32_t txpktko;
+  uint32_t rxbytes;
+  uint32_t rxpktko;
 } log_t;
 
 typedef struct {
