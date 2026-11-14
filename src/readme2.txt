@@ -25,6 +25,7 @@ sudo iw dev wlan0mon set bitrates legacy 5 24
 
 gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=10.0.0.1
 
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! videoconvert ! video/x-raw,format=I420 ! x265enc tune=zerolatency bitrate=100 speed-preset=ultrafast key-int-max=30 ! rtph265pay config-interval=1 mtu=1400 pt=96 ! udpsink port=5600 host=127.0.0.1
 
 
 RECEPTION

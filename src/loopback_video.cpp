@@ -16,7 +16,6 @@ sudo ./loopback_video 1 4 1 5
 #include "DeviceConfig.h"
 #include "UsbOpen.h"
 #include "RxPacket.h"
-//#include "Logger.h"
 #include "logger.h"
 
 #include <gst/gst.h>
@@ -31,8 +30,6 @@ sudo ./loopback_video 1 4 1 5
 #include <thread>
 #include <cstring>
 #include <cstdlib>
-
-//using namespace devourer;
 
 // --- EN-TÊTES RADIO (13 octets Radiotap + 24 octets IEEE 802.11 = 37 octets) ---
 static const uint8_t RADIOTAP_HEADER[] = {
@@ -69,7 +66,8 @@ bool init_adapter(RadioAdapter &ad, uint8_t target_bus, uint8_t target_addr) {
         if (libusb_get_bus_number(list[i]) == target_bus &&
             libusb_get_device_address(list[i]) == target_addr) {
             libusb_device_descriptor desc;
-if (libusb_get_device_descriptor(list[i], &desc) == 0 && (desc.idVendor == 0x0bda || desc.idVendor == 0x0b05)) {
+            if (libusb_get_device_descriptor(list[i], &desc) == 0 && (desc.idVendor == 0x0bda 
+	      || desc.idVendor == 0x0b05)) {
                 libusb_open(list[i], &ad.usb_handle);
                 break;
             }
@@ -204,10 +202,15 @@ int main(int argc, char *argv[]) {
 
     // 4. Création du pipeline GStreamer TX (mire vidéo -> H.264 -> RTP -> appsink)
     // Note : mtu=1400 est crucial pour ne pas dépasser la taille max d'une trame Wi-Fi
+
     GstElement *tx_pipeline = gst_parse_launch(
-        "videotestsrc is-live=true pattern=ball ! "
-        "video/x-raw,width=640,height=480,framerate=30/1 ! "
-        "x265enc tune=zerolatency bitrate=1500 speed-preset=ultrafast key-int-max=30 ! "
+      "v4l2src device=/dev/video0 ! "
+      "video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! "
+      "videoconvert ! "
+      "video/x-raw,format=I420 ! "
+//        "videotestsrc is-live=true pattern=ball ! "
+//        "video/x-raw,width=640,height=480,framerate=30/1 ! "
+        "x265enc tune=zerolatency bitrate=100 speed-preset=ultrafast key-int-max=30 ! "
         "rtph265pay config-interval=1 mtu=1400 pt=96 ! "
         "appsink name=tx_sink emit-signals=true sync=false max-buffers=1 drop=true", nullptr);
     GstElement *appsink = gst_bin_get_by_name(GST_BIN(tx_pipeline), "tx_sink");
