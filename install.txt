@@ -1,5 +1,6 @@
-mkdir Projects
 git clone https://github.com/OpenIPC/devourer.git
+(--config "http.proxy=proxy:3128")
+
 cd devourer
 
 # Debian/Ubuntu
@@ -7,5 +8,17 @@ sudo apt install build-essential cmake pkg-config libusb-1.0-0-dev
 # macOS (Homebrew)
 brew install cmake pkg-config libusb
 
-cmake -S . -B build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDEVOURER_JAGUAR1=ON
 cmake --build build
+
+/etc/modprobe.d/blacklist.conf
+blacklist rtw88_8812au
+
+/etc/udev/rules.d/99-openipc-devourer.rules
+SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="17d2", MODE="0666"
+
+
+# Debian/Ubuntu
+sudo apt-get update
+sudo apt-get install gstreamer1.0-tools gstreamer1.0-plugins-bad libx265-dev gstreamer1.0-libav
+
