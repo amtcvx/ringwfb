@@ -1,8 +1,8 @@
 /*
-DEVPATH=../devourer g++ -std=c++20 -O2 recepteur.cpp \
-    -I$DEVPATH/src \
-    -I$DEVPATH/src/hal \
-    $DEVPATH/build/libdevourer.a \
+g++ -std=c++20 -O2 recepteur.cpp \
+    -I../devourer/src \
+    -I../devourer/hal \
+    ../devourer/build/libdevourer.a \
     $(pkg-config --cflags --libs libusb-1.0) \
     -lpthread \
     -o recepteur
