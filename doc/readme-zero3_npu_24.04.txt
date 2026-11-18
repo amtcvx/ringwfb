@@ -34,6 +34,21 @@ git clone https://github.com/OpenIPC/devourer.git
 sudo apt update
 (DO NOT UPGRADE !)
 
+https://github.com/roju/rkaiq_3A_server-rk356x.git
+cd rkaiq_3A_server-rk356x/
+mkdir build && cd build
+cmake .. -DRKAIQ_TARGET_SOC=rk356x -DISP_HW_VERSION=-DISP_HW_V21 -DARCH=aarch64 -DCMAKE_INSTALL_PREFIX=/usr
+make 
+cmake ../rkaiq_3A_server 
+make
+
+sudo systemctl stop rkaiq_3A.service
+sudo cp rkaiq/all_lib/Release/librkaiq.so /usr/lib/librkaiq.so
+sudo cp rkaiq_3A_server/rkaiq_3A_server /usr/bin/rkaiq_3A_server
+sudo ldconfig
+sudo systemctl start rkaiq_3A.service
+
+-------------------------------------------------------
 sudo apt install -y zram-config
 sudo systemctl set-default multi-user.target
 (sudo systemctl set-default graphical.target)
