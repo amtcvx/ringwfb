@@ -22,3 +22,7 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="17d2", MODE="0666"
 sudo apt-get update
 sudo apt-get install gstreamer1.0-tools gstreamer1.0-plugins-bad libx265-dev gstreamer1.0-libav
 
+# Debian/Ubuntu (only radxa)
+sudo apt-get update
+sudo apt-get install vim
+

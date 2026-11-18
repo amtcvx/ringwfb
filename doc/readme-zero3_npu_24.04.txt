@@ -30,6 +30,49 @@ install devourer described in install.txt
 git clone https://github.com/OpenIPC/devourer.git
 ...
 
+-------------------------------------------------------------------------------
+sudo apt update
+(DO NOT UPGRADE !)
+
+sudo apt install -y zram-config
+sudo systemctl set-default multi-user.target
+(sudo systemctl set-default graphical.target)
+
+/etc/systemd/journald.conf
+SystemMaxUse=50M
+
+/etc/fstab
+tmpfs /tmp tmpfs defaults,noatime,nosuid,nodev,mode=1777,size=256M 0 0
+
+sudo systemctl disable --now cups cups-browsed
+sudo systemctl disable --now bluetooth
+
+
+snap list
+sudo snap remove --purge firefox
+sudo snap remove --purge gnome-42-2204
+sudo snap remove --purge gtk-common-themes
+sudo snap remove --purge bare
+sudo snap remove --purge core22
+sudo snap remove --purge lxd
+sudo snap remove --purge core24
+sudo snap remove --purge snapd
+sudo apt autoremove --purge -y snapd gnome-software-plugin-snap
+rm -rf ~/snap
+sudo rm -rf /snap /var/snap /var/lib/snapd /var/cache/snapd
+
+cat <<EOF | sudo tee /etc/apt/preferences.d/nosnap.pref
+Package: snapd
+Pin: release a=*
+Pin-Priority: -10
+EOF
+
+sudo apt update
+
+sudo systemctl stop packagekit.service
+sudo systemctl mask packagekit.service
+
+-------------------------------------------------------------------------------
 plug usb/eth
 
 on pc
@@ -52,6 +95,8 @@ keep usb/eth
 ssh radxa@192.168.3.2
 
 
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 sudo systemctl stop wpa_supplicant.service
 sudo systemctl stop NetworkManager
 
