@@ -45,29 +45,8 @@ SystemMaxUse=50M
 tmpfs /tmp tmpfs defaults,noatime,nosuid,nodev,mode=1777,size=256M 0 0
 
 sudo systemctl disable --now cups cups-browsed
-sudo systemctl disable --now bluetooth
-
-
-snap list
-sudo snap remove --purge firefox
-sudo snap remove --purge gnome-42-2204
-sudo snap remove --purge gtk-common-themes
-sudo snap remove --purge bare
-sudo snap remove --purge core22
-sudo snap remove --purge lxd
-sudo snap remove --purge core24
-sudo snap remove --purge snapd
-sudo apt autoremove --purge -y snapd gnome-software-plugin-snap
-rm -rf ~/snap
-sudo rm -rf /snap /var/snap /var/lib/snapd /var/cache/snapd
-
-cat <<EOF | sudo tee /etc/apt/preferences.d/nosnap.pref
-Package: snapd
-Pin: release a=*
-Pin-Priority: -10
-EOF
-
-sudo apt update
+sudo systemctl disable --now snapd.service snapd.socket
+sudo systemctl disable --now ModemManager bluetooth avahi-daemon
 
 sudo systemctl stop packagekit.service
 sudo systemctl mask packagekit.service
