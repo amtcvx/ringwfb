@@ -21,7 +21,7 @@ sudo nmap -sn 192.168.42.113/24
 ssh radxa@192.168.42.156
 radxa
 
-mkdir Project
+mkdir Projects
 cd Projects
 git clone https://github.com/amtcvx/ringwfb.git
 
