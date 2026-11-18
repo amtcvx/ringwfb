@@ -18,7 +18,7 @@ blacklist rtw88_8812au
 SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="17d2", MODE="0666"
 
 
-# Debian/Ubuntu
+# Debian/Ubuntu (no radxa)
 sudo apt-get update
 sudo apt-get install gstreamer1.0-tools gstreamer1.0-plugins-bad libx265-dev gstreamer1.0-libav
 
