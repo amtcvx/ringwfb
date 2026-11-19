@@ -39,14 +39,41 @@ cd rkaiq_3A_server-rk356x/
 mkdir build && cd build
 cmake .. -DRKAIQ_TARGET_SOC=rk356x -DISP_HW_VERSION=-DISP_HW_V21 -DARCH=aarch64 -DCMAKE_INSTALL_PREFIX=/usr
 make 
-cmake ../rkaiq_3A_server 
-make
 
 sudo systemctl stop rkaiq_3A.service
 sudo cp rkaiq/all_lib/Release/librkaiq.so /usr/lib/librkaiq.so
 sudo cp rkaiq_3A_server/rkaiq_3A_server /usr/bin/rkaiq_3A_server
 sudo ldconfig
+
+sudo mv /etc/iqfiles /etc/iqfiles.bak
+sudo mkdir -p /etc/iqfiles
+
+git clone https://github.com/radxa-pkg/rockchip-iqfiles.git
+cp /home/radxa/Projects/rockchip-iqfiles/rockchip-iqfiles-rk356x/imx219_rpi-camera-v2_default.json /etc/iqfiles
+
+sudo cp /home/radxa/Projects/rkaiq_3A_server-rk356x/rkaiq/iqfiles/isp21/*.json /etc/iqfiles/
+
+sudo tee /etc/systemd/system/rkaiq_3A.service > /dev/null << 'EOF'
+[Unit]
+Description=Enable Rockchip camera engine rkaiq
+After=local-fs.target systemd-udevd.service systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+Requires=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rkaiq_3A_server
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable rkaiq_3A.service
 sudo systemctl start rkaiq_3A.service
+sudo systemctl status rkaiq_3A.service
 
 -------------------------------------------------------
 sudo apt install -y zram-config
@@ -88,20 +115,21 @@ Unplug HDMI + USB Keyboard Mouse
 keep usb/eth
 ssh radxa@192.168.3.2
 
+-------------------------------------------------------------------------------
+gst-launch-1.0 v4l2src device=/dev/video0 io-mode=dmabuf ! video/x-raw,format=I420,width=640,height=480,framerate=30/1 ! mpph265enc ! rtph265pay name=pay0 pt=96 config-interval=-1 mtu=1400 ! udpsink port=5600 host=192.168.3.1
+
+gst-launch-1.0 udpsrc uri=udp://0.0.0.0:5600 ! application/x-rtp, encoding-name=H265, payload=96 ! rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
+
+gst-launch-1.0 v4l2src device=/dev/video0 io-mode=dmabuf ! video/x-raw,format=I420,width=1920,height=1080,framerate=30/1 ! mpph265enc rc-mode=vbr bps=3000000 bps-max=3172000  ! rtph265pay name=pay0 pt=96 config-interval=-1 mtu=1400 ! udpsink port=5600 host=192.168.3.1
+
+
 
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
-sudo systemctl stop wpa_supplicant.service
-sudo systemctl stop NetworkManager
+#sudo systemctl stop wpa_supplicant.service
+#sudo systemctl stop NetworkManager
 
-/etc/sysctl.conf
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
-net.ipv6.conf.lo.disable_ipv6 = 1
-
-plug usb wifi
-
-cd /home/radxa/Projects/ringwfb/tests/modules7
-...
-  
-gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw, width=1920, height=1080, framerate=30/1, format='NV12' ! mpph265enc rc-mode=vbr bps=3000000 bps-max=3172000  ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=192.168.42.113
+#/etc/sysctl.conf
+#net.ipv6.conf.all.disable_ipv6 = 1
+#net.ipv6.conf.default.disable_ipv6 = 1
+#net.ipv6.conf.lo.disable_ipv6 = 1

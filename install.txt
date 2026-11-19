@@ -26,3 +26,6 @@ sudo apt-get install gstreamer1.0-tools gstreamer1.0-plugins-bad libx265-dev gst
 sudo apt-get update
 sudo apt-get install vim
 
+# on radxa
+sudo apt-get update
+sudo apt-get install libusb-1.0-0-dev
