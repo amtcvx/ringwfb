@@ -20,6 +20,7 @@ blacklist rtw88_8812au
 
 /etc/udev/rules.d/99-openipc-devourer.rules
 SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="17d2", MODE="0666"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0bda", ATTR{idProduct}=="8812", MODE="0666"
 
 cd devourer
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDEVOURER_JAGUAR1=ON

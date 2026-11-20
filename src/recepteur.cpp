@@ -52,8 +52,11 @@ uint16_t get_env_hex(const char* name, uint16_t default_val) {
 
 // Parcourt tous les périphériques USB, filtre par VID:PID et ouvre le premier disponible
 libusb_device_handle* open_first_available_adapter(libusb_context* ctx) {
-    uint16_t target_vid = get_env_hex("DEVOURER_VID", 0x0b05);
-    uint16_t target_pid = get_env_hex("DEVOURER_PID", 0x17d2);
+    uint16_t target_vid1 = get_env_hex("DEVOURER_VID", 0x0bda);
+    uint16_t target_pid1 = get_env_hex("DEVOURER_PID", 0x8812);
+    uint16_t target_vid2 = get_env_hex("DEVOURER_VID", 0x0b05);
+    uint16_t target_pid2 = get_env_hex("DEVOURER_PID", 0x17d2);
+    uint16_t target_vid, target_pid;
 
     libusb_device** list = nullptr;
     ssize_t count = libusb_get_device_list(ctx, &list);
@@ -70,7 +73,9 @@ libusb_device_handle* open_first_available_adapter(libusb_context* ctx) {
         libusb_device_descriptor desc{};
         if (libusb_get_device_descriptor(dev, &desc) != 0) continue;
 
-        if (desc.idVendor != target_vid || desc.idProduct != target_pid) continue;
+        if (!(desc.idVendor == target_vid1 && desc.idProduct == target_pid1) &&
+	   !(desc.idVendor == target_vid2 && desc.idProduct == target_pid2)) continue;
+        target_vid = desc.idVendor; target_pid = desc.idProduct;
 
         ++matching_found;
         uint8_t bus  = libusb_get_bus_number(dev);
