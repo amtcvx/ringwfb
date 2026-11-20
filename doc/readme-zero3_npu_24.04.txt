@@ -34,8 +34,10 @@ git clone https://github.com/OpenIPC/devourer.git
 sudo apt update
 (DO NOT UPGRADE !)
 
-https://github.com/roju/rkaiq_3A_server-rk356x.git
+cd ringwfb
+git clone https://github.com/roju/rkaiq_3A_server-rk356x.git
 cd rkaiq_3A_server-rk356x/
+
 mkdir build && cd build
 cmake .. -DRKAIQ_TARGET_SOC=rk356x -DISP_HW_VERSION=-DISP_HW_V21 -DARCH=aarch64 -DCMAKE_INSTALL_PREFIX=/usr
 make 
@@ -53,6 +55,7 @@ cp /home/radxa/Projects/rockchip-iqfiles/rockchip-iqfiles-rk356x/imx219_rpi-came
 
 sudo cp /home/radxa/Projects/rkaiq_3A_server-rk356x/rkaiq/iqfiles/isp21/*.json /etc/iqfiles/
 
+---------
 sudo tee /etc/systemd/system/rkaiq_3A.service > /dev/null << 'EOF'
 [Unit]
 Description=Enable Rockchip camera engine rkaiq
