@@ -1,3 +1,5 @@
+STEP 1
+------
 https://github.com/Qengineering/Radxa-Zero-3-NPU-Ubuntu24
 Radxa_Zero3_NPU_Ubuntu24.img.xz (3.9Gb)
 Radxa_Zero3_NPU_Ubuntu24.img  (15.9Gb)
@@ -30,7 +32,8 @@ install devourer described in install.txt
 git clone https://github.com/OpenIPC/devourer.git
 ...
 
--------------------------------------------------------------------------------
+STEP 2
+------
 sudo apt update
 (DO NOT UPGRADE !)
 
@@ -55,7 +58,6 @@ cp /home/radxa/Projects/rockchip-iqfiles/rockchip-iqfiles-rk356x/imx219_rpi-came
 
 sudo cp /home/radxa/Projects/rkaiq_3A_server-rk356x/rkaiq/iqfiles/isp21/*.json /etc/iqfiles/
 
----------
 sudo tee /etc/systemd/system/rkaiq_3A.service > /dev/null << 'EOF'
 [Unit]
 Description=Enable Rockchip camera engine rkaiq
@@ -78,7 +80,8 @@ sudo systemctl enable rkaiq_3A.service
 sudo systemctl start rkaiq_3A.service
 sudo systemctl status rkaiq_3A.service
 
--------------------------------------------------------
+STEP 3
+------
 sudo apt install -y zram-config
 sudo systemctl set-default multi-user.target
 (sudo systemctl set-default graphical.target)
@@ -89,14 +92,8 @@ SystemMaxUse=50M
 /etc/fstab
 tmpfs /tmp tmpfs defaults,noatime,nosuid,nodev,mode=1777,size=256M 0 0
 
-sudo systemctl disable --now cups cups-browsed
-sudo systemctl disable --now snapd.service snapd.socket
-sudo systemctl disable --now ModemManager bluetooth avahi-daemon
-
-sudo systemctl stop packagekit.service
-sudo systemctl mask packagekit.service
-
--------------------------------------------------------------------------------
+STEP 4
+------
 plug usb/eth
 
 on pc
@@ -107,16 +104,39 @@ on radxa
 sudo nmcli connection add type ethernet con-name myusbconnection match.interface-name "enx*" ipv4.addresses "192.168.3.2/24" ipv4.method manual connection.autoconnect yes
 sudo nmcli connection up myusbconnection
 
-
 /etc/default/u-boot
-U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo"
-U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo radxa-zero3-rpi-camera-v2.dtbo rk3588-uart4-m0.dtbo radxa-zero3-disabled-wireless.dtbo"
+U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo radxa-zero3-rpi-camera-v2.dtbo rk3588-uart4-m0.dtbo"
 sudo u-boot-update
 sudo reboot
 
 Unplug HDMI + USB Keyboard Mouse
 keep usb/eth
 ssh radxa@192.168.3.2
+
+----
+----
+SAVE SD IMAGE AFTER THIS STEP 4
+----
+sudo dd if=/dev/sdX bs=4M status=progress | gzip > Radxa-Zero-3-NPU-Ubuntu24_step4.img.gz
+----
+gunzip -c Radxa-Zero-3-NPU-Ubuntu24_step4.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+----
+----
+
+
+STEP 5
+------
+/etc/default/u-boot
+U_BOOT_FDT_OVERLAYS="rk3568-npu-enable.dtbo radxa-zero3-rpi-camera-v2.dtbo rk3588-uart4-m0.dtbo radxa-zero3-disabled-wireless.dtbo"
+sudo u-boot-update
+sudo reboot
+
+sudo systemctl disable --now cups cups-browsed
+sudo systemctl disable --now snapd.service snapd.socket
+sudo systemctl disable --now ModemManager bluetooth avahi-daemon
+
+sudo systemctl stop packagekit.service
+sudo systemctl mask packagekit.service
 
 -------------------------------------------------------------------------------
 gst-launch-1.0 v4l2src device=/dev/video0 io-mode=dmabuf ! video/x-raw,format=I420,width=640,height=480,framerate=30/1 ! mpph265enc ! rtph265pay name=pay0 pt=96 config-interval=-1 mtu=1400 ! udpsink port=5600 host=192.168.3.1
