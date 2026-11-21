@@ -19,8 +19,10 @@ gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5601 ! application/x-rtp, encoding-nam
   rtph265depay ! h265parse ! queue ! avdec_h265 !  videoconvert ! autovideosink sync=false
 
 gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! \
-  x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5600 host=127.0.0.1
+  x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=-1 mtu=1400 ! udpsink port=5600 host=127.0.0.1
 
+st-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! videoconvert ! video/x-raw,format=I420 ! x265enc bitrate=1000 ! rtph265pay config-interval=-1 mtu=1400 pt=96 ! udpsink port=5600 host=127.0.0.1
+  
 */
 #include <iostream>
 #include <fstream>
