@@ -11,6 +11,9 @@ g++ -std=c++20 -O2 tunnel.cpp \
 
 sudo ./tunnel
 
+ping 10.250.12.7
+ssh pprz@10.250.12.7
+
 */
 #include <iostream>
 #include <fstream>
