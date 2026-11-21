@@ -243,7 +243,7 @@ int main() {
     addr.sin_port = htons(5700);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (bind(udp_sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
-        std::cerr << "Erreur bind UDP 5600\n";
+        std::cerr << "Erreur bind UDP 5700\n";
         return 1;
     }
 
@@ -260,7 +260,7 @@ int main() {
 
     uint32_t seq = 0;
     const size_t header_overhead = sizeof(MinimalRadiotapHeader) + sizeof(VideoPacketHeader);
-    std::cout << "[TX] En attente du flux video UDP sur 127.0.0.1:5600...\n";
+    std::cout << "[TX] En attente du flux video UDP sur 127.0.0.1:5700...\n";
 
     while (true) {
         ssize_t n = recv(udp_sock, tx_frame.payload, sizeof(tx_frame.payload), 0);
