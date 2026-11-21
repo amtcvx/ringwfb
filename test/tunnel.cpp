@@ -1,4 +1,6 @@
 /*
+sudo apt update && sudo apt install -y openssh-server
+
 g++ -std=c++20 -O2 tunnel.cpp \
     -I../devourer/src \
     -I../devourer/hal \
@@ -6,6 +8,9 @@ g++ -std=c++20 -O2 tunnel.cpp \
     $(pkg-config --cflags --libs libusb-1.0) \
     -lpthread \
     -o tunnel
+
+sudo ./tunnel
+
 */
 #include <iostream>
 #include <fstream>
