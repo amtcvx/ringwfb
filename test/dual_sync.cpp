@@ -48,13 +48,10 @@ gst-launch-1.0 udpsrc port=5601 caps="application/x-rtp,media=video,encoding-nam
 #include "IRadio.h"
 #include "IRtlRadio.h"
 #include "RxPacket.h"
-#include "UsbOpen.h"
 #include "WiFiDriver.h"
 #include "logger.h"
 
 using namespace std::chrono_literals;
-
-static std::mutex usb_mtx;
 
 struct [[gnu::packed]] SyncMsg {
     uint32_t magic = 0x44565253; // "DVRS"
@@ -98,23 +95,25 @@ static libusb_device_handle* open_adapter(libusb_context* ctx, libusb_device* sk
     return found;
 }
 
-// fc: 0x08 = Vidéo H.265 | 0x88 = Tunnel IP/SSH | 0x40 = Sync TSF
+// Radiotap minimal 8 octets + 802.11 24 octets = 32 octets d'en-tête
 static void send_frame(IRadio& r, bool is_drone, uint8_t fc, const void* payload, size_t len) {
     if (len > 1500) return;
     const uint8_t src_id = is_drone ? 0x01 : 0x02;
-    uint8_t buf[37 + 1500] = {
-        0x00,0x00,0x0d,0x00, 0x00,0x80,0x08,0x00, 0x08,0x00,0x07,0x00,0x03, // Radiotap MCS3
-        fc,  0x00,0x00,0x00, 0xff,0xff,0xff,0xff,0xff,0xff,                // 802.11 FC + DA
-        0x57,0x42,0x75,0x05,0xd6,src_id, 0x57,0x42,0x75,0x05,0xd6,0x00, 0x00,0x00
+    uint8_t buf[32 + 1500] = {
+        0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,          // Radiotap minimal valide (8 octets)
+        fc,   0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 802.11 FC + DA (broadcast)
+        0x57, 0x42, 0x75, 0x05, 0xd6, src_id,                    // SA (0x01 = drone, 0x02 = ground)
+        0x57, 0x42, 0x75, 0x05, 0xd6, 0x00, 0x00, 0x00           // BSSID + Seq
     };
-    std::memcpy(buf + 37, payload, len);
-    std::lock_guard<std::mutex> lk(usb_mtx);
-    r.send_packet(buf, 37 + len);
+    std::memcpy(buf + 32, payload, len);
+    if (!r.send_packet(buf, 32 + len)) {
+        std::cerr << "[ERR] send_packet rejected frame (fc=0x" << std::hex << int(fc) << std::dec << ")\n";
+    }
 }
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <drone|ground> [rx_port] [tx_port]\n";
+        std::cerr << "Usage: " << argv << " <drone|ground> [rx_port] [tx_port]\n";
         return 1;
     }
 
@@ -122,7 +121,6 @@ int main(int argc, char** argv) {
     const uint16_t rx_port = (argc > 2) ? std::stoi(argv[2]) : 5600;
     const uint16_t tx_port = (argc > 3) ? std::stoi(argv[3]) : 5601;
 
-    // 1. Interfaces réseau (TUN + UDP local)
     int tun_fd = open_tun(is_drone);
     if (tun_fd < 0) { std::cerr << "TUN error (run with sudo)\n"; return 1; }
 
@@ -131,37 +129,32 @@ int main(int argc, char** argv) {
     sockaddr_in out_addr{AF_INET, htons(tx_port), {htonl(INADDR_LOOPBACK)}, {}};
     bind(udp_sock, reinterpret_cast<sockaddr*>(&local_addr), sizeof(local_addr));
 
-    // 2. Initialisation des deux adaptateurs USB
     libusb_context* ctx = nullptr;
     libusb_init(&ctx);
 
-    libusb_device_handle* h_txrx = open_adapter(ctx);
+    libusb_device_handle* h_txrx  = open_adapter(ctx);
     libusb_device_handle* h_scout = h_txrx ? open_adapter(ctx, libusb_get_device(h_txrx)) : nullptr;
-    if (!h_txrx || !h_scout) {
-        std::cerr << "Need two 0b05:17d2 adapters\n";
-        return 1;
-    }
+    if (!h_txrx || !h_scout) { std::cerr << "Need two 0b05:17d2 adapters\n"; return 1; }
 
     auto logger = std::make_shared<Logger>();
     WiFiDriver drv(logger);
     auto txrx  = drv.CreateRadio(h_txrx);
     auto scout = drv.CreateRadio(h_scout);
-    if (!txrx || !scout) {
-        std::cerr << "Failed to create radios\n";
-        return 1;
-    }
-
-    std::atomic<uint8_t>  cur_chan{149}, best_chan{149}, target_chan{0};
-    std::atomic<uint64_t> switch_tsf{0};
+    if (!txrx || !scout) return 1;
 
     SelectedChannel ch0{.Channel = 149, .ChannelOffset = 0, .ChannelWidth = CHANNEL_WIDTH_20};
     txrx->InitWrite(ch0);
     scout->InitWrite(ch0);
 
-    // 3. Thread RX (démultiplexage Vidéo / TUN / Sync)
+    // État partagé sans aucun blocage USB dans le callback RX
+    std::atomic<uint8_t>  cur_chan{149}, best_chan{149}, target_chan{0};
+    std::atomic<uint64_t> switch_tsf{0};
+    std::mutex sync_mtx;
+    std::optional<SyncMsg> pending_sync;
+
+    // Thread RX : pur décodage mémoire (zéro transfert USB synchrone ici !)
     std::thread rx([&] {
-        // On n'accepte que les trames provenant de l'autre extrémité (0x02 si drone, 0x01 si ground)
-        const uint8_t peer_sa[6] = {0x57, 0x42, 0x75, 0x05, 0xd6, static_cast<uint8_t>(is_drone ? 0x02 : 0x01)};
+        const uint8_t peer_sa[] = {0x57, 0x42, 0x75, 0x05, 0xd6, static_cast<uint8_t>(is_drone ? 0x02 : 0x01)};
 
         txrx->StartRxLoop([&](const Packet& p) {
             const uint8_t* raw = p.Data.data();
@@ -175,27 +168,15 @@ int main(int argc, char** argv) {
             } else if (*raw == 0x40 && len >= sizeof(SyncMsg)) {
                 SyncMsg m{};
                 std::memcpy(&m, raw + 24, sizeof(m));
-                if (m.magic != 0x44565253) return;
-
-                uint64_t now = 0;
-                { std::lock_guard<std::mutex> lk(usb_mtx); now = txrx->ReadTsf(); }
-
-                if (is_drone && m.type == 1 && m.chan != cur_chan) {
-                    uint64_t go = now + 30000ULL;
-                    SyncMsg commit{0x44565253, 2, m.chan, now, go};
-                    send_frame(*txrx, is_drone, 0x40, &commit, sizeof(commit));
-                    target_chan = m.chan;
-                    switch_tsf  = go;
-                } else if (!is_drone && m.type == 2) {
-                    uint64_t delta = (m.go_tsf > m.tx_tsf) ? (m.go_tsf - m.tx_tsf) : 20000ULL;
-                    target_chan = m.chan;
-                    switch_tsf  = now + delta;
+                if (m.magic == 0x44565253) {
+                    std::lock_guard<std::mutex> lk(sync_mtx);
+                    pending_sync = m;
                 }
             }
         });
     });
 
-    // 4. Thread Scanner (balayage 5 GHz sur la 2ème clé)
+    // Thread Scanner (sur la 2ème clé uniquement)
     std::thread scan([&] {
         auto* rtl = dynamic_cast<IRtlRadio*>(scout.get());
         if (!rtl) return;
@@ -214,7 +195,7 @@ int main(int argc, char** argv) {
         }
     });
 
-    // 5. Boucle principale (TX Vidéo/TUN + Exécution saut de canal)
+    // Boucle principale : propriétaire unique du plan de contrôle USB de txrx
     std::array<uint8_t, 1500> buf{};
     auto last_prop = std::chrono::steady_clock::now();
 
@@ -225,14 +206,34 @@ int main(int argc, char** argv) {
         while ((n = read(tun_fd, buf.data(), buf.size())) > 0)
             send_frame(*txrx, is_drone, 0x88, buf.data(), n);
 
-        uint64_t now = 0;
-        { std::lock_guard<std::mutex> lk(usb_mtx); now = txrx->ReadTsf(); }
+        // Traitement d'un éventuel message Sync reçu par le thread RX
+        std::optional<SyncMsg> rx_sync;
+        {
+            std::lock_guard<std::mutex> lk(sync_mtx);
+            if (pending_sync) { rx_sync = *pending_sync; pending_sync.reset(); }
+        }
+
+        uint64_t now = txrx->ReadTsf();
+
+        if (rx_sync) {
+            if (is_drone && rx_sync->type == 1 && rx_sync->chan != cur_chan) {
+                uint64_t go = now + 30000ULL;
+                SyncMsg commit{0x44565253, 2, rx_sync->chan, now, go};
+                send_frame(*txrx, is_drone, 0x40, &commit, sizeof(commit));
+                target_chan = rx_sync->chan;
+                switch_tsf  = go;
+            } else if (!is_drone && rx_sync->type == 2) {
+                uint64_t delta = (rx_sync->go_tsf > rx_sync->tx_tsf) ? (rx_sync->go_tsf - rx_sync->tx_tsf) : 20000ULL;
+                target_chan = rx_sync->chan;
+                switch_tsf  = now + delta;
+            }
+        }
 
         if (target_chan != 0 && static_cast<int64_t>(now - switch_tsf) >= 0) {
             uint8_t next = target_chan.exchange(0);
-            { std::lock_guard<std::mutex> lk(usb_mtx); txrx->FastRetune(next); }
+            txrx->FastRetune(next);
             cur_chan = next;
-            std::cout << "[" << argv[1] << "] Switched -> ch " << int(next) << "\n";
+            std::cout << "[" << argv << "] Switched -> ch " << int(next) << "\n";
         }
 
         if (!is_drone && std::chrono::steady_clock::now() - last_prop > 5s) {
@@ -242,7 +243,7 @@ int main(int argc, char** argv) {
                 send_frame(*txrx, is_drone, 0x40, &prop, sizeof(prop));
             }
         }
-        std::this_thread::sleep_for(200us);
+        std::this_thread::sleep_for(500us);
     }
 }
 
