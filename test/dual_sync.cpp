@@ -99,12 +99,13 @@ static libusb_device_handle* open_adapter(libusb_context* ctx, libusb_device* sk
 }
 
 // fc: 0x08 = Vidéo H.265 | 0x88 = Tunnel IP/SSH | 0x40 = Sync TSF
-static void send_frame(IRadio& r, uint8_t fc, const void* payload, size_t len) {
+static void send_frame(IRadio& r, bool is_drone, uint8_t fc, const void* payload, size_t len) {
     if (len > 1500) return;
+    const uint8_t src_id = is_drone ? 0x01 : 0x02;
     uint8_t buf[37 + 1500] = {
         0x00,0x00,0x0d,0x00, 0x00,0x80,0x08,0x00, 0x08,0x00,0x07,0x00,0x03, // Radiotap MCS3
         fc,  0x00,0x00,0x00, 0xff,0xff,0xff,0xff,0xff,0xff,                // 802.11 FC + DA
-        0x57,0x42,0x75,0x05,0xd6,0x00, 0x57,0x42,0x75,0x05,0xd6,0x00, 0x00,0x00
+        0x57,0x42,0x75,0x05,0xd6,src_id, 0x57,0x42,0x75,0x05,0xd6,0x00, 0x00,0x00
     };
     std::memcpy(buf + 37, payload, len);
     std::lock_guard<std::mutex> lk(usb_mtx);
@@ -159,18 +160,14 @@ int main(int argc, char** argv) {
 
     // 3. Thread RX (démultiplexage Vidéo / TUN / Sync)
     std::thread rx([&] {
-        static constexpr uint8_t SA[6] = {0x57, 0x42, 0x75, 0x05, 0xd6, 0x00};
+        // On n'accepte que les trames provenant de l'autre extrémité (0x02 si drone, 0x01 si ground)
+        const uint8_t peer_sa[6] = {0x57, 0x42, 0x75, 0x05, 0xd6, static_cast<uint8_t>(is_drone ? 0x02 : 0x01)};
+
         txrx->StartRxLoop([&](const Packet& p) {
             const uint8_t* raw = p.Data.data();
-    
-	    if (p.Data.size() >= 16) {
-              std::printf("RX len=%zu bytes: %02x %02x %02x %02x | +10: %02x:%02x:%02x\n",
-              p.Data.size(), raw[0], raw[1], raw[2], raw[3], raw[10], raw[11], raw[12]);
-	    }
+            if (p.Data.size() <= 24 || std::memcmp(raw + 10, peer_sa, 6) != 0) return;
 
-            if (p.Data.size() <= 28 || std::memcmp(raw + 10, SA, 6) != 0) return;
-
-            size_t len = p.Data.size() - 28;
+            size_t len = p.Data.size() - 24;
             if (*raw == 0x08) {
                 sendto(udp_sock, raw + 24, len, 0, reinterpret_cast<sockaddr*>(&out_addr), sizeof(out_addr));
             } else if (*raw == 0x88) {
@@ -186,7 +183,7 @@ int main(int argc, char** argv) {
                 if (is_drone && m.type == 1 && m.chan != cur_chan) {
                     uint64_t go = now + 30000ULL;
                     SyncMsg commit{0x44565253, 2, m.chan, now, go};
-                    send_frame(*txrx, 0x40, &commit, sizeof(commit));
+                    send_frame(*txrx, is_drone, 0x40, &commit, sizeof(commit));
                     target_chan = m.chan;
                     switch_tsf  = go;
                 } else if (!is_drone && m.type == 2) {
@@ -224,9 +221,9 @@ int main(int argc, char** argv) {
     while (true) {
         ssize_t n;
         while ((n = recv(udp_sock, buf.data(), buf.size(), 0)) > 0)
-            send_frame(*txrx, 0x08, buf.data(), n);
+            send_frame(*txrx, is_drone, 0x08, buf.data(), n);
         while ((n = read(tun_fd, buf.data(), buf.size())) > 0)
-            send_frame(*txrx, 0x88, buf.data(), n);
+            send_frame(*txrx, is_drone, 0x88, buf.data(), n);
 
         uint64_t now = 0;
         { std::lock_guard<std::mutex> lk(usb_mtx); now = txrx->ReadTsf(); }
@@ -242,7 +239,7 @@ int main(int argc, char** argv) {
             last_prop = std::chrono::steady_clock::now();
             if (best_chan != cur_chan && target_chan == 0) {
                 SyncMsg prop{0x44565253, 1, best_chan, now, 0};
-                send_frame(*txrx, 0x40, &prop, sizeof(prop));
+                send_frame(*txrx, is_drone, 0x40, &prop, sizeof(prop));
             }
         }
         std::this_thread::sleep_for(200us);
