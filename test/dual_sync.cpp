@@ -16,7 +16,7 @@ sudo ./dual_sync drone
 
 gst-launch-1.0 videotestsrc is-live=true ! \
   video/x-raw,width=1280,height=720,framerate=30/1 ! \
-  x265enc tune=zerolatency bitrate=2000 speed-preset=ultrafast key-int-max=30 ! \
+  x265enc tune=zerolatency bitrate=4000 speed-preset=ultrafast key-int-max=30 ! \
   rtph265pay config-interval=1 mtu=1400 pt=96 ! \
   udpsink host=127.0.0.1 port=5600
 
@@ -157,6 +157,15 @@ int main(int argc, char** argv) {
     SelectedChannel ch0{.Channel = 149, .ChannelOffset = 0, .ChannelWidth = CHANNEL_WIDTH_20};
     txrx->InitWrite(ch0);
     scout->InitWrite(ch0);
+
+    // Configuration du débit radio par défaut : HT-MCS4 (39 Mbps PHY), 20 MHz, LDPC + STBC
+    devourer::TxMode tx_mode{};
+    tx_mode.mode   = devourer::TxMode::Mode::HT;
+    tx_mode.ht_mcs = 4;    // 3 = 26 Mbps PHY, 4 = 39 Mbps PHY
+    tx_mode.bw_mhz = 20;
+    tx_mode.ldpc   = true; // Gain de sensibilité (~2 dB) en réception
+    tx_mode.stbc   = true; // Diversité spatiale sur les 2 antennes TX de l'AC56
+    txrx->SetTxMode(tx_mode);
 
     // État partagé sans aucun blocage USB dans le callback RX
     std::atomic<uint8_t>  cur_chan{149}, best_chan{149}, target_chan{0};
