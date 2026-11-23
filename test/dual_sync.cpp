@@ -7,6 +7,8 @@ g++ -std=c++20 -O2 dual_sync.cpp \
     -lpthread \
     -o dual_sync
 
+sudo apt update && sudo apt install -y openssh-server
+
 Usage: ./dual_sync <ground|drone> [udp_rx_port=5600] [udp_tx_port=5601]
 
 
