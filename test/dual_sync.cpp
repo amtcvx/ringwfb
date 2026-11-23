@@ -234,6 +234,7 @@ int main(int argc, char** argv) {
             if (pending_sync) { rx_sync = *pending_sync; pending_sync.reset(); }
         }
 
+        std::this_thread::sleep_for(200us);
         uint64_t now = txrx->ReadTsf();
 
         if (rx_sync) {
