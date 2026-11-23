@@ -14,10 +14,16 @@ Usage: ./dual_sync <ground|drone> [udp_rx_port=5600] [udp_tx_port=5601]
 
 sudo ./dual_sync drone
 
-gst-launch-1.0 videotestsrc ! \
-  x265enc tune=zerolatency bitrate=4000 speed-preset=ultrafast key-int-max=30 ! \
+gst-launch-1.0 videotestsrc is-live=true ! \
+  video/x-raw,width=1280,height=720,framerate=30/1 ! \
+  x265enc tune=zerolatency bitrate=2000 speed-preset=ultrafast key-int-max=30 ! \
   rtph265pay config-interval=1 mtu=1400 pt=96 ! \
   udpsink host=127.0.0.1 port=5600
+
+#gst-launch-1.0 videotestsrc ! \
+#  x265enc tune=zerolatency bitrate=4000 speed-preset=ultrafast key-int-max=30 ! \
+#  rtph265pay config-interval=1 mtu=1400 pt=96 ! \
+#  udpsink host=127.0.0.1 port=5600
 
 
 sudo ./dual_sync ground
@@ -25,8 +31,12 @@ sudo ./dual_sync ground
 ssh root@10.5.0.1
 #ssh -L 8080:127.0.0.1:80 -L 5760:127.0.0.1:5760 root@10.5.0.1
 
-gst-launch-1.0 udpsrc port=5601 caps="application/x-rtp,media=video,encoding-name=H265,payload=96" ! \
-  rtph265depay ! avdec_h265 ! autovideosink sync=false
+
+gst-launch-1.0 udpsrc port=5601 caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H265,payload=96" ! \
+  rtph265depay ! h265parse ! avdec_h265 ! videoconvert ! autovideosink sync=false
+
+#gst-launch-1.0 udpsrc port=5601 caps="application/x-rtp,media=video,encoding-name=H265,payload=96" ! \
+#  rtph265depay ! avdec_h265 ! autovideosink sync=false
 
 */
 #include <arpa/inet.h>
