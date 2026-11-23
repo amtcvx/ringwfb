@@ -41,6 +41,7 @@ gst-launch-1.0 udpsrc port=5601 caps="application/x-rtp,media=video,encoding-nam
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
+#include <mutex>
 #include <libusb-1.0/libusb.h>
 
 #include "WiFiDriver.h"
@@ -51,6 +52,8 @@ gst-launch-1.0 udpsrc port=5601 caps="application/x-rtp,media=video,encoding-nam
 #include "logger.h"
 
 using namespace std::chrono_literals;
+
+std::mutex txrx_usb_mtx;
 
 static constexpr uint16_t vid_pid[2][2] = {
     {0x0b05, 0x17d2}, // ASUS USB-AC56
@@ -117,6 +120,7 @@ static void send_frame(IRadio& r, uint8_t fc, const void* payload, size_t len) {
     if (len > 1500) return;
     std::memcpy(buf, hdr, sizeof(hdr));
     std::memcpy(buf + sizeof(hdr), payload, len);
+    std::lock_guard<std::mutex> lk(txrx_usb_mtx);
     r.send_packet(buf, sizeof(hdr) + len);
 }
 
@@ -190,7 +194,11 @@ int main(int argc, char** argv) {
                 std::memcpy(&m, raw + 24, sizeof(m));
                 if (m.magic != 0x44565253) return;
 
-                uint64_t now = txrx.ReadTsf();
+                uint64_t now = 0;
+                {
+                  std::lock_guard<std::mutex> lk(txrx_usb_mtx);
+                  now = txrx.ReadTsf();
+                }
                 if (is_drone && m.type == 1 && m.chan != cur_chan) {
                     uint64_t go = now + 30000ULL;
                     SyncMsg commit{0x44565253, 2, m.chan, now, go};
@@ -230,16 +238,23 @@ int main(int argc, char** argv) {
     while (true) {
         ssize_t n;
         while ((n = recv(udp_sock, io_buf.data(), io_buf.size(), 0)) > 0) {
-            send_frame(txrx, 0x08, io_buf.data(), static_cast<size_t>(n));
+          send_frame(txrx, 0x08, io_buf.data(), static_cast<size_t>(n));
         }
         while ((n = read(tun_fd, io_buf.data(), io_buf.size())) > 0) {
-            send_frame(txrx, 0x88, io_buf.data(), static_cast<size_t>(n));
+          send_frame(txrx, 0x88, io_buf.data(), static_cast<size_t>(n));
         }
 
-        uint64_t now = txrx.ReadTsf();
+        uint64_t now = 0;
+        {
+          std::lock_guard<std::mutex> lk(txrx_usb_mtx);
+          now = txrx.ReadTsf();
+        }
         if (target_chan != 0 && now >= switch_tsf) {
             uint8_t next = target_chan.exchange(0);
-            txrx.FastRetune(next);
+	    {
+              std::lock_guard<std::mutex> lk(txrx_usb_mtx);
+              txrx.FastRetune(next);
+	    }
             cur_chan = next;
             std::cout << "[" << *(argv + 1) << "] Switched -> ch " << int(next) << "\n";
         }
