@@ -162,6 +162,12 @@ int main(int argc, char** argv) {
         static constexpr uint8_t SA[6] = {0x57, 0x42, 0x75, 0x05, 0xd6, 0x00};
         txrx->StartRxLoop([&](const Packet& p) {
             const uint8_t* raw = p.Data.data();
+    
+	    if (p.Data.size() >= 16) {
+              std::printf("RX len=%zu bytes: %02x %02x %02x %02x | +10: %02x:%02x:%02x\n",
+              p.Data.size(), raw[0], raw[1], raw[2], raw[3], raw[10], raw[11], raw[12]);
+	    }
+
             if (p.Data.size() <= 28 || std::memcmp(raw + 10, SA, 6) != 0) return;
 
             size_t len = p.Data.size() - 28;
