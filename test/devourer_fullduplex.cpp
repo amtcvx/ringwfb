@@ -9,15 +9,14 @@ g++ -std=c++20 -O2 devourer_fullduplex.cpp \
 
 ./devourer_fullduplex 1 149 5601 5600
 
-./devourer_fullduplex 2 149 5601 5600
-
-
 gst-launch-1.0 videotestsrc is-live=true ! \
   x265enc tune=zerolatency speed-preset=ultrafast ! \
   rtph265pay config-interval=-1 mtu=1500 ! \
   udpsink host=127.0.0.1 port=5601 sync=false async=false
 
-gst-launch-1.0 udpsrc address=127.0.0.1 port=5600 mtu=1500 buffer-size=0 \
+#./devourer_fullduplex 2 149 5600 5601
+
+#gst-launch-1.0 udpsrc address=127.0.0.1 port=5600 mtu=1500 buffer-size=0 \
   caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H265" ! \
   rtph265depay ! avdec_h265 ! autovideosink sync=false
 
@@ -70,7 +69,7 @@ constexpr std::array<uint8_t, 13> RADIOTAP_HDR = {
     0x00, 0x00              // Alignement
 };
 
-// Préfixe MAC 5 octets partagé par les deux nœuds (le 6e octet est le node_id)
+// Préfixe MAC 5 octets partagé (le 6e octet est le node_id)
 constexpr std::array<uint8_t, 5> MAC_PREFIX = {0x57, 0x42, 0x75, 0x05, 0xd6};
 
 // En-tête 802.11 Data (24 octets)
@@ -86,6 +85,8 @@ constexpr size_t TX_HDR_LEN    = RADIOTAP_HDR.size() + IEEE80211_HDR_TEMPLATE.si
 constexpr size_t BUFFER_STRIDE = 1600; // Multiple de 64 octets (> 37 + 1500)
 
 std::atomic<bool> g_running{true};
+std::atomic<uint64_t> g_tx_pkts{0};
+std::atomic<uint64_t> g_rx_pkts{0};
 
 void setRealtimeCpu(int core) noexcept {
     cpu_set_t cpuset;
@@ -99,7 +100,6 @@ void setRealtimeCpu(int core) noexcept {
 } // namespace
 
 int main(int argc, char* argv[]) {
-    // 1. Masquage déterministe de SIGINT/SIGTERM
     sigset_t sigset;
     sigemptyset(&sigset);
     sigaddset(&sigset, SIGINT);
@@ -112,7 +112,6 @@ int main(int argc, char* argv[]) {
     const uint16_t tx_port      = (argc > 3) ? static_cast<uint16_t>(std::atoi(argv[3])) : 5601;
     const uint16_t rx_port      = (argc > 4) ? static_cast<uint16_t>(std::atoi(argv[4])) : 5600;
 
-    // 2. Initialisation libusb sur 0b05:17d2
     libusb_context* usb_ctx = nullptr;
     if (libusb_init(&usb_ctx) < 0) {
         std::cerr << "[Fatal] libusb_init échoué.\n";
@@ -155,10 +154,10 @@ int main(int argc, char* argv[]) {
         .ChannelWidth  = CHANNEL_WIDTH_20,
     };
 
-    // 3. Initialisation matérielle Full Duplex (TX + RX simultanés)
+    // Initialisation Full Duplex (TX + RX simultanés)
     radio->InitWrite(sel_chan);
 
-    // 4. Voie RX (Air -> UDP 127.0.0.1:rx_port vers GStreamer udpsrc)
+    // Voie RX (Air -> UDP 127.0.0.1:rx_port vers GStreamer udpsrc)
     int rx_sock = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     sockaddr_in dst{};
     dst.sin_family = AF_INET;
@@ -172,12 +171,12 @@ int main(int argc, char* argv[]) {
 
         const uint8_t* frame = pkt.Data.data();
 
-        // Vérifie les 5 octets du préfixe MAC (57:42:75:05:d6)
+        // Filtre le préfixe MAC OpenIPC (57:42:75:05:d6)
         if (std::memcmp(frame + 10, MAC_PREFIX.data(), MAC_PREFIX.size()) != 0) [[unlikely]] {
             return;
         }
 
-        // Ignore nos propres paquets (anti-écho)
+        // Ignore les paquets émis par ce même nœud
         if (frame[15] == local_node_id) [[unlikely]] {
             return;
         }
@@ -192,7 +191,9 @@ int main(int argc, char* argv[]) {
         if ((rtp_ptr[0] & 0xC0) != 0x80) [[unlikely]] return;
 
         if (rtp_len <= MAX_RTP_PAYLOAD) [[likely]] {
-            send(rx_sock, rtp_ptr, rtp_len, MSG_DONTWAIT);
+            if (send(rx_sock, rtp_ptr, rtp_len, MSG_DONTWAIT) > 0) {
+                g_rx_pkts.fetch_add(1, std::memory_order_relaxed);
+            }
         }
     };
 
@@ -200,7 +201,7 @@ int main(int argc, char* argv[]) {
         radio->StartRxLoop(rx_callback);
     });
 
-    // 5. Voie TX Zero-Copy (GStreamer udpsink :tx_port -> recvmmsg -> Air)
+    // Voie TX Zero-Copy par lots (GStreamer udpsink :tx_port -> recvmmsg -> send_packets)
     int tx_sock = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 
     int busy_poll = 50;
@@ -222,11 +223,12 @@ int main(int argc, char* argv[]) {
         setRealtimeCpu(1);
 
         auto hdr80211 = IEEE80211_HDR_TEMPLATE;
-        hdr80211[15]  = local_node_id; // Signature MAC locale unique
+        hdr80211[15]  = local_node_id;
 
         alignas(64) std::array<std::array<uint8_t, BUFFER_STRIDE>, BATCH_SIZE> pool{};
         std::array<iovec, BATCH_SIZE> iov{};
         std::array<mmsghdr, BATCH_SIZE> msgs{};
+        std::array<TxPacketView, BATCH_SIZE> tx_views{};
 
         for (size_t i = 0; i < BATCH_SIZE; ++i) {
             std::memcpy(pool[i].data(), RADIOTAP_HDR.data(), RADIOTAP_HDR.size());
@@ -247,13 +249,33 @@ int main(int argc, char* argv[]) {
                 if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
                 break;
             }
+
+            size_t valid_count = 0;
             for (int i = 0; i < n; ++i) {
                 const unsigned int flags = msgs[i].msg_hdr.msg_flags;
                 const size_t rtp_len     = msgs[i].msg_len;
                 if (!(flags & MSG_TRUNC) && rtp_len > 0) [[likely]] {
-                    radio->send_packet(pool[i].data(), TX_HDR_LEN + rtp_len);
+                    tx_views[valid_count].data = pool[i].data();
+                    tx_views[valid_count].len  = TX_HDR_LEN + rtp_len;
+                    ++valid_count;
                 }
             }
+
+            if (valid_count > 0) [[likely]] {
+                const size_t sent = radio->send_packets(tx_views.data(), valid_count);
+                g_tx_pkts.fetch_add(sent, std::memory_order_relaxed);
+            }
+        }
+    });
+
+    // Thread de télémétrie légère (affiche les compteurs TX/RX toutes les 2 secondes)
+    std::thread stats_thread([]() {
+        while (g_running.load(std::memory_order_relaxed)) {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            if (!g_running.load(std::memory_order_relaxed)) break;
+            std::cout << "[Stats] TX radio: " << g_tx_pkts.load(std::memory_order_relaxed)
+                      << " pkts | RX radio -> UDP: " << g_rx_pkts.load(std::memory_order_relaxed)
+                      << " pkts\n" << std::flush;
         }
     });
 
@@ -261,7 +283,6 @@ int main(int argc, char* argv[]) {
               << " | Canal: " << channel << " | TX UDP :" << tx_port << " | RX UDP :" << rx_port
               << " (Ctrl+C pour quitter)\n";
 
-    // 6. Attente synchrone de Ctrl+C
     int caught_sig = 0;
     sigwait(&sigset, &caught_sig);
 
@@ -272,26 +293,21 @@ int main(int argc, char* argv[]) {
 
     std::thread([]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
-        std::cout << "[Arrêt] Matériel éteint, sortie immédiate.\n" << std::flush;
-        _exit(0);
-    }).detach();
-
-    shutdown(tx_sock, SHUT_RDWR);
-    close(tx_sock);
-    libusb_interrupt_event_handler(usb_ctx);
-
-    if (tx_thread.joinable()) tx_thread.join();
-    if (rx_thread.joinable()) rx_thread.join();
-
-    radio.reset();
-    usb_lock.reset();
-    close(rx_sock);
-
-    libusb_release_interface(handle, 0);
-    libusb_close(handle);
-    libusb_exit(usb_ctx);
-
-    std::cout << "[Arrêt] Terminé.\n";
-    return 0;
+std::cout << "[Arrêt] Matériel éteint, sortie immédiate.\n" << std::flush;
+_exit(0);
+}).detach();
+shutdown(tx_sock, SHUT_RDWR);
+close(tx_sock);
+libusb_interrupt_event_handler(usb_ctx);
+if (stats_thread.joinable()) stats_thread.join();
+if (tx_thread.joinable()) tx_thread.join();
+if (rx_thread.joinable()) rx_thread.join();
+radio.reset();
+usb_lock.reset();
+close(rx_sock);
+libusb_release_interface(handle, 0);
+libusb_close(handle);
+libusb_exit(usb_ctx);
+std::cout << "[Arrêt] Terminé.\n";
+return 0;
 }
-
