@@ -152,31 +152,13 @@ int main(int argc, char* argv[]) {
                 const uint8_t* payload = pkt.Data.data() + payload_offset;
                 size_t payload_len = pkt.Data.size() - payload_offset;
 
-                std::cout << "[RX] Recu " << payload_len << " octets depuis node "
-                          << int(hdr->addr2[5]) << " (offset 802.11=" << offset << ")\n";
-
                 sendto(udp_sock, payload, payload_len, 0,
                        reinterpret_cast<const sockaddr*>(&addr_out), sizeof(addr_out));
                 return;
             }
         }
     };
-/*
-    auto on_rx_packet = [&](const Packet& pkt) {
-        constexpr size_t hdr_len = sizeof(Ieee80211Hdr);
-        if (pkt.Data.size() <= hdr_len) return;
 
-        const auto* hdr = reinterpret_cast<const Ieee80211Hdr*>(pkt.Data.data());
-        if (hdr->addr3[0] != 'O' || hdr->addr3[1] != 'P') return;
-        if (hdr->addr2[5] == local_id) return; // Ignore notre propre echo
-
-        const uint8_t* payload = pkt.Data.data() + hdr_len;
-        size_t payload_len = pkt.Data.size() - hdr_len;
-
-        sendto(udp_sock, payload, payload_len, 0,
-               reinterpret_cast<const sockaddr*>(&addr_out), sizeof(addr_out));
-    };
-*/
     // StartRxLoop est bloquant : on l'execute dans un thread dedie
     std::thread rx_thread([&]() {
         g_radio->StartRxLoop(on_rx_packet);
