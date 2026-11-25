@@ -9,17 +9,15 @@ g++ -std=c++20 -O2 udp_duplex_bridge.cpp \
 
 sudo ./udp_duplex_bridge 1
 gst-launch-1.0 videotestsrc is-live=true ! \
-    video/x-raw,width=1280,height=720,framerate=30/1 ! \
-    x265enc tune=zerolatency speed-preset=ultrafast bitrate=2000 key-int-max=30 ! \
+    video/x-raw,width=640,height=480,framerate=30/1 ! \
+    x265enc tune=zerolatency speed-preset=ultrafast bitrate=800 key-int-max=30 ! \
     rtph265pay config-interval=-1 mtu=1400 ! \
     udpsink host=127.0.0.1 port=5600 sync=false
 
 sudo ./udp_duplex_bridge 2
-gst-launch-1.0 udpsrc port=5601 caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H265,payload=96" ! \
-    rtpjitterbuffer latency=20 drop-on-latency=true ! \
+gst-launch-1.0 -v udpsrc port=5601 caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H265" ! \
     rtph265depay ! h265parse ! avdec_h265 ! \
-    autovideosink sync=false
-
+    videoconvert ! autovideosink sync=false
 
 */
 #include <arpa/inet.h>
