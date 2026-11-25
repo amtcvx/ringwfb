@@ -11,11 +11,17 @@ g++ -std=c++20 -O2 devourer_rtph265_bridge.cpp \
     -lpthread \
     -o devourer_rtph265_bridge
 
-devourer_rtph265_bridge duplex 149 5601 5600
+./devourer_rtph265_bridge duplex 149 5601 5600
 
-rtph265pay config-interval=-1 mtu=1500 ! udpsink host=127.0.0.1 port=5601 sync=false async=false
+gst-launch-1.0 videotestsrc is-live=true ! \
+  x265enc tune=zerolatency speed-preset=ultrafast ! \
+  rtph265pay config-interval=-1 mtu=1500 ! \
+  udpsink host=127.0.0.1 port=5601 sync=false async=false
 
-gst-launch-1.0 udpsrc address=127.0.0.1 port=5600 mtu=1500 buffer-size=0 caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H265" ! rtph265depay ! avdec_h265 ! autovideosink sync=false
+gst-launch-1.0 udpsrc address=127.0.0.1 port=5600 mtu=1500 buffer-size=0 \
+  caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H265" ! \
+  rtph265depay ! avdec_h265 ! autovideosink sync=false
+
 
 */
 #ifndef _GNU_SOURCE
