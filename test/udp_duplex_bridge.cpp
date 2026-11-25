@@ -14,6 +14,13 @@ gst-launch-1.0 videotestsrc is-live=true ! \
     rtph265pay config-interval=-1 mtu=1400 ! \
     udpsink host=127.0.0.1 port=5600 sync=false
 
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! \
+    videoconvert ! video/x-raw,format=I420 ! \
+    x265enc tune=zerolatency speed-preset=ultrafast bitrate=1200 key-int-max=15 option-string="repeat-headers=1" ! \
+    rtph265pay config-interval=-1 mtu=1400 ! \
+    udpsink host=127.0.0.1 port=5600 sync=false
+
+
 sudo ./udp_duplex_bridge 2
 gst-launch-1.0 -v udpsrc port=5601 caps="application/x-rtp,media=video,clock-rate=90000,encoding-name=H265" ! \
     rtph265depay ! h265parse ! avdec_h265 ! \
