@@ -28,9 +28,8 @@ RTP H.265, Time-Slicing inter-frames, scan bi-bande 2.4/5 GHz, synchro sans maî
 #include "DeviceConfig.h"
 #include "IRadio.h"
 #include "RxPacket.h"
-#include "WiFiDriver.h"
 #include "UsbDeviceLock.h"
-
+#include "WiFiDriver.h"
 #include <libusb-1.0/libusb.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -48,16 +47,34 @@ RTP H.265, Time-Slicing inter-frames, scan bi-bande 2.4/5 GHz, synchro sans maî
 using namespace std::chrono;
 
 enum Msg : uint8_t { DATA = 1, HB = 2, PROP = 3, ACC = 4 };
+
+// En-tête Radiotap TX 12 octets (Rate = 0x30 -> 24 Mbps OFDM)
+constexpr std::array<uint8_t, 12> RTAP_TX = {
+    0x00, 0x00, 0x0c, 0x00, 0x04, 0x00, 0x00, 0x00,
+    0x30, 0x00, 0x00, 0x00
+};
+
+// En-tête IEEE 802.11 Data (24 octets)
+constexpr std::array<uint8_t, 24> IEEE80211_HDR = {
+    0x08, 0x01, 0x00, 0x00,
+    0x57, 0x42, 0x00, 0x00, 0x00, 0x01,
+    0x57, 0x42, 0x00, 0x00, 0x00, 0x02,
+    0x57, 0x42, 0x00, 0x00, 0x00, 0x03,
+    0x00, 0x00
+};
+
+constexpr std::array<uint8_t, 4> MAGIC_DV = {'D', 'V', '6', '5'};
+
 struct __attribute__((packed)) Hdr {
-    std::array<uint8_t, 8> rtap;
+    std::array<uint8_t, 12> rtap;
+    std::array<uint8_t, 24> dot11;
     std::array<uint8_t, 4> magic;
     uint8_t type, ch;
     uint32_t id, delay_us;
     uint16_t seq;
 };
 
-constexpr std::array<uint8_t, 8> RTAP_MIN = {0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00};
-constexpr std::array<uint8_t, 4> MAGIC_DV = {'D', 'V', '6', '5'};
+// Canaux 2.4 GHz (non-chevauchants) + 5 GHz sans DFS (ETSI / France)
 const std::vector<uint8_t> CHANS = {1, 6, 11, 13, 36, 40, 44, 48, 149, 153, 157, 161, 165};
 constexpr uint8_t RDV_5G = 149, RDV_24 = 6;
 
@@ -94,7 +111,7 @@ class Node {
 
     void TxCtrl(uint8_t t, uint8_t c, uint16_t s, uint32_t d = 0) {
         if (scan_) return;
-        Hdr h{RTAP_MIN, MAGIC_DV, t, c, id_, d, s};
+        Hdr h{RTAP_TX, IEEE80211_HDR, MAGIC_DV, t, c, id_, d, s};
         std::lock_guard lk(tx_mtx_);
         r_->send_packet(reinterpret_cast<uint8_t*>(&h), sizeof(h));
     }
@@ -122,10 +139,11 @@ class Node {
 
         const uint8_t* ptr = nullptr;
         size_t rem = 0;
-        for (size_t off = 0; off + (sizeof(Hdr) - 8) <= len && off < 48; ++off) {
+        constexpr size_t OFFSET_MAGIC = offsetof(Hdr, magic);
+        for (size_t off = 24; off + (sizeof(Hdr) - OFFSET_MAGIC) <= len && off <= 32; ++off) {
             if (std::memcmp(raw + off, "DV65", 4) == 0) {
-                ptr = raw + off - 8;
-                rem = len - off + 8;
+                ptr = raw + off - OFFSET_MAGIC;
+                rem = len - off + OFFSET_MAGIC;
                 break;
             }
         }
@@ -170,15 +188,16 @@ public:
         sc.ChannelOffset = 0;
         sc.ChannelWidth = CHANNEL_WIDTH_20;
         r_->InitWrite(sc);
+        r_->SetTxPower(35);
 
         std::thread t_rx([this] { r_->StartRxLoop([this](const Packet& f) { OnRx(f); }); });
         std::thread t_tx([this] {
             std::array<uint8_t, 2048> buf{};
             while (run_) {
                 ssize_t n = recvfrom(s_in_, buf.data(), buf.size(), 0, nullptr, nullptr);
-                if (n <= 0 || n > 1450 || scan_) continue;
+                if (n <= 0 || n > 1420 || scan_) continue;
                 std::vector<uint8_t> pkt(sizeof(Hdr) + n);
-                *reinterpret_cast<Hdr*>(pkt.data()) = Hdr{RTAP_MIN, MAGIC_DV, DATA, ch_, id_, 0, ++seq_};
+                *reinterpret_cast<Hdr*>(pkt.data()) = Hdr{RTAP_TX, IEEE80211_HDR, MAGIC_DV, DATA, ch_, id_, 0, ++seq_};
                 std::memcpy(pkt.data() + sizeof(Hdr), buf.data(), n);
                 { std::lock_guard lk(tx_mtx_); r_->send_packet(pkt.data(), pkt.size()); }
                 if (state_ == 0 && IsEndOfH265PFrame(buf.data(), n)) MicroScan();
@@ -235,11 +254,11 @@ int main(int argc, char** argv) {
 
     auto logger = std::make_shared<Logger>();
     devourer::DeviceConfig cfg;
+    cfg.rx.enable_with_tx = true;
 
     auto usb_lock = std::make_shared<devourer::UsbDeviceLock>();
     WiFiDriver drv(logger);
     auto radio = drv.CreateRadio(dev, ctx, usb_lock, cfg);
-
     if (!radio) return 1;
 
     Node(radio.get(), pin, ip, pout).Run();
@@ -248,3 +267,4 @@ int main(int argc, char** argv) {
     libusb_exit(ctx);
     return 0;
 }
+
