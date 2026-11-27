@@ -11,15 +11,15 @@ sudo ./main_h265 5600 5601 127.0.0.1
 
 gst-launch-1.0 -v videotestsrc is-live=true pattern=ball ! \
   video/x-raw,width=1280,height=720,framerate=30/1 ! \
-  x265enc tune=zerolatency bitrate=3000 speed-preset=ultrafast key-int-max=30 ! \
+  x265enc tune=zerolatency bitrate=2500 speed-preset=ultrafast key-int-max=30 bframes=0 vbv-buf-capacity=200 ! \
   rtph265pay config-interval=-1 mtu=1400 ! \
   udpsink host=127.0.0.1 port=5600 sync=false
 
 sudo ./main_h265 5600 5601 127.0.0.1
 
 gst-launch-1.0 -v udpsrc port=5601 caps="application/x-rtp,media=video,encoding-name=H265,clock-rate=90000,payload=96" ! \
-  rtpjitterbuffer latency=20 drop-on-latency=true ! \
-  rtph265depay ! h265parse ! avdec_h265 ! videoconvert ! autovideosink sync=false
+  rtpjitterbuffer latency=15 drop-on-latency=true ! \
+  rtph265depay ! h265parse config-interval=-1 ! avdec_h265 ! videoconvert ! autovideosink sync=false
 
 
 RTP H.265, Time-Slicing inter-frames, scan bi-bande 2.4/5 GHz, synchro sans maître
@@ -48,10 +48,10 @@ using namespace std::chrono;
 
 enum Msg : uint8_t { DATA = 1, HB = 2, PROP = 3, ACC = 4 };
 
-// En-tête Radiotap TX 12 octets (Rate = 0x30 -> 24 Mbps OFDM)
-constexpr std::array<uint8_t, 12> RTAP_TX = {
-    0x00, 0x00, 0x0c, 0x00, 0x04, 0x00, 0x00, 0x00,
-    0x30, 0x00, 0x00, 0x00
+// Radiotap TX 13 octets : HT MCS 3 (39 Mbps en 20 MHz) pour absorber les keyframes sans saccade
+constexpr std::array<uint8_t, 13> RTAP_TX = {
+    0x00, 0x00, 0x0d, 0x00, 0x00, 0x00, 0x08, 0x00,
+    0x07, 0x00, 0x03, 0x00, 0x00
 };
 
 // En-tête IEEE 802.11 Data (24 octets)
@@ -66,7 +66,7 @@ constexpr std::array<uint8_t, 24> IEEE80211_HDR = {
 constexpr std::array<uint8_t, 4> MAGIC_DV = {'D', 'V', '6', '5'};
 
 struct __attribute__((packed)) Hdr {
-    std::array<uint8_t, 12> rtap;
+    std::array<uint8_t, 13> rtap;
     std::array<uint8_t, 24> dot11;
     std::array<uint8_t, 4> magic;
     uint8_t type, ch;
@@ -99,6 +99,7 @@ class Node {
 
     uint8_t ch_{RDV_5G};
     uint16_t seq_{0}, a_seq_{0};
+    uint32_t frame_cnt_{0};
     size_t s_idx_{0};
     std::array<uint32_t, 13> scores_{};
     steady_clock::time_point last_sw_{steady_clock::now()};
@@ -117,13 +118,17 @@ class Node {
     }
 
     void MicroScan() {
+        // 1 micro-scan toutes les 4 P-frames (~7.5 scans/sec à 30 fps) pour garantir zéro saccade
+        if (++frame_cnt_ % 4 != 0) return;
+
         size_t i = s_idx_;
         uint8_t c = CHANS.at(i);
         s_idx_ = (s_idx_ + 1) % CHANS.size();
         if (c == ch_) return;
+
         scan_ = true; s_noise_ = 0;
         { std::lock_guard lk(tx_mtx_); r_->FastRetune(c, true); }
-        std::this_thread::sleep_for(milliseconds(c <= 14 ? 6 : 4));
+        std::this_thread::sleep_for(milliseconds(c <= 14 ? 3 : 2));
         { std::lock_guard lk(tx_mtx_); r_->FastRetune(ch_, true); }
         scores_.at(i) = (scores_.at(i) * 3 + s_noise_ + (c <= 14 ? 4 : 0)) / 4;
         scan_ = false;
@@ -218,7 +223,8 @@ public:
                 sw_pend_ = false; state_ = 0; last_rx_ns_ = NowNs(); last_sw_ = now_tp;
                 std::cout << "[CH] " << (int)ch_ << "\n";
             }
-            if ((now_ns - last_rx_ns_) > 300'000'000LL) {
+            // Watchdog élargi à 1.5 s pour éviter tout décrochage intempestif
+            if ((now_ns - last_rx_ns_) > 1'500'000'000LL) {
                 uint8_t rdv = (alt = !alt) ? RDV_24 : RDV_5G;
                 if (ch_ != rdv) { std::lock_guard lk(tx_mtx_); Tune(rdv); }
                 state_ = 2;
@@ -235,7 +241,7 @@ public:
                 noise_ = 0;
             }
             TxCtrl(HB, ch_, ++seq_);
-            std::this_thread::sleep_for(milliseconds(5));
+            std::this_thread::sleep_for(milliseconds(10));
         }
         t_tx.join(); t_rx.join();
     }
@@ -259,6 +265,7 @@ int main(int argc, char** argv) {
     auto usb_lock = std::make_shared<devourer::UsbDeviceLock>();
     WiFiDriver drv(logger);
     auto radio = drv.CreateRadio(dev, ctx, usb_lock, cfg);
+
     if (!radio) return 1;
 
     Node(radio.get(), pin, ip, pout).Run();
