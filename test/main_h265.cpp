@@ -10,15 +10,15 @@ g++ -std=c++20 -O2 main_h265.cpp \
 sudo ./main_h265 5600 5601 127.0.0.1
 
 gst-launch-1.0 -v videotestsrc is-live=true pattern=ball ! \
-  video/x-raw,width=1280,height=720,framerate=60/1 ! \
-  timeoverlay font-desc="Sans, 24" ! videoconvert ! \
-  x265enc tune=zerolatency bitrate=4000 speed-preset=ultrafast key-int-max=60 ! \
-  rtph265pay config-interval=1 mtu=1400 ! \
+  video/x-raw,width=1280,height=720,framerate=30/1 ! \
+  x265enc tune=zerolatency bitrate=3000 speed-preset=ultrafast key-int-max=30 ! \
+  rtph265pay config-interval=-1 mtu=1400 ! \
   udpsink host=127.0.0.1 port=5600 sync=false
 
 sudo ./main_h265 5600 5601 127.0.0.1
 
 gst-launch-1.0 -v udpsrc port=5601 caps="application/x-rtp,media=video,encoding-name=H265,clock-rate=90000,payload=96" ! \
+  rtpjitterbuffer latency=20 drop-on-latency=true ! \
   rtph265depay ! h265parse ! avdec_h265 ! videoconvert ! autovideosink sync=false
 
 
