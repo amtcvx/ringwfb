@@ -11,7 +11,7 @@ sudo ./main_h265 5600 5601 127.0.0.1
 
 gst-launch-1.0 -v videotestsrc is-live=true pattern=ball ! \
   video/x-raw,width=1280,height=720,framerate=30/1 ! \
-  x265enc tune=zerolatency bitrate=2500 speed-preset=ultrafast key-int-max=30 option-string="bframes=0:vbv-maxrate=2500:vbv-bufsize=500" ! \
+  x265enc tune=zerolatency bitrate=2500 speed-preset=ultrafast key-int-max=15 option-string="bframes=0:intra-refresh=1:vbv-maxrate=2500:vbv-bufsize=300" ! \
   rtph265pay config-interval=-1 mtu=1400 ! \
   udpsink host=127.0.0.1 port=5600 sync=false
 
@@ -74,8 +74,9 @@ struct __attribute__((packed)) Hdr {
     uint16_t seq;
 };
 
-// Canaux 2.4 GHz (non-chevauchants) + 5 GHz sans DFS (ETSI / France)
-const std::vector<uint8_t> CHANS = {1, 6, 11, 13, 36, 40, 44, 48, 149, 153, 157, 161, 165};
+// Canaux 5 GHz rapides (< 1 ms avec FastRetune intra-bande) + 2.4 GHz en dernier recours
+const std::vector<uint8_t> CHANS_5G = {36, 40, 44, 48, 149, 153, 157, 161, 165};
+const std::vector<uint8_t> CHANS_24G = {1, 6, 11, 13};
 constexpr uint8_t RDV_5G = 149, RDV_24 = 6;
 
 inline bool IsEndOfH265PFrame(const uint8_t* p, size_t n) {
@@ -118,21 +119,23 @@ class Node {
     }
 
     void MicroScan() {
-        // 1 micro-scan toutes les 4 P-frames (~7.5 scans/sec à 30 fps) pour garantir zéro saccade
-        if (++frame_cnt_ % 4 != 0) return;
-
-        size_t i = s_idx_;
-        uint8_t c = CHANS.at(i);
-        s_idx_ = (s_idx_ + 1) % CHANS.size();
-        if (c == ch_) return;
-
-        scan_ = true; s_noise_ = 0;
-        { std::lock_guard lk(tx_mtx_); r_->FastRetune(c, true); }
-        std::this_thread::sleep_for(milliseconds(c <= 14 ? 3 : 2));
-        { std::lock_guard lk(tx_mtx_); r_->FastRetune(ch_, true); }
-        scores_.at(i) = (scores_.at(i) * 3 + s_noise_ + (c <= 14 ? 4 : 0)) / 4;
-        scan_ = false;
+      // Scanner uniquement si le canal actif montre du bruit (> 8 trames parasites)
+      // et au maximum 1 fois toutes les 6 frames
+      if (noise_.load() < 8 || (++frame_cnt_ % 6 != 0)) return;
+  
+      size_t i = s_idx_;
+      uint8_t c = CHANS_5G.at(i);
+      s_idx_ = (s_idx_ + 1) % CHANS_5G.size();
+      if (c == ch_ || ch_ <= 14) return; // FastRetune rapide uniquement intra-bande 5 GHz
+  
+      scan_ = true; s_noise_ = 0;
+      { std::lock_guard lk(tx_mtx_); r_->FastRetune(c, true); }
+      std::this_thread::sleep_for(milliseconds(2));
+      { std::lock_guard lk(tx_mtx_); r_->FastRetune(ch_, true); }
+      scores_.at(i) = (scores_.at(i) * 3 + s_noise_) / 4;
+      scan_ = false;
     }
+
 
     void OnRx(const Packet& rx) {
         if (rx.RxAtrib.crc_err) return;
@@ -229,17 +232,24 @@ public:
                 if (ch_ != rdv) { std::lock_guard lk(tx_mtx_); Tune(rdv); }
                 state_ = 2;
             }
-            if (state_ == 0 && duration_cast<seconds>(now_tp - last_sw_).count() >= 2 && noise_ > 35) {
-                uint8_t best = ch_; uint32_t min_s = UINT32_MAX;
-                for (size_t i = 0; i < CHANS.size(); ++i) {
-                    if (scores_.at(i) < min_s) { min_s = scores_.at(i); best = CHANS.at(i); }
-                }
-                if (best != ch_) {
-                    state_ = 1; a_seq_ = ++seq_; p_ch_ = best; deadline_ns_ = now_ns + 30'000'000LL;
-                    for (int k = 0; k < 5; ++k) { TxCtrl(PROP, best, a_seq_, 30000); std::this_thread::sleep_for(milliseconds(1)); }
-                }
-                noise_ = 0;
+
+	    // Si le canal actif dépasse le seuil d'encombrement (noise_ > 40)
+	    if (state_ == 0 && duration_cast<seconds>(now_tp - last_sw_).count() >= 2 && noise_ > 40) {
+              uint8_t best = ch_; uint32_t min_s = UINT32_MAX;
+              for (size_t i = 0; i < CHANS_5G.size(); ++i) {
+                if (scores_.at(i) < min_s) { min_s = scores_.at(i); best = CHANS_5G.at(i); }
+              }
+              // Si même le meilleur canal 5 GHz est très bruité (> 25), basculer sur 2.4 GHz (canal 6)
+              if (min_s > 25) best = RDV_24;
+
+              if (best != ch_) {
+                state_ = 1; a_seq_ = ++seq_; p_ch_ = best; deadline_ns_ = now_ns + 35'000'000LL;
+                for (int k = 0; k < 5; ++k) { TxCtrl(PROP, best, a_seq_, 35000); std::this_thread::sleep_for(milliseconds(1)); }
+              }
+              noise_ = 0;
             }
+
+
             TxCtrl(HB, ch_, ++seq_);
             std::this_thread::sleep_for(milliseconds(10));
         }
