@@ -48,7 +48,7 @@ using namespace std::chrono;
 
 enum Msg : uint8_t { DATA = 1, HB = 2, PROP = 3, ACC = 4 };
 
-// Radiotap TX 13 octets : HT MCS 3 (39 Mbps en 20 MHz) pour absorber les keyframes sans saccade
+// Radiotap TX 13 octets : HT MCS 3 (39 Mbps en 20 MHz) 
 constexpr std::array<uint8_t, 13> RTAP_TX = {
     0x00, 0x00, 0x0d, 0x00, 0x00, 0x00, 0x08, 0x00,
     0x07, 0x00, 0x03, 0x00, 0x00
