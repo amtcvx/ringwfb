@@ -11,7 +11,7 @@ sudo ./main_h265 5600 5601 127.0.0.1
 
 gst-launch-1.0 -v videotestsrc is-live=true pattern=ball ! \
   video/x-raw,width=1280,height=720,framerate=30/1 ! \
-  x265enc tune=zerolatency bitrate=2500 speed-preset=ultrafast key-int-max=30 bframes=0 vbv-buf-capacity=200 ! \
+  x265enc tune=zerolatency bitrate=2500 speed-preset=ultrafast key-int-max=30 option-string="bframes=0:vbv-maxrate=2500:vbv-bufsize=500" ! \
   rtph265pay config-interval=-1 mtu=1400 ! \
   udpsink host=127.0.0.1 port=5600 sync=false
 
