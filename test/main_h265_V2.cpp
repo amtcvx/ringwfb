@@ -2,11 +2,11 @@
 g++ -std=c++20 -O2 main_h265_V2.cpp -I../devourer/src -I../devourer/hal ../devourer/build/libdevourer.a $(pkg-config --cflags --libs libusb-1.0) -lpthread -o main_h265_V2
 
 # TX
-sudo ./main_h265 5600 5601 127.0.0.1
+sudo ./main_h265_V2 5600 5601 127.0.0.1
 gst-launch-1.0 -v videotestsrc is-live=true pattern=ball ! video/x-raw,width=1280,height=720,framerate=30/1 ! x265enc tune=zerolatency bitrate=2500 speed-preset=ultrafast option-string="bframes=0:keyint=30:intra-refresh=1:rc-lookahead=0:scenecut=0:vbv-maxrate=2500:vbv-bufsize=120:slices=4" ! rtph265pay config-interval=1 mtu=1350 aggregate-mode=zero-latency ! udpsink host=127.0.0.1 port=5600 sync=false
 
 # RX
-sudo ./main_h265 5600 5601 127.0.0.1
+sudo ./main_h265_V2 5600 5601 127.0.0.1
 gst-launch-1.0 -v udpsrc port=5601 buffer-size=524288 caps="application/x-rtp,media=video,encoding-name=H265,clock-rate=90000,payload=96" ! rtpjitterbuffer latency=8 drop-on-latency=true do-lost=true ! rtph265depay ! h265parse ! avdec_h265 max-threads=2 output-corrupt=true ! videoconvert ! autovideosink sync=false
 */
 #include "DeviceConfig.h"
