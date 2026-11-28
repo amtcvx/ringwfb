@@ -11,4 +11,7 @@ gst-launch-1.0 udpsrc uri=udp://192.168.1.29:5600 \
     caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=H265,payload=96\" ! \
   rtpjitterbuffer latency=50 ! \
   rtph265depay ! h265parse ! avdec_h265 ! \
-  videoconvert ! autovideosink sync=false
+  videoconvert ! \
+  autovideosink sync=false
+
+  fpsdisplaysink text-overlay=true sync=false
