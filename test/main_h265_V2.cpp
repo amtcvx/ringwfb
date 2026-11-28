@@ -157,7 +157,7 @@ public:
                 if (n <= 0 || n > 1420 || scan_) continue;
                 *reinterpret_cast<Hdr*>(pkt.data()) = Hdr{RTAP_TX, IEEE80211_HDR, MAGIC_DV, DATA, ch_, id_, 0, ++seq_};
                 { std::lock_guard lk(tx_mtx_); r_->send_packet(pkt.data(), sizeof(Hdr) + n); }
-                if (state_ == 0 && IsEndOfH265PFrame(payload, n)) MicroScan();
+//                if (state_ == 0 && IsEndOfH265PFrame(payload, n)) MicroScan();
             }
         });
 
