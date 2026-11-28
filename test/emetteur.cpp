@@ -15,6 +15,8 @@ puis relaye en continu tout flux vidéo arrivant sur le port UDP 5700.
 gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=I420  ! \
   x265enc bitrate=2048 ! rtph265pay name=pay0 pt=96 config-interval=1 mtu=1400 ! udpsink port=5700 host=127.0.0.1
 
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! videoconvert ! video/x-raw,format=I420 ! x265enc tune=zerolatency bitrate=2500 speed-preset=ultrafast option-string="bframes=0:keyint=30:intra-refresh=1:rc-lookahead=0:scenecut=0:vbv-maxrate=2500:vbv-bufsize=120:slices=4" ! rtph265pay config-interval=-1 mtu=1350 aggregate-mode=zero-latency ! udpsink host=127.0.0.1 port=5700 sync=false
+
 */
 #include <iostream>
 #include <vector>
